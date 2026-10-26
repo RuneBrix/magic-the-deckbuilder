@@ -1,9 +1,10 @@
 # Deck workspace
-Mode: Operate. Code-first implementation under the user's authorization to build a practical MVP and defer questions. Engine unavailable: concept seed could not download; no seed or approved visual comp is claimed.
-## Direction contract
-THESIS: A card library and working deck share one desk. Exploration visibly composes queries and keeps each card one action from a deck.
-OWN-WORLD: Cool porcelain ground, ink navy navigation, violet selection, precise hairlines, compact controls and generous card art. Warmth comes from the actual Magic cards.
-STORY: Pick a function, narrow its meaning, see the exact query, inspect cards, add them, and watch deck statistics change.
-FIRST VIEWPORT: Slim fixed left navigation; wide central search and three-column uncropped full-card gallery; right deck inspector with quantity controls and mana curve. On narrow screens panels stack.
-FORM: Collector's index and playtesting desk. No seed available because the skill engine download failed. Signature interaction is a tag turning into a removable query chip while the deck remains visible.
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+Mode: Operate. Issue #9 authorizes replacement of the original visual identity and reduction of visible controls.
+
+THESIS: Search for cards and build a deck without presenting every secondary tool at once.
+OWN-WORLD: Warm paper, forest-green ink, Newsreader headings, Public Sans controls, fine rules and authored diamond/card SVGs. Dark appearance supports evening use; device appearance is the default.
+FIRST VIEWPORT: Navigation, central search, collapsed Filters and function browser, three common role searches, working deck. On phones the deck follows the explorer with a fixed shortcut.
+SIGNATURE: Expand a function, select a tag, then collapse the browser; the selected tag remains a removable chip beside the results.
+BEHAVIOR: Native details disclosure; open state survives rerenders. Appearance and backups live in Settings. The Cards tab edits quantities; Statistics shows the curve.
+MOTION: Existing card hover lift and search loading feedback; reduced-motion override retained.
+FINISH: Code-led implementation. Impeccable context and concept-seed were attempted but the engine was unavailable. No generated comp or design approval is claimed. Windows desktop/mobile light/dark browser checks and automated verification recorded in the linked PR; macOS/Safari untested.

@@ -1,14 +1,9 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-26T21:27:53.982Z",
+  "generatedAt": "2026-10-26T22:20:56.459Z",
   "title": "Design System: Arcana",
   "extensions": {
     "shadows": [
-      {
-        "name": "search",
-        "value": "0 3px 9px #28334804",
-        "purpose": "Subtle search-field separation."
-      },
       {
         "name": "card-hover",
         "value": "0 9px 15px #20223b22",
@@ -16,7 +11,7 @@
       },
       {
         "name": "dialog",
-        "value": "0 20px 80px #19203b30",
+        "value": "0 18px 70px #0005",
         "purpose": "Modal elevation."
       },
       {
@@ -70,218 +65,7 @@
         "value": "600px"
       }
     ],
-    "colorMeta": {
-      "accent": {
-        "role": "primary",
-        "displayName": "Accent",
-        "tonalRamp": [
-          "oklch(15.00% 0.1563 288.45)",
-          "oklch(26.43% 0.1563 288.45)",
-          "oklch(37.86% 0.1563 288.45)",
-          "oklch(49.29% 0.1563 288.45)",
-          "oklch(60.71% 0.1563 288.45)",
-          "oklch(72.14% 0.1563 288.45)",
-          "oklch(83.57% 0.1563 288.45)",
-          "oklch(95.00% 0.1563 288.45)"
-        ]
-      },
-      "accent-hover": {
-        "role": "primary",
-        "displayName": "Accent Hover",
-        "tonalRamp": [
-          "oklch(15.00% 0.1436 288.06)",
-          "oklch(26.43% 0.1436 288.06)",
-          "oklch(37.86% 0.1436 288.06)",
-          "oklch(49.29% 0.1436 288.06)",
-          "oklch(60.71% 0.1436 288.06)",
-          "oklch(72.14% 0.1436 288.06)",
-          "oklch(83.57% 0.1436 288.06)",
-          "oklch(95.00% 0.1436 288.06)"
-        ]
-      },
-      "ink": {
-        "role": "neutral",
-        "displayName": "Ink",
-        "tonalRamp": [
-          "oklch(15.00% 0.0459 265.01)",
-          "oklch(26.43% 0.0459 265.01)",
-          "oklch(37.86% 0.0459 265.01)",
-          "oklch(49.29% 0.0459 265.01)",
-          "oklch(60.71% 0.0459 265.01)",
-          "oklch(72.14% 0.0459 265.01)",
-          "oklch(83.57% 0.0459 265.01)",
-          "oklch(95.00% 0.0459 265.01)"
-        ]
-      },
-      "ground": {
-        "role": "neutral",
-        "displayName": "Ground",
-        "tonalRamp": [
-          "oklch(15.00% 0.0054 274.97)",
-          "oklch(26.43% 0.0054 274.97)",
-          "oklch(37.86% 0.0054 274.97)",
-          "oklch(49.29% 0.0054 274.97)",
-          "oklch(60.71% 0.0054 274.97)",
-          "oklch(72.14% 0.0054 274.97)",
-          "oklch(83.57% 0.0054 274.97)",
-          "oklch(95.00% 0.0054 274.97)"
-        ]
-      },
-      "white": {
-        "role": "neutral",
-        "displayName": "White",
-        "tonalRamp": [
-          "oklch(15.00% 0.0000 89.88)",
-          "oklch(26.43% 0.0000 89.88)",
-          "oklch(37.86% 0.0000 89.88)",
-          "oklch(49.29% 0.0000 89.88)",
-          "oklch(60.71% 0.0000 89.88)",
-          "oklch(72.14% 0.0000 89.88)",
-          "oklch(83.57% 0.0000 89.88)",
-          "oklch(95.00% 0.0000 89.88)"
-        ]
-      },
-      "muted": {
-        "role": "neutral",
-        "displayName": "Muted",
-        "tonalRamp": [
-          "oklch(15.00% 0.0309 262.23)",
-          "oklch(26.43% 0.0309 262.23)",
-          "oklch(37.86% 0.0309 262.23)",
-          "oklch(49.29% 0.0309 262.23)",
-          "oklch(60.71% 0.0309 262.23)",
-          "oklch(72.14% 0.0309 262.23)",
-          "oklch(83.57% 0.0309 262.23)",
-          "oklch(95.00% 0.0309 262.23)"
-        ]
-      },
-      "line": {
-        "role": "neutral",
-        "displayName": "Line",
-        "tonalRamp": [
-          "oklch(15.00% 0.0100 267.36)",
-          "oklch(26.43% 0.0100 267.36)",
-          "oklch(37.86% 0.0100 267.36)",
-          "oklch(49.29% 0.0100 267.36)",
-          "oklch(60.71% 0.0100 267.36)",
-          "oklch(72.14% 0.0100 267.36)",
-          "oklch(83.57% 0.0100 267.36)",
-          "oklch(95.00% 0.0100 267.36)"
-        ]
-      },
-      "soft": {
-        "role": "neutral",
-        "displayName": "Soft",
-        "tonalRamp": [
-          "oklch(15.00% 0.0176 296.63)",
-          "oklch(26.43% 0.0176 296.63)",
-          "oklch(37.86% 0.0176 296.63)",
-          "oklch(49.29% 0.0176 296.63)",
-          "oklch(60.71% 0.0176 296.63)",
-          "oklch(72.14% 0.0176 296.63)",
-          "oklch(83.57% 0.0176 296.63)",
-          "oklch(95.00% 0.0176 296.63)"
-        ]
-      },
-      "focus": {
-        "role": "neutral",
-        "displayName": "Focus",
-        "tonalRamp": [
-          "oklch(15.00% 0.1140 293.15)",
-          "oklch(26.43% 0.1140 293.15)",
-          "oklch(37.86% 0.1140 293.15)",
-          "oklch(49.29% 0.1140 293.15)",
-          "oklch(60.71% 0.1140 293.15)",
-          "oklch(72.14% 0.1140 293.15)",
-          "oklch(83.57% 0.1140 293.15)",
-          "oklch(95.00% 0.1140 293.15)"
-        ]
-      },
-      "mana-white": {
-        "role": "secondary",
-        "displayName": "Mana White",
-        "tonalRamp": [
-          "oklch(15.00% 0.0314 92.95)",
-          "oklch(26.43% 0.0314 92.95)",
-          "oklch(37.86% 0.0314 92.95)",
-          "oklch(49.29% 0.0314 92.95)",
-          "oklch(60.71% 0.0314 92.95)",
-          "oklch(72.14% 0.0314 92.95)",
-          "oklch(83.57% 0.0314 92.95)",
-          "oklch(95.00% 0.0314 92.95)"
-        ]
-      },
-      "mana-blue": {
-        "role": "secondary",
-        "displayName": "Mana Blue",
-        "tonalRamp": [
-          "oklch(15.00% 0.0370 232.87)",
-          "oklch(26.43% 0.0370 232.87)",
-          "oklch(37.86% 0.0370 232.87)",
-          "oklch(49.29% 0.0370 232.87)",
-          "oklch(60.71% 0.0370 232.87)",
-          "oklch(72.14% 0.0370 232.87)",
-          "oklch(83.57% 0.0370 232.87)",
-          "oklch(95.00% 0.0370 232.87)"
-        ]
-      },
-      "mana-black": {
-        "role": "secondary",
-        "displayName": "Mana Black",
-        "tonalRamp": [
-          "oklch(15.00% 0.0197 312.78)",
-          "oklch(26.43% 0.0197 312.78)",
-          "oklch(37.86% 0.0197 312.78)",
-          "oklch(49.29% 0.0197 312.78)",
-          "oklch(60.71% 0.0197 312.78)",
-          "oklch(72.14% 0.0197 312.78)",
-          "oklch(83.57% 0.0197 312.78)",
-          "oklch(95.00% 0.0197 312.78)"
-        ]
-      },
-      "mana-red": {
-        "role": "secondary",
-        "displayName": "Mana Red",
-        "tonalRamp": [
-          "oklch(15.00% 0.0535 32.67)",
-          "oklch(26.43% 0.0535 32.67)",
-          "oklch(37.86% 0.0535 32.67)",
-          "oklch(49.29% 0.0535 32.67)",
-          "oklch(60.71% 0.0535 32.67)",
-          "oklch(72.14% 0.0535 32.67)",
-          "oklch(83.57% 0.0535 32.67)",
-          "oklch(95.00% 0.0535 32.67)"
-        ]
-      },
-      "mana-green": {
-        "role": "secondary",
-        "displayName": "Mana Green",
-        "tonalRamp": [
-          "oklch(15.00% 0.0351 146.59)",
-          "oklch(26.43% 0.0351 146.59)",
-          "oklch(37.86% 0.0351 146.59)",
-          "oklch(49.29% 0.0351 146.59)",
-          "oklch(60.71% 0.0351 146.59)",
-          "oklch(72.14% 0.0351 146.59)",
-          "oklch(83.57% 0.0351 146.59)",
-          "oklch(95.00% 0.0351 146.59)"
-        ]
-      },
-      "mana-colorless": {
-        "role": "secondary",
-        "displayName": "Mana Colorless",
-        "tonalRamp": [
-          "oklch(15.00% 0.0040 286.32)",
-          "oklch(26.43% 0.0040 286.32)",
-          "oklch(37.86% 0.0040 286.32)",
-          "oklch(49.29% 0.0040 286.32)",
-          "oklch(60.71% 0.0040 286.32)",
-          "oklch(72.14% 0.0040 286.32)",
-          "oklch(83.57% 0.0040 286.32)",
-          "oklch(95.00% 0.0040 286.32)"
-        ]
-      }
-    }
+    "colorMeta": {}
   },
   "components": [
     {
@@ -290,7 +74,7 @@
       "refersTo": "button-primary",
       "description": "Main search and confirmation action.",
       "html": "<button class=\"ds-primary\">Search</button>",
-      "css": ".ds-primary{font-family:'DM Sans',sans-serif;display:inline-flex;gap:8px;align-items:center;justify-content:center;padding:10px 15px;font-size:12px;border-radius:6px;font-weight:550;white-space:nowrap;border:0;cursor:pointer;background:var(--accent,#6450b7);color:white}.ds-primary:hover{background:#52409c}.ds-primary:focus-visible{outline:3px solid #9c8bd9;outline-offset:3px}.ds-primary:disabled{opacity:.55;cursor:wait}"
+      "css": ".ds-primary{font-family:'Public Sans',sans-serif;display:inline-flex;gap:8px;align-items:center;justify-content:center;padding:10px 15px;font-size:12px;border-radius:3px;font-weight:550;white-space:nowrap;border:0;cursor:pointer;background:var(--accent,#276047);color:white}.ds-primary:hover{background:#194a35}.ds-primary:focus-visible{outline:3px solid #397455;outline-offset:3px}.ds-primary:disabled{opacity:.55;cursor:wait}"
     },
     {
       "name": "Secondary button",
@@ -298,7 +82,7 @@
       "refersTo": "button-secondary",
       "description": "Supporting actions such as import and export.",
       "html": "<button class=\"ds-secondary\">Export deck</button>",
-      "css": ".ds-secondary{font-family:'DM Sans',sans-serif;display:inline-flex;gap:8px;align-items:center;justify-content:center;padding:10px 15px;font-size:12px;border-radius:6px;font-weight:550;border:1px solid #dcdce7;background:white;color:#263149;cursor:pointer}.ds-secondary:hover{background:#f0edf8}.ds-secondary:focus-visible{outline:3px solid #9c8bd9;outline-offset:3px}"
+      "css": ".ds-secondary{font-family:'Public Sans',sans-serif;display:inline-flex;gap:8px;align-items:center;justify-content:center;padding:10px 15px;font-size:12px;border-radius:3px;font-weight:550;border:1px solid #d5d6ca;background:var(--surface,#fffdf7);color:#243a30;cursor:pointer}.ds-secondary:hover{background:#e5eadf}.ds-secondary:focus-visible{outline:3px solid #397455;outline-offset:3px}"
     },
     {
       "name": "Text field",
@@ -306,7 +90,7 @@
       "refersTo": "input",
       "description": "Labeled compact form input.",
       "html": "<label class=\"ds-label\">Card name<input class=\"ds-input\" placeholder=\"Exact phrase in name\"></label>",
-      "css": ".ds-label{font-family:'DM Sans',sans-serif;font-size:11px;color:#657087}.ds-input{font-family:'DM Sans',sans-serif;display:block;margin-top:6px;width:100%;padding:9px 10px;border:1px solid #dde0e9;border-radius:5px;color:#3c465c;background:white;caret-color:var(--accent,#6450b7)}.ds-input::placeholder{color:#697386}.ds-input:focus-visible{outline:3px solid #9c8bd9;outline-offset:3px}"
+      "css": ".ds-label{font-family:'Public Sans',sans-serif;font-size:11px;color:#60685f}.ds-input{font-family:'Public Sans',sans-serif;display:block;margin-top:6px;width:100%;padding:9px 10px;border:1px solid #d5d6ca;border-radius:3px;color:#243a30;background:var(--surface,#fffdf7);caret-color:var(--accent,#276047)}.ds-input::placeholder{color:#60685f}.ds-input:focus-visible{outline:3px solid #397455;outline-offset:3px}"
     },
     {
       "name": "Navigation",
@@ -314,7 +98,7 @@
       "refersTo": "navigation-selected",
       "description": "Current workspace destination.",
       "html": "<nav aria-label=\"Workspace\"><button class=\"ds-nav\" aria-current=\"page\">Explore cards</button></nav>",
-      "css": ".ds-nav{font-family:'DM Sans',sans-serif;display:flex;align-items:center;text-align:left;width:100%;padding:13px 12px;border:0;border-radius:7px;margin-bottom:5px;font-size:14px;font-weight:550;background:var(--soft,#eeebf8);color:#5945a3;cursor:pointer}.ds-nav:focus-visible{outline:3px solid #9c8bd9;outline-offset:3px}"
+      "css": ".ds-nav{font-family:'Public Sans',sans-serif;display:flex;align-items:center;text-align:left;width:100%;padding:13px 12px;border:0;border-radius:3px;margin-bottom:5px;font-size:14px;font-weight:550;background:var(--soft,#e5eadf);color:#276047;cursor:pointer}.ds-nav:focus-visible{outline:3px solid #397455;outline-offset:3px}"
     },
     {
       "name": "Function tag",
@@ -322,7 +106,7 @@
       "refersTo": "chip-selected",
       "description": "Selected card-function filter.",
       "html": "<button class=\"ds-tag\" aria-pressed=\"true\">Card draw</button>",
-      "css": ".ds-tag{font-family:'DM Sans',sans-serif;display:flex;gap:8px;align-items:center;border:1px solid #b6a8df;background:var(--soft,#eeebf8);color:#58419e;padding:7px 10px;border-radius:5px;font-size:11px;text-transform:capitalize;cursor:pointer}.ds-tag:hover{border-color:#b4a9d5}.ds-tag:focus-visible{outline:3px solid #9c8bd9;outline-offset:3px}"
+      "css": ".ds-tag{font-family:'Public Sans',sans-serif;display:flex;gap:8px;align-items:center;border:1px solid #d5d6ca;background:var(--soft,#e5eadf);color:#276047;padding:7px 10px;border-radius:3px;font-size:11px;text-transform:capitalize;cursor:pointer}.ds-tag:hover{border-color:#276047}.ds-tag:focus-visible{outline:3px solid #397455;outline-offset:3px}"
     },
     {
       "name": "Deck library card",
@@ -330,38 +114,37 @@
       "refersTo": "library-card",
       "description": "Saved deck container; cover art appears above this body in the library.",
       "html": "<article class=\"ds-card\"><div class=\"ds-card-body\"><h2>Untitled deck</h2><p>Commander · 0 cards</p></div></article>",
-      "css": ".ds-card{font-family:'DM Sans',sans-serif;background:white;color:#263149;border:1px solid var(--line,#e5e8ef);border-radius:12px;overflow:hidden}.ds-card-body{padding:22px}.ds-card h2{margin:0;font-size:17px;font-weight:650;letter-spacing:-.3px;overflow-wrap:anywhere}.ds-card p{font-size:11px;color:var(--muted,#626c7e);margin:10px 0 18px;line-height:1.7}"
+      "css": ".ds-card{font-family:'Public Sans',sans-serif;background:var(--surface,#fffdf7);color:#243a30;border:1px solid var(--line,#d5d6ca);border-radius:12px;overflow:hidden}.ds-card-body{padding:22px}.ds-card h2{margin:0;font-size:17px;font-weight:650;letter-spacing:-.3px;overflow-wrap:anywhere}.ds-card p{font-size:11px;color:var(--muted,#60685f);margin:10px 0 18px;line-height:1.7}"
     }
   ],
   "narrative": {
-    "northStar": "The Collector's Desk",
-    "overview": "Cool porcelain surfaces, navy ink, and violet selections frame the cards as the richest visual material. The interface is compact and orderly: discovery and deck editing share a working surface, with typography and hairlines carrying hierarchy.",
+    "northStar": "The Collector’s Index",
+    "overview": "Paper and forest-green surfaces frame uncropped Magic cards. Progressive disclosure keeps discovery and deck editing central, with appearance and backups in Settings.",
     "keyCharacteristics": [
-      "Quiet neutral surfaces with violet actions and selection.",
-      "Compact controls and generous, uncropped card imagery.",
-      "A persistent working deck on wide screens; stacked work areas on small screens."
+      "Self-hosted Newsreader headings and Public Sans controls.",
+      "Light, dark and device appearance with semantic theme tokens.",
+      "Expandable filters, function tags and query; selected tags remain visible."
     ],
     "rules": [
       {
-        "name": "The Selection Rule",
-        "body": "Use the violet family consistently for interactive selection; keep mana colors tied to card identity.",
-        "section": "colors"
+        "name": "Focus",
+        "body": "Retain keyboard outlines, native disclosure and reduced-motion support.",
+        "section": "components"
       },
       {
-        "name": "The Focus Rule",
-        "body": "Keep the shared visible keyboard outline on interactive controls; preserve reduced-motion behavior when extending components.",
-        "section": "components"
+        "name": "Game meaning",
+        "body": "Mana colors remain tied to card identity in both themes.",
+        "section": "colors"
       }
     ],
     "dos": [
-      "Do use violet for actions and selection, and mana colors for card identity.",
-      "Do preserve complete card images and readable names.",
-      "Do retain keyboard focus visibility and the reduced-motion override.",
-      "Do adapt the working deck into the document flow on narrow screens."
+      "Keep complete card imagery.",
+      "Use explicit action labels.",
+      "Keep appearance and backups accessible on mobile."
     ],
     "donts": [
-      "Don't crop card art to fit landscape tiles.",
-      "Don't replace compact information rows with decorative oversized containers."
+      "Do not change deck data when changing appearance.",
+      "Do not show every secondary tool on the initial explorer."
     ]
   }
 }

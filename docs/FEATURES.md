@@ -20,6 +20,7 @@ This inventory describes what the app does today. GitHub Issues track future wor
 | Text decklist import/export | Partial | Quantities and names; import is atomic; no sideboards or preserved roles in text export | Parser test and browser import checks |
 | JSON backup/restore | Implemented | Preserve complete decks and roles; restore adds decks | Backup and URL-validation tests |
 | Responsive interface | Implemented | Desktop inspector; mobile panel shortcut and backup controls | Desktop/mobile browser checks |
+| Focused workspace and appearance | Implemented | Expandable filters, function tags and query; Settings contains backups and persisted light/dark/device appearance; self-hosted typefaces and custom SVG navigation icons | [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9); `test/workspace.test.mjs`; desktop/mobile browser checks |
 | macOS support | Partial | Cross-platform Node 22+ implementation; directly tested on Windows only | Roadmap D05 |
 | Collection ownership | Planned | No inventory of owned cards | Roadmap D07 |
 | Price and budget planning | Partial | Individual prices from Scryfall; no deck budget totals or alerts | Roadmap D07 |

@@ -54,7 +54,7 @@ const server = createServer(async (req, res) => {
     const file = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
     if (!file.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
     const content = await readFile(file);
-    res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json' })[path.extname(file)] || 'application/octet-stream');
+    res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.ttf': 'font/ttf' })[path.extname(file)] || 'application/octet-stream');
     res.end(req.method === 'HEAD' ? undefined : content);
   } catch (error) {
     res.writeHead(error.status || (error.code === 'ENOENT' ? 404 : 502), { 'Content-Type': 'application/json' });
