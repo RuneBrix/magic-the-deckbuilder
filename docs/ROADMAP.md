@@ -12,6 +12,7 @@
 | D06 | Improve decklist interoperability | Later | Scoped | [#6](https://github.com/RuneBrix/magic-the-deckbuilder/issues/6) |
 | D07 | Collection ownership and deck budget planning | Later | Needs user feedback | [#7](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7) |
 | D08 | Decide whether native desktop packaging is useful | Later | Needs user feedback | [#8](https://github.com/RuneBrix/magic-the-deckbuilder/issues/8) |
+| D09 | Redesign typography, icons and focused workflows; add dark mode | Current | Typography, themes and progressive disclosure; see feature inventory | [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9) |
 
 Acceptance criteria and implementation progress live in the linked issues. [The issue index](ISSUE_BACKLOG.md) provides a compact overview.
 

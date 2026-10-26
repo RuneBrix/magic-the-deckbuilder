@@ -11,4 +11,6 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 - [D07 / #7: Explore collection ownership and deck budget planning](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7)
 - [D08 / #8: Decide whether native desktop packaging is useful](https://github.com/RuneBrix/magic-the-deckbuilder/issues/8)
 
+- [D09 / #9: Redesign typography, icons, appearance and focused workflows](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9)
+
 See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the development workflow](DEVELOPMENT.md).

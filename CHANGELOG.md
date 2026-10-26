@@ -4,6 +4,12 @@ Record completed user-facing changes here. Future work belongs in [GitHub issues
 
 ## Unreleased
 
+### Changed
+
+- Redesign the workspace with self-hosted Newsreader/Public Sans typography, forest-green and paper surfaces, custom card/search icons, and direct task-focused copy ([#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9)).
+- Keep search and the working deck central: expand filters, function tags and query only when needed; show the mana curve in Statistics; move JSON backup/restore into Settings on desktop and mobile.
+- Add light, dark and device-following appearance in Settings. Save the choice separately from deck data, with a session fallback when browser storage is unavailable.
+
 ### Development
 
 - Add GitHub issue and pull-request templates, a feature inventory, roadmap and development workflow.

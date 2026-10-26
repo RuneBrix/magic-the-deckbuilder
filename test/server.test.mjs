@@ -14,6 +14,9 @@ test('server serves the app, rejects traversal and validates API requests', asyn
     assert.equal(home.status, 200);
     assert.match(await home.text(), /Arcana/);
     assert.match((await fetch(base + '/app.js')).headers.get('content-type'), /javascript/);
+    const font = await fetch(base + '/fonts/PublicSans.ttf');
+    assert.equal(font.status, 200);
+    assert.equal(font.headers.get('content-type'), 'font/ttf');
     assert.equal((await fetch(base + '/%2e%2e%2fpackage.json')).status, 403);
     assert.equal((await fetch(base + '/api/search?q=&page=-1')).status, 400);
     assert.equal((await fetch(base + '/api/collection', { method: 'POST', body: JSON.stringify({ names: [] }) })).status, 400);
