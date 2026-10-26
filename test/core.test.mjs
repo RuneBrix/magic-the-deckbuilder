@@ -1,0 +1,38 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { queryFor, stats, legality, parseImport, validateBackup, safeUrl } from '../public/core.js';
+const card=(name,type,cmc,identity=[],extra={})=>({id:name,oracle_id:name,name,type_line:type,cmc,color_identity:identity,colors:identity,legalities:{commander:'legal',modern:'legal',vintage:'legal'},...extra});
+const entry=(c,qty=1,extra={})=>({card:c,qty,tags:[],...extra});
+test('guided filters compose without losing advanced syntax',()=>{
+  const f={raw:'usd<5',name:'A "name"',oracle:'draw a card',type:'instant',mv:'3',mvOp:'<=',cost:'{U}',colors:['U'],tags:['ramp','card-draw'],match:'any',legal:true};
+  assert.equal(queryFor(f,{format:'modern'}),'usd<5 name:"A \\"name\\"" o:"draw a card" t:instant mv<=3 m:{U} id<=U (otag:ramp OR otag:card-draw) f:modern'.replaceAll('\\\\','\\'));
+});
+test('stats weight quantities and omit lands from average and curve',()=>{
+  const s=stats({cards:[entry(card('Forest','Basic Land — Forest',0,['G']),10),entry(card('Spell','Creature',3,['G']),2,{tags:['Ramp']}),entry(card('Big','Artifact',9),1)]});
+  assert.equal(s.total,13);assert.equal(s.lands,10);assert.equal(s.average,5);assert.equal(s.curve[3],2);assert.equal(s.curve[7],1);assert.equal(s.tags.Ramp,2);
+});
+test('Commander flags missing commander, duplicate copies, bans, size and identity',()=>{
+  const c=card('Leader','Legendary Creature',3,['G']);
+  const d={format:'commander',cards:[entry(c,1,{commander:true}),entry(card('Blue','Instant',1,['U']),2),entry(card('Banned','Artifact',0,[],{legalities:{commander:'banned'}}))]};
+  const issues=legality(d).join(' ');assert.match(issues,/100 cards/);assert.match(issues,/outside/);assert.match(issues,/maximum 1/);assert.match(issues,/banned/);
+  d.cards[0].commander=false;assert.match(legality(d).join(' '),/Choose a commander/);
+});
+test('basic lands and explicit copy exceptions work; restricted cards limited',()=>{
+  const d={format:'vintage',cards:[entry(card('Forest','Basic Land — Forest',0,['G']),60),entry(card('Restricted','Artifact',1,[],{legalities:{vintage:'restricted'}}),2)]};
+  assert.equal(legality(d).length,1);assert.match(legality(d)[0],/restricted/);
+  d.cards=[entry(card('Rats','Creature',3,[],{oracle_text:'A deck can have any number of cards named Rats.'}),60)];assert.deepEqual(legality(d),[]);
+});
+test('imports combine duplicate names and reject malformed quantities',()=>{
+  assert.deepEqual(parseImport('1 Sol Ring\n2x Forest\n3 forest'),[{name:'Sol Ring',qty:1},{name:'forest',qty:5}]);
+  assert.throws(()=>parseImport('0 Sol Ring'));assert.throws(()=>parseImport('Commander'));assert.throws(()=>parseImport('501 Forest'));
+});
+test('backups reject duplicate identities and invalid quantities',()=>{
+  const d={id:'deck',name:'Test',format:'modern',cards:[entry(card('A','Creature',2))]};assert.equal(validateBackup([d])[0],d);
+  assert.throws(()=>validateBackup([{...d,cards:[entry(card('A','Creature',2),-1)]}]));assert.throws(()=>validateBackup([d,d]));
+});
+test('backup links only allow Scryfall HTTPS destinations',()=>{
+  assert.equal(safeUrl('javascript:alert(1)'), '');
+  assert.equal(safeUrl('https://scryfall.com.evil.example/card'), '');
+  assert.equal(safeUrl('https://cards.scryfall.io/normal/a.jpg',true), 'https://cards.scryfall.io/normal/a.jpg');
+  assert.equal(safeUrl('https://scryfall.com/card/a'), 'https://scryfall.com/card/a');
+});

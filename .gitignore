@@ -1,0 +1,7 @@
+node_modules/
+.impeccable/runtime/
+.impeccable/review/
+.cache/
+test-results/
+*.log
+arcana-decks*.json
