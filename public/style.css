@@ -431,6 +431,17 @@ summary span{font-size:12px;color:var(--muted);font-weight:400}
 .advanced-fields{padding-bottom:10px}
 .tag-browser{margin:0;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:0;background:transparent}
 .tag-browser-content{padding:14px 0 0}
+.tag-choice{display:inline-flex;max-width:100%}
+.tag-choice .tag-option{overflow-wrap:anywhere;text-align:left}
+.tag-browse{display:grid;place-items:center;min-width:34px;border:1px solid var(--line);border-radius:3px;color:var(--accent)}
+.tag-browse:hover{background:var(--soft)}
+.tag-footer>span{display:block;flex-basis:100%}
+.tag-more{margin:12px 12px 12px 0;min-height:34px}
+.tag-detail{margin-top:16px;padding:16px 0;border-top:1px solid var(--line)}
+.tag-detail h3{font-size:16px;overflow-wrap:anywhere}
+.tag-relations{margin:12px 0;font-size:12px}
+.tag-relations>div{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px}
+.tag-relations button{min-height:34px;text-align:left;overflow-wrap:anywhere;max-width:100%}
 .tag-option{border-radius:3px;font-size:12px;min-height:34px}
 .tag-footer{flex-wrap:wrap}
 .tag-search input{font-size:13px}

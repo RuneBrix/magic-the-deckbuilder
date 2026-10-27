@@ -29,6 +29,8 @@ Settings offers Light, Dark and Use device setting. The default follows the devi
 
 The initial explorer shows the primary search, collapsed Filters and Browse by function, an optional query disclosure and three starting searches. Filters contains type, mana value, color identity, card name, Oracle text and cost. Selected function tags stay visible as removable chips even when the browser is collapsed. Clear filters appears when a query is active. Open disclosure state survives search and deck rerenders.
 
+The function browser searches the dated Scryfall Oracle Tags snapshot by name and alias, with curated starting labels and descriptions. Results appear in batches of 30. Each tag has a separate add/remove control and relationship arrow; browsing recorded broader/narrower links moves focus to the detail heading without changing filters. Source date, missing-snapshot guidance and all/any semantics remain explicit. The catalog provenance and update procedure are in `docs/TAG_TAXONOMY.md`.
+
 Settings, available in the header on every viewport, holds appearance and complete JSON backup/restore. Import/export stays with the working deck. The Cards tab focuses on quantities; the mana curve lives in Statistics. Checks retains its partial-legality explanation and refresh action.
 
 ## Layout and states

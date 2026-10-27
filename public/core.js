@@ -1,18 +1,33 @@
+import { TAG_CATALOG } from './tag-catalog.js';
+export { TAG_CATALOG };
 export const FORMATS = ['commander', 'standard', 'modern', 'pioneer', 'pauper', 'legacy', 'vintage'];
 export const TAGS = [
-  ['ramp', 'Ramp', 'Make more mana', ['mana-rock', 'mana-dork', 'land-ramp']],
-  ['card-draw', 'Card draw', 'Keep your hand full', ['cantrip', 'draw-engine']],
-  ['removal', 'Removal', 'Answer a threat', ['creature-removal', 'artifact-removal', 'enchantment-removal']],
-  ['board-wipe', 'Board wipes', 'Reset the battlefield', ['mass-creature-removal']],
-  ['counterspell', 'Counterspells', 'Stop a spell', ['counterspell-creature']],
-  ['token', 'Tokens', 'Build a board', ['creature-token']],
-  ['lifegain', 'Lifegain', 'Gain life', []],
-  ['graveyard', 'Graveyard', 'Use your graveyard', ['reanimate', 'self-mill']],
-  ['sacrifice-outlet', 'Sacrifice', 'Turn permanents into value', ['free-sacrifice-outlet']],
-  ['blink', 'Blink', 'Exile and return', []],
-  ['tutor', 'Tutors', 'Find the right card', []],
-  ['protection', 'Protection', 'Keep your threats safe', []],
+  ['ramp', 'Ramp', 'Make more mana'],
+  ['draw', 'Card draw', 'Keep your hand full'],
+  ['removal', 'Removal', 'Answer a threat'],
+  ['sweeper', 'Board wipes', 'Reset the battlefield'],
+  ['counterspell', 'Counterspells', 'Stop a spell'],
+  ['repeatable-token-generator', 'Repeatable tokens', 'Build a board over time'],
+  ['lifegain', 'Lifegain', 'Gain life'],
+  ['reanimate', 'Reanimation', 'Return cards from your graveyard'],
+  ['sacrifice-outlet', 'Sacrifice', 'Turn permanents into value'],
+  ['flicker', 'Blink', 'Exile and return'],
+  ['tutor', 'Tutors', 'Find the right card'],
+  ['protection', 'Protection', 'Keep your threats safe'],
 ];
+export const tagById = new Map(TAG_CATALOG.tags.map(t => [t.id, t]));
+const normalizeTag = value => value.trim().toLowerCase().replace(/[-_\s]+/g, ' ');
+export function findTags(value) {
+  const q = normalizeTag(value);
+  const terms = t => [t.id, ...t.aliases, ...TAGS.filter(([id]) => id === t.id).flatMap(([,label,desc]) => [label, desc])];
+  const rank = t => terms(t).some(s => normalizeTag(s) === q) ? 0 : 1;
+  return TAG_CATALOG.tags.filter(t => terms(t).some(s => normalizeTag(s).includes(q)))
+    .sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id, 'en'));
+}
+export function resolveTag(value) {
+  const q = normalizeTag(value);
+  return tagById.get(value.trim().toLowerCase()) || TAG_CATALOG.tags.find(t => t.aliases.some(a => normalizeTag(a) === q));
+}
 export const count = deck => deck.cards.reduce((sum, e) => sum + e.qty, 0);
 export const isLand = card => /\bLand\b/.test(card.type_line);
 export const category = card => ['Land', 'Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Battle'].find(t => card.type_line?.includes(t)) || 'Other';

@@ -25,7 +25,7 @@ function workspace({ savedTheme = null, dark = false, blocked = false } = {}) {
       getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.theme.v1' ? savedTheme : null; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },
     },
-    setTimeout: () => 1, clearTimeout() {},
+    setTimeout: () => 1, clearTimeout() {}, URLSearchParams,
   });
   vm.runInContext(source, context);
   return { context, document, media, node, writes };
@@ -71,4 +71,34 @@ test('search disclosures start closed and preserve the opened state and selected
   assert.match(html, /name="oracle" value="draw a card"/);
   assert.match(html, /aria-label="Remove ramp filter"/);
   assert.doesNotMatch(html, /data-action="backup"|data-action="restore"/);
+});
+
+test('tag discovery renders aliases, verified relationships, limits and custom tag guidance', () => {
+  const w = workspace();
+  vm.runInContext("tagSearch = 'blink'; browsedTag = 'flicker'; filters.tags = ['unknown-arcana-tag']; render()", w.context);
+  const html = w.node('#app').innerHTML;
+  assert.match(html, /Add flicker filter/);
+  assert.match(html, /Aliases: blink/);
+  assert.match(html, /Broader tags/);
+  assert.match(html, /Narrower tags/);
+  assert.match(html, /data-browse-tag="flicker-creature"/);
+  assert.match(html, /outside this snapshot/);
+  assert.match(html, /Snapshot \d{4}-\d{2}-\d{2}/);
+  assert.match(html, /Match all requires every tag/);
+  assert.match(html, /otag:unknown-arcana-tag/);
+  vm.runInContext("tagSearch = 'unknown-arcana-tag'; render()", w.context);
+  assert.match(w.node('#app').innerHTML, /No matching name or alias/);
+  vm.runInContext("tagSearch = ''; allTags = true; render()", w.context);
+  assert.match(w.node('#app').innerHTML, /showing 30/);
+  assert.match(w.node('#app').innerHTML, /Show more tags/);
+});
+
+test('upstream no-match responses explain recovery and possible unsupported custom tags', async () => {
+  const w = workspace();
+  w.context.fetch = async () => ({ ok: false, json: async () => ({ error: 'Your query didn’t match any cards. Adjust your search terms.' }) });
+  await vm.runInContext("filters.tags = ['unknown-arcana-tag']; search()", w.context);
+  assert.match(w.node('#app').innerHTML, /No cards matched these filters/);
+  assert.match(w.node('#app').innerHTML, /custom tag may be unsupported/);
+  assert.match(w.node('#app').innerHTML, /switch to Match any/);
+  assert.match(w.node('#app').innerHTML, /otag:unknown-arcana-tag/);
 });

@@ -12,7 +12,7 @@ This inventory describes what the app does today. GitHub Issues track future wor
 | Card exploration | Implemented | Scryfall search, details, full images, sorting, result batches | Live search verified |
 | Guided card filters | Implemented | Name, Oracle text, type, mana value/cost, color identity, format | Query composition test |
 | Advanced Scryfall syntax | Implemented | Search bar accepts native syntax | `queryFor` in `public/core.js` |
-| Function-tag discovery | Partial | Curated tags, narrower suggestions, custom entry, all/any matching; no complete live taxonomy | `TAGS` and `queryFor` in `public/core.js` |
+| Function-tag discovery | Implemented | Search 4,590 snapshot tags by name/alias; browse verified broader/narrower links, curated starting points, custom entry, all/any matching and final query; dated snapshot, no live sync | [#1](https://github.com/RuneBrix/magic-the-deckbuilder/issues/1); [source/update limits](TAG_TAXONOMY.md); `test/tags.test.mjs` |
 | Related effects and synergy | Planned | No similarity ranking or synergy recommendation engine | Roadmap D02 |
 | Deck statistics | Implemented | Quantity-weighted curve, average nonland mana value, types, card colors, user role tags | Statistics test |
 | Format legality | Partial | Main-deck size, stored legality, copy limits, single commander, color identity | Legality tests; roadmap D03 |
