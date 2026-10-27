@@ -19,9 +19,9 @@ npm test
 - Create, rename, delete, and switch decks; seven format presets.
 - Search Scryfall using its full syntax plus guided name, Oracle text, type, mana value, mana cost, color identity, and format filters.
 - Curated function tags, related narrower tags, custom tag entry, all/any matching, and a visible composed query. Filter edits update the query; Search applies text, color, and mana changes. Tag, type, sort, and legal-only changes search immediately.
-- Full card images and details, adding/removing copies, commander selection, and personal role tags.
+- Full card images and details, adding/removing copies, explicit main/sideboard/command zones, and personal role tags.
 - Quantity-weighted mana curve, average nonland mana value, types, colors, and custom role counts.
-- Main-deck checks for size, stored card legality, restrictions, copy limits, one commander, and commander color identity. Refresh card data to retrieve current Scryfall legality.
+- Zone-aware Modern construction checks for main/sideboard size, combined copy limits, exceptions and stored legality. Checks distinguishes failed rules, missing data and manual review. Commander remains partial; refresh card data before use. See [coverage and sources](docs/DECK_ZONES.md).
 - Plain-text decklist import/export and JSON workspace backup/restore. Imports are atomic: unresolved cards leave the deck unchanged.
 - Responsive desktop and mobile layout, keyboard controls, native dialogs, reduced-motion support.
 
@@ -31,13 +31,13 @@ Use GitHub Issues and pull requests for ongoing work. See the [feature inventory
 
 ## Storage and limitations
 
-Decks save in this browser's localStorage on this origin. **Export JSON backups regularly**; changing browsers, ports, devices, or clearing browser data does not preserve decks. JSON restores add decks; text exports preserve only quantities and names. A storage failure is shown in the app. No cloud sync or authentication is included.
+Decks save in this browser's localStorage on this origin. **Export JSON backups regularly**; changing browsers, ports, devices, or clearing browser data does not preserve decks. JSON restores add decks; text exports preserve quantities, names and zones, while personal roles require JSON. Legacy commander flags and backups remain compatible. A storage failure is shown in the app. No cloud sync or authentication is included.
 
 Card search, the optional example deck, imports, card images, and refreshes need internet access. The example deck is deliberately incomplete and loaded from real API records. No deck is created until requested.
 
 Suggestions are a curated set, not a live or exhaustive Tagger taxonomy; some specialized tags can change or be absent. Custom tags are validated by Scryfall search. Personal role tags are user assigned and separate from Scryfall function tags. The MVP does not rank synergy or guarantee that a narrower search retains all useful cards.
 
-Legality is **partial**, not tournament certification: no sideboards, partner/background pairings, companions, special commander exceptions, points systems, or all unusual construction rules. Checks use stored Scryfall records, not a rules engine. Refresh before use. Format status can change.
+Legality is **partial**, not tournament certification. Modern main/sideboard construction is the selected verified rule family; partner/background pairings, companion predicates, special commander exceptions, points systems and unusual construction rules still require review. Checks use stored Scryfall records. Refresh before use. Format status can change. Follow-ups: [Commander #13](https://github.com/RuneBrix/magic-the-deckbuilder/issues/13), [companions #14](https://github.com/RuneBrix/magic-the-deckbuilder/issues/14).
 
 ## Implementation
 
@@ -45,4 +45,4 @@ Legality is **partial**, not tournament certification: no sideboards, partner/ba
 
 Data and complete card images: [Scryfall](https://scryfall.com/docs/api). Function tag syntax: [Scryfall search reference](https://scryfall.com/docs/syntax). Magic: The Gathering and card artwork © Wizards of the Coast and their respective artists. This is an independent, unofficial project.
 
-Future feedback: complete tag discovery, better related-effect suggestions, cloud sync, sideboards and deeper legality, price tracking, collection tracking, native packaging.
+Future feedback: live tag updates, automatic synergy ranking, cloud sync, deeper format rules, price tracking, collection tracking, native packaging.

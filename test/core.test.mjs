@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { queryFor, stats, legality, parseImport, validateBackup, safeUrl } from '../public/core.js';
-const card=(name,type,cmc,identity=[],extra={})=>({id:name,oracle_id:name,name,type_line:type,cmc,color_identity:identity,colors:identity,legalities:{commander:'legal',modern:'legal',vintage:'legal'},...extra});
+const card=(name,type,cmc,identity=[],extra={})=>({id:name,oracle_id:name,name,type_line:type,cmc,color_identity:identity,colors:identity,oracle_text:'',legalities:{commander:'legal',modern:'legal',vintage:'legal'},...extra});
 const entry=(c,qty=1,extra={})=>({card:c,qty,tags:[],...extra});
 test('guided filters compose without losing advanced syntax',()=>{
   const f={raw:'usd<5',name:'A "name"',oracle:'draw a card',type:'instant',mv:'3',mvOp:'<=',cost:'{U}',colors:['U'],tags:['ramp','card-draw'],match:'any',legal:true};

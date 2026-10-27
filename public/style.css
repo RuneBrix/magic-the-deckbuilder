@@ -459,6 +459,11 @@ summary span{font-size:12px;color:var(--muted);font-weight:400}
 .broadening-note{margin:20px 0;padding:16px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.7;overflow-wrap:anywhere}
 .broadening-note p{margin:0 0 12px}
 .compare-card{font-size:12px;min-height:34px;margin-top:6px}
+.zone-counts{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted);line-height:1.6;margin:12px 0 20px}
+.deck-zone{margin:20px 0}
+.deck-zone>h3{font-size:13px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.check-section{margin-top:24px}
+#zone-error{color:var(--danger)}
 #detail-compare{margin:0 8px 10px 0}
 @media(max-width:600px){.comparison-table{font-size:12px}.comparison-table th,.comparison-table td{padding:10px 5px}.comparison-table thead th{font-size:13px}.comparison-table th:first-child{width:24%;font-size:11px}}
 .tag-option{border-radius:3px;font-size:12px;min-height:34px}

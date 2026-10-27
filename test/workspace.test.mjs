@@ -7,7 +7,7 @@ import * as core from '../public/core.js';
 const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/, '');
 
 // Exercise the browser module's preferences and rendering without a DOM dependency.
-function workspace({ savedTheme = null, dark = false, blocked = false } = {}) {
+function workspace({ savedTheme = null, savedDecks = null, dark = false, blocked = false } = {}) {
   const writes = [], nodes = new Map();
   const node = selector => {
     if (!nodes.has(selector)) nodes.set(selector, {
@@ -22,7 +22,7 @@ function workspace({ savedTheme = null, dark = false, blocked = false } = {}) {
   const document = { querySelector: node, documentElement: { dataset: {} }, activeElement: null };
   const context = vm.createContext({ ...core, document, matchMedia: () => media,
     localStorage: {
-      getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.theme.v1' ? savedTheme : null; },
+      getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.theme.v1' ? savedTheme : savedDecks; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },
     },
     setTimeout: () => 1, clearTimeout() {}, URLSearchParams, structuredClone,
@@ -179,4 +179,33 @@ test('applying unsent changes while sorting clears an obsolete relaxation explan
   await vm.runInContext("filters.raw='usd<5'; search(false,true)",w.context);
   assert.equal(vm.runInContext('broadening',w.context),null);
   assert.doesNotMatch(vm.runInContext('resultContext.reason',w.context),/ignored/);
+});
+
+test('legacy saved decks get explicit in-memory zones without writing storage',()=>{
+  const c={id:'leader',name:'Leader',type_line:'Legendary Creature',cmc:1,color_identity:['G'],colors:['G'],oracle_text:'',legalities:{commander:'legal'}};
+  const d={id:'old',name:'Old deck',format:'commander',cards:[{card:c,qty:1,tags:['Role'],commander:true}]};
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  assert.equal(vm.runInContext('decks[0].cards[0].zone',w.context),'command');
+  assert.equal(vm.runInContext('decks[0].cards[0].tags[0]',w.context),'Role');
+  assert.equal(w.writes.length,0);
+  assert.match(w.node('#app').innerHTML,/Command zone: 1/);
+  vm.runInContext("deckTab='checks'; render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Failed checks/);
+  assert.match(w.node('#app').innerHTML,/Data unavailable/);
+  assert.match(w.node('#app').innerHTML,/Manual review/);
+  assert.match(w.node('#app').innerHTML,/coverage is partial/);
+});
+
+test('zone row quantity buttons target only their entry and sideboard does not inflate deck progress',async()=>{
+  const c={id:'land',oracle_id:'land',name:'Forest',type_line:'Basic Land — Forest',cmc:0,color_identity:['G'],colors:[],oracle_text:'',legalities:{modern:'legal'}};
+  const d={id:'zones',name:'Zones',format:'modern',cards:[{card:c,qty:60,tags:[],zone:'main'},{card:c,qty:15,tags:[],zone:'sideboard'}]};
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  const button={dataset:{zonePlus:core.entryKey(d.cards[1])}};
+  w.context.FormData=class {get(key){return vm.runInContext(`filters[${JSON.stringify(key)}]`,w.context);}};
+  await w.node('#app').click({target:{closest:()=>button}});
+  assert.equal(vm.runInContext('decks[0].cards[0].qty',w.context),60);
+  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),16);
+  assert.match(w.node('#app').innerHTML,/<strong>60<span> \/ 60\+/);
+  vm.runInContext("deckTab='checks'; render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Sideboard has 16/);
 });

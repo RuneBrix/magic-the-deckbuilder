@@ -10,6 +10,8 @@ Magic players building decks and exploring cards who currently move between Scry
 Local browser storage, Scryfall live API, guided combinable function tags and Oracle filters, full advanced syntax, deck creation, import/export, mana curve and category counts. No authentication or cloud synchronization in this MVP. Function discovery searches a dated official Oracle Tags snapshot with aliases and recorded relationships; starting points are curated and live taxonomy synchronization is not implemented. Format checks are a useful subset, not a tournament certification. User requested deferring unspecified decisions until later feedback.
 Manual two-card effect comparison supports reversible guided search broadening and explicit source-query context. Automatic similarity, upgrade and synergy rankings are not implemented.
 
+Decks have main, sideboard and command zones. Modern construction checks are zone-aware; Commander and companion rules remain partial and are labeled for manual review. Existing browser data and legacy backups remain compatible.
+
 ## Open decisions
 
-Accounts and cross-device storage, full taxonomy access, partner commanders, sideboards, collection tracking, and native desktop packaging.
+Accounts and cross-device storage, live taxonomy synchronization, complete Commander/companion validation, collection tracking, and native desktop packaging.
