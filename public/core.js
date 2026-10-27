@@ -49,6 +49,25 @@ export function queryFor(f, deck) {
   if (f.legal && deck) bits.push('f:' + deck.format);
   return bits.filter(Boolean).join(' ') || 'game:paper';
 }
+export function relaxationOptions(f, deck) {
+  return [
+    ['name', f.name.trim(), `Card name: ${f.name}`],
+    ['oracle', f.oracle.trim(), `Oracle phrase: ${f.oracle}`],
+    ['type', f.type, `Type: ${f.type}`],
+    ['mv', f.mv !== '', `Mana value: ${f.mvOp}${f.mv}`],
+    ['cost', f.cost.trim(), `Mana cost: ${f.cost}`],
+    ['colors', f.colors.length, `Color identity: ${f.colors.join(', ')}`],
+    ['tags', f.tags.length, `Function tags (${f.match}): ${f.tags.join(', ')}`],
+    ['legal', f.legal && deck, `Format legality: ${deck?.format}`],
+  ].filter(([, active]) => active).map(([key,, label]) => ({ key, label }));
+}
+export function relaxSearch(f, deck, key) {
+  const option = relaxationOptions(f, deck).find(o => o.key === key);
+  if (!option) throw Error('Choose an active guided condition to relax.');
+  const original = structuredClone(f), relaxed = structuredClone(f);
+  relaxed[key] = Array.isArray(f[key]) ? [] : key === 'legal' ? false : '';
+  return { original, filters: relaxed, originalQuery: queryFor(original, deck), query: queryFor(relaxed, deck), label: option.label };
+}
 export function stats(deck) {
   const result = { total: count(deck), lands: 0, spells: 0, average: 0, curve: Array(8).fill(0), types: {}, tags: Object.create(null), colors: Object.fromEntries('WUBRGC'.split('').map(c => [c, 0])) };
   let value = 0;
