@@ -4,7 +4,7 @@
 
 | Reference | Work | Proposed priority | Scope | GitHub issue |
 | --- | --- | --- | --- | --- |
-| D01 | Discover and navigate a broader function-tag taxonomy | Next | Scoped | [#1](https://github.com/RuneBrix/magic-the-deckbuilder/issues/1) |
+| D01 | Discover and navigate a broader function-tag taxonomy | Implemented | Dated official snapshot, alias search and verified relationship navigation; [limits/update strategy](TAG_TAXONOMY.md) | [#1](https://github.com/RuneBrix/magic-the-deckbuilder/issues/1) |
 | D02 | Compare related effects and explain search broadening | Next | Scoped | [#2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) |
 | D03 | Extend format checks and support deck zones | Next | Scoped | [#3](https://github.com/RuneBrix/magic-the-deckbuilder/issues/3) |
 | D04 | Decide durable storage and cross-device workflow | Next | Needs user decision | [#4](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4) |
