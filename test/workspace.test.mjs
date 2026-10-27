@@ -13,7 +13,7 @@ function workspace({ savedTheme = null, dark = false, blocked = false } = {}) {
     if (!nodes.has(selector)) nodes.set(selector, {
       innerHTML: '', content: '', addEventListener(type, fn) { this[type] = fn; },
       contains() { return false; }, querySelector: node,
-      setAttribute() {}, showModal() {},
+      setAttribute() {}, showModal() {}, focus() {}, close() {},
       classList: { add() {}, remove() {} },
     });
     return nodes.get(selector);
@@ -25,7 +25,7 @@ function workspace({ savedTheme = null, dark = false, blocked = false } = {}) {
       getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.theme.v1' ? savedTheme : null; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },
     },
-    setTimeout: () => 1, clearTimeout() {}, URLSearchParams,
+    setTimeout: () => 1, clearTimeout() {}, URLSearchParams, structuredClone,
   });
   vm.runInContext(source, context);
   return { context, document, media, node, writes };
@@ -101,4 +101,82 @@ test('upstream no-match responses explain recovery and possible unsupported cust
   assert.match(w.node('#app').innerHTML, /custom tag may be unsupported/);
   assert.match(w.node('#app').innerHTML, /switch to Match any/);
   assert.match(w.node('#app').innerHTML, /otag:unknown-arcana-tag/);
+});
+
+test('comparison retains result provenance across unsent edits and subsequent searches', async () => {
+  const w = workspace();
+  const card = name => ({id:name,oracle_id:name,name,type_line:'Instant',cmc:2,mana_cost:'{1}{U}',colors:['U'],color_identity:['U'],oracle_text:'Draw a card.'});
+  w.context.fetch = async () => ({ok:true,json:async()=>({data:[card('First')],total_cards:1,has_more:false})});
+  await vm.runInContext("filters.tags=['draw']; filters.mv='2'; search();",w.context);
+  vm.runInContext("filters.tags=['removal']; toggleComparison('First');",w.context);
+  let html=w.node('#app').innerHTML;
+  assert.match(html,/Searched for all: draw/);
+  assert.match(html,/mv&lt;=2 \(otag:draw\)/);
+  assert.doesNotMatch(html,/Searched for all: removal/);
+  w.context.fetch = async () => ({ok:true,json:async()=>({data:[card('Second'),card('Third')],total_cards:2,has_more:false})});
+  await vm.runInContext('search()',w.context);
+  vm.runInContext("toggleComparison('Second'); toggleComparison('Third');",w.context);
+  assert.equal(vm.runInContext('comparison.length',w.context),2);
+  assert.equal(vm.runInContext("findCard('First').name",w.context),'First');
+  html=w.node('#app').innerHTML;
+  assert.match(html,/Your comparison/);
+  assert.match(html,/Individual tag membership is not verified/);
+  assert.match(html,/Oracle text/);
+  assert.match(html,/Selected from query/);
+  assert.match(html,/No personal roles recorded/);
+  assert.equal(w.writes.length,0);
+});
+
+test('broadening always starts from original settings and restoration survives upstream failure', async () => {
+  const w=workspace(), queries=[];
+  w.context.FormData=class {get(key){return vm.runInContext(`filters[${JSON.stringify(key)}]`,w.context);}};
+  w.context.fetch=async url=>{queries.push(String(url));return {ok:false,json:async()=>({error:'Offline test'})};};
+  vm.runInContext("filters.raw='usd<5'; filters.tags=['ramp']; filters.mv='3'; filters.type='creature';",w.context);
+  await vm.runInContext("broaden('mv')",w.context);
+  let html=w.node('#app').innerHTML;
+  assert.match(html,/Ignored Mana value: &lt;=3/);
+  assert.match(html,/Original query: <code>usd&lt;5 t:creature mv&lt;=3 \(otag:ramp\)/);
+  assert.match(html,/Return to original search/);
+  await vm.runInContext("broaden('type')",w.context);
+  assert.equal(vm.runInContext('filters.mv',w.context),'3');
+  assert.equal(vm.runInContext('filters.type',w.context),'');
+  await vm.runInContext('restoreSearch()',w.context);
+  assert.equal(vm.runInContext('filters.type',w.context),'creature');
+  assert.equal(vm.runInContext('filters.mv',w.context),'3');
+  assert.equal(vm.runInContext('broadening',w.context),null);
+  assert.ok(decodeURIComponent(queries[0]).includes('t:creature'));
+  assert.ok(decodeURIComponent(queries[1]).includes('mv<=3'));
+  assert.equal(w.writes.length,0);
+});
+
+test('stale alternative responses cannot overwrite restored results or their comparison context',async()=>{
+  const w=workspace();let finish;
+  w.context.fetch=()=>new Promise(resolve=>{finish=resolve;});
+  const stale=vm.runInContext("filters.tags=['ramp']; search()",w.context);
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
+  await vm.runInContext("filters.tags=['draw']; search()",w.context);
+  finish({ok:true,json:async()=>({data:[],total_cards:99,has_more:true})});
+  await stale;
+  assert.equal(vm.runInContext('total',w.context),0);
+  assert.equal(vm.runInContext('resultContext.query',w.context),'(otag:draw)');
+});
+
+test('pagination uses the completed result query rather than unsent filter edits',async()=>{
+  const w=workspace(), queries=[];
+  w.context.fetch=async url=>{queries.push(String(url));return {ok:true,json:async()=>({data:[],total_cards:300,has_more:true})};};
+  await vm.runInContext("filters.tags=['ramp']; search()",w.context);
+  await vm.runInContext("filters.tags=['draw']; search(true)",w.context);
+  assert.equal(new URLSearchParams(queries[1].split('?')[1]).get('q'),'(otag:ramp)');
+  assert.equal(new URLSearchParams(queries[1].split('?')[1]).get('page'),'2');
+});
+
+test('applying unsent changes while sorting clears an obsolete relaxation explanation',async()=>{
+  const w=workspace();
+  w.context.FormData=class {get(key){return vm.runInContext(`filters[${JSON.stringify(key)}]`,w.context);}};
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
+  await vm.runInContext("filters.tags=['ramp']; filters.mv='3'; broaden('mv')",w.context);
+  assert.ok(vm.runInContext('broadening',w.context));
+  await vm.runInContext("filters.raw='usd<5'; search(false,true)",w.context);
+  assert.equal(vm.runInContext('broadening',w.context),null);
+  assert.doesNotMatch(vm.runInContext('resultContext.reason',w.context),/ignored/);
 });

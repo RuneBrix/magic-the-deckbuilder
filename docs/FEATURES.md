@@ -13,7 +13,8 @@ This inventory describes what the app does today. GitHub Issues track future wor
 | Guided card filters | Implemented | Name, Oracle text, type, mana value/cost, color identity, format | Query composition test |
 | Advanced Scryfall syntax | Implemented | Search bar accepts native syntax | `queryFor` in `public/core.js` |
 | Function-tag discovery | Implemented | Search 4,590 snapshot tags by name/alias; browse verified broader/narrower links, curated starting points, custom entry, all/any matching and final query; dated snapshot, no live sync | [#1](https://github.com/RuneBrix/magic-the-deckbuilder/issues/1); [source/update limits](TAG_TAXONOMY.md); `test/tags.test.mjs` |
-| Related effects and synergy | Planned | No similarity ranking or synergy recommendation engine | Roadmap D02 |
+| Effect comparison | Implemented | Manually select two cards, relax one guided condition with original-query restoration, and compare attributes and explicit search/role context; no inferred equivalence | [D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2); [workflow and limits](EFFECT_COMPARISON.md); comparison/workspace tests |
+| Synergy recommendations | Planned | No similarity ranking, automatic upgrade recommendation or synergy scoring; separate scope decision | [D02 scope](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) |
 | Deck statistics | Implemented | Quantity-weighted curve, average nonland mana value, types, card colors, user role tags | Statistics test |
 | Format legality | Partial | Main-deck size, stored legality, copy limits, single commander, color identity | Legality tests; roadmap D03 |
 | Current card data | Partial | Explicit refresh; server caches responses for five minutes | `server.mjs`, refresh action |

@@ -6,6 +6,7 @@ Record completed user-facing changes here. Future work belongs in [GitHub issues
 
 ### Changed
 
+- Add manual two-card effect comparison with mana, colors, Oracle text and role/search context. Broaden one guided condition with an explicit reason, preserved original query and return action; retain comparisons across searches without automatic ranking ([D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2)).
 - Expand function discovery to a bundled Scryfall snapshot of 4,590 tags with alias search, broader/narrower navigation, dated source information and custom-tag guidance. Replace unsupported starting suggestions with verified canonical names ([D01 / #1](https://github.com/RuneBrix/magic-the-deckbuilder/issues/1)); [source and updates](docs/TAG_TAXONOMY.md).
 - Redesign the workspace with self-hosted Newsreader/Public Sans typography, forest-green and paper surfaces, custom card/search icons, and direct task-focused copy ([#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9)).
 - Keep search and the working deck central: expand filters, function tags and query only when needed; show the mana curve in Statistics; move JSON backup/restore into Settings on desktop and mobile.

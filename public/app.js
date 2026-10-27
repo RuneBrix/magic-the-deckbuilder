@@ -1,4 +1,4 @@
-import { FORMATS, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, category, imageFor, oracle, queryFor, stats, legality, parseImport, validateBackup, safeUrl } from './core.js';
+import { FORMATS, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, category, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, legality, parseImport, validateBackup, safeUrl } from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -24,6 +24,7 @@ let filters = { raw: '', name: '', oracle: '', type: '', mv: '', mvOp: '<=', cos
 let filtersOpen = false, tagsOpen = false, queryOpen = false;
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
 let browsedTag = '', tagLimit = 30, allTags = false;
+let comparison = [], comparisonOpen = false, broadening = null, resultContext = null;
 const current = () => decks.find(d => d.id === active);
 const cardKey = c => c.oracle_id || c.id;
 function save() {
@@ -56,7 +57,8 @@ function explorer() {
   return `<div class="explorer"><div class="page-heading"><div><h1>Find a place in your deck.</h1><p>Search Magic cards by name, rules text, or what they do.</p></div></div><form id="search-form"><div class="search-box">${icon('search', 22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.raw)}"><button class="primary" type="submit">Search ${icon('arrow', 16)}</button></div><details id="search-filters" class="search-disclosure" ${filtersOpen ? 'open' : ''}><summary>${icon('filters',16)} Filters <span>${[filters.type, filters.mv, filters.name, filters.oracle, filters.cost, ...filters.colors].filter(Boolean).length || ''}</span></summary><div class="filter-row"><label>Type<select name="type"><option value="">Any type</option>${['creature', 'instant', 'sorcery', 'artifact', 'enchantment', 'land', 'planeswalker', 'battle'].map(t => `<option ${filters.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label><label>Mana value<div class="value-filter"><select name="mvOp" aria-label="Mana value comparison">${['<=', '=', '>='].map(o => `<option ${o === filters.mvOp ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select><input name="mv" type="number" min="0" max="99" aria-label="Mana value" placeholder="Any" value="${esc(filters.mv)}"></div></label><fieldset class="color-filter"><legend>Color identity</legend><div>${'WUBRG'.split('').map(c => `<button type="button" class="color-button mana-${c} ${filters.colors.includes(c) ? 'chosen' : ''}" data-color="${c}" aria-pressed="${filters.colors.includes(c)}" aria-label="${({ W:'White', U:'Blue', B:'Black', R:'Red', G:'Green' })[c]} identity">${c}</button>`).join('')}</div></fieldset></div><div class="advanced-fields"><label>Card name<input name="name" value="${esc(filters.name)}" placeholder="Exact phrase in name"></label><label>Oracle text<input name="oracle" value="${esc(filters.oracle)}" placeholder="e.g. whenever a creature dies"></label><label>Mana cost<input name="cost" value="${esc(filters.cost)}" placeholder="e.g. {1}{G}"></label></div><p class="hint">Colors include colorless cards and any subset of the selected identity. Full syntax works in the search bar.</p></details></form>
   <details id="function-tags" class="tag-browser" ${tagsOpen ? 'open' : ''}><summary>${icon('leaf',16)} Browse by function <span>${filters.tags.length ? filters.tags.length + ' selected' : 'Ramp, draw, removal…'}</span></summary><div class="tag-browser-content"><div class="tag-search">${icon('search', 15)}<input id="tag-search" value="${esc(tagSearch)}" placeholder="Find a function, like ramp or removal…" aria-label="Find function tags"></div><div id="tag-options">${tagOptions()}</div><div class="tag-footer"><span>Match all requires every tag; Match any accepts any tag.</span><label class="inline-label">Combine tags<select id="tag-match"><option value="all" ${filters.match === 'all' ? 'selected' : ''}>Match all</option><option value="any" ${filters.match === 'any' ? 'selected' : ''}>Match any</option></select></label><button class="text-button" data-action="custom-tag">+ Custom tag</button></div></div></details>
   ${filters.tags.length ? `<div class="active-tags" aria-label="Active function tags">${filters.tags.map(t=>`<button class="tag-option selected" data-tag="${esc(t)}" aria-label="Remove ${esc(t)} filter">${esc(t.replaceAll('-',' '))} ${icon('close',12)}</button>`).join('')}</div>` : ''}<details id="query-details" class="query-details" ${queryOpen ? 'open' : ''}><summary>View Scryfall query</summary><div class="query-strip"><span>QUERY</span><code id="query">${esc(queryFor(filters, d))}</code><button class="icon-button" data-action="reset" aria-label="Reset all search filters">${icon('close', 15)}</button></div></details>
-  <div class="results-heading"><div><h2>${searched ? 'Cards' : 'Start a search'}</h2><span id="result-count" role="status" aria-live="polite">${loading ? 'Searching Scryfall…' : searched && !error ? `${total.toLocaleString()} cards found` : 'Choose a starting point below'}</span></div><div class="results-controls">${Object.entries(filters).some(([k,v])=>!['match','mvOp'].includes(k) && (Array.isArray(v) ? v.length : v)) ? '<button class="text-button" data-action="reset">Clear filters</button>' : ''}${d ? `<label class="legal-toggle"><input id="legal" type="checkbox" ${filters.legal ? 'checked' : ''}> ${esc(d.format)} legal</label>` : ''}<select id="sort" aria-label="Sort cards">${[['edhrec','Popular first'],['cmc','Mana value'],['name','Name A–Z'],['usd','Price: low first']].map(([v,l])=>`<option value="${v}" ${order === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+  ${comparisonTools()}
+  <div class="results-heading"><div><h2 id="result-heading" tabindex="-1">${searched ? 'Cards' : 'Start a search'}</h2><span id="result-count" role="status" aria-live="polite">${loading ? 'Searching Scryfall…' : searched && !error ? `${total.toLocaleString()} cards found` : 'Choose a starting point below'}</span></div><div class="results-controls">${Object.entries(filters).some(([k,v])=>!['match','mvOp'].includes(k) && (Array.isArray(v) ? v.length : v)) ? '<button class="text-button" data-action="reset">Clear filters</button>' : ''}${d ? `<label class="legal-toggle"><input id="legal" type="checkbox" ${filters.legal ? 'checked' : ''}> ${esc(d.format)} legal</label>` : ''}<select id="sort" aria-label="Sort cards">${[['edhrec','Popular first'],['cmc','Mana value'],['name','Name A–Z'],['usd','Price: low first']].map(([v,l])=>`<option value="${v}" ${order === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
   ${error ? `<div class="empty-state" role="alert">${icon('search',32)}<h3>${error.startsWith('No cards') ? 'A little too specific?' : 'Search couldn’t finish'}</h3><p>${esc(error)}</p><div><button class="secondary" data-action="reset">Clear filters</button><button class="primary" data-action="retry">Try again</button></div></div>` : loading && !results.length ? `<div class="loading-state"><span class="spinner"></span><p>Looking through the library…</p></div>` : `<div class="card-grid" aria-busy="${loading}">${results.slice(0,visibleLimit).map(cardTile).join('')}</div>${!searched && !results.length ? `<div class="welcome-state"><span class="welcome-icon">${icon('leaf', 32)}</span><h3>What does your deck need?</h3><p>Start with a common role, or search for a card above.</p><div><button data-preset="ramp">Find ramp</button><button data-preset="draw">Find card draw</button><button data-preset="removal">Find removal</button></div></div>` : ''}`}
   ${(more || visibleLimit < results.length) && !error ? `<button class="load-more secondary" data-action="more" ${loading ? 'disabled' : ''}>${loading ? 'Loading…' : 'Load more cards'}</button>` : ''}<footer>Card data and images by <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. Magic: The Gathering © Wizards of the Coast.</footer></div>`;
 }
@@ -74,10 +76,60 @@ function tagOptions() {
     ${detail ? `<section class="tag-detail" aria-label="Tag relationships"><h3>${esc(detail.id.replaceAll('-',' '))}</h3><p class="hint">${detail.aliases.length ? 'Aliases: '+esc(detail.aliases.join(', '))+'. ' : ''}<a href="https://tagger.scryfall.com/tags/card/${encodeURIComponent(detail.id)}" target="_blank" rel="noreferrer">View on Tagger</a></p>${relation('Broader tags', detail.parents)}${relation('Narrower tags', detail.children)}<p class="hint">Relationships come from the snapshot. Browsing leaves your filters unchanged; use + to combine tags. Match all requires every tag; Match any accepts any tag.</p><button class="secondary" data-tag="${esc(detail.id)}">${filters.tags.includes(detail.id) ? 'Remove from' : 'Add to'} search</button></section>` : ''}
     ${filters.tags.filter(t => !tagById.has(t)).map(t => `<p class="hint">Custom tag “${esc(t)}” is outside this snapshot. Scryfall may accept it, reject it, or return no cards.</p>`).join('')}`;
 }
+function comparisonTools() {
+  const source = broadening?.original || filters;
+  const options = relaxationOptions(source, current());
+  const colors = value => Array.isArray(value) ? value.length ? [...new Set(value)].join(', ') : 'Colorless' : 'Unknown';
+  const row = (label, value) => `<tr><th scope="row">${label}</th>${comparison.map(item => `<td>${value(item)}</td>`).join('')}${comparison.length === 1 ? '<td>—</td>' : ''}</tr>`;
+  return `<details id="comparison-tools" class="search-disclosure comparison-tools" ${comparisonOpen ? 'open' : ''}><summary>Compare alternatives <span>${comparison.length}/2 cards</span></summary><div class="comparison-content">
+    <p class="hint">Choose Compare on two cards to inspect their tradeoffs. Results follow your chosen Scryfall sort, with no synergy score or best-card ranking. Loaded batches are not exhaustive.</p>
+    <h3 id="comparison-title" tabindex="-1">${comparison.length ? 'Your comparison' : 'Choose cards to compare'}</h3>
+    ${comparison.length ? `<table class="comparison-table"><caption class="sr-only">Card attributes and search context</caption><thead><tr><th scope="col">Attribute</th>${comparison.map(({card}) => `<th scope="col">${esc(card.name)}<button class="text-button" data-remove-compare="${esc(cardKey(card))}" aria-label="Remove ${esc(card.name)} from comparison">Remove</button></th>`).join('')}${comparison.length === 1 ? '<th scope="col">Choose a second card</th>' : ''}</tr></thead><tbody>
+      ${row('Card', ({card}) => { const image = safeUrl(imageFor(card),true); return `${image ? `<img src="${esc(image)}" alt="${esc(card.name)}" loading="lazy">` : ''}<button class="text-button" data-inspect="${esc(card.id)}" aria-label="Inspect ${esc(card.name)}">Inspect</button> <button class="text-button" data-add="${esc(card.id)}" aria-label="Add ${esc(card.name)} to deck">Add to deck</button>`; })}
+      ${row('Mana value', ({card}) => esc(card.cmc))}
+      ${row('Mana cost', ({card}) => mana(card.mana_cost) || 'No mana cost')}
+      ${row('Colors', ({card}) => esc(colors(card.colors || (card.card_faces?.some(f => Array.isArray(f.colors)) ? card.card_faces.flatMap(f => f.colors || []) : undefined))))}
+      ${row('Color identity', ({card}) => esc(colors(card.color_identity)))}
+      ${row('Type', ({card}) => esc(card.type_line))}
+      ${row('Oracle text', ({card}) => `<span class="comparison-oracle">${esc(oracle(card)) || 'No Oracle text.'}</span>`)}
+      ${row('Functional roles', item => `${item.roles.length ? `Your deck roles: ${esc(item.roles.join(', '))}. ` : 'No personal roles recorded. '}${item.tags.length ? `Searched for ${esc(item.match)}: ${esc(item.tags.join(', '))}. Individual tag membership is not verified.` : 'No guided function tags in this search.'}`)}
+      ${row('Why shown', item => esc(item.reason))}
+      ${row('Selected from query', item => `<code>${esc(item.query)}</code>`)}
+    </tbody></table>` : '<p class="hint">Use Compare below a result, or Compare this card in its details. Selections stay here across searches until removed or the page is reloaded.</p>'}
+    <h3>Broaden one condition</h3><p class="hint">Ignore one guided condition to look for alternatives. All other conditions and advanced syntax stay in place. Changing the choice always starts from the original search, so relaxations do not accumulate. Removing the color or legality condition may show cards that do not fit your deck.</p>
+    ${options.length ? `<div class="relax-options">${options.map(o => `<button class="secondary" data-relax="${esc(o.key)}" ${broadening?.label === o.label ? 'disabled' : ''}>Ignore ${esc(o.label)}</button>`).join('')}</div>` : '<p class="hint">No guided condition to relax. Add guided filters; advanced syntax is kept verbatim and is not rewritten.</p>'}
+    ${broadening ? `<div class="broadening-note" role="status"><p><strong>Why these results:</strong> Ignored ${esc(broadening.label)}. Other original conditions were retained. A match is a candidate for manual comparison, not a guarantee of the same effect.</p><p>Original query: <code>${esc(broadening.originalQuery)}</code></p><p>Alternative query: <code>${esc(broadening.query)}</code></p><button class="secondary" data-action="restore-search">Return to original search</button><p class="hint">Applying other search controls starts a new search. Compare selections remain.</p></div>` : ''}
+  </div></details>`;
+}
+function toggleComparison(id) {
+  const card = findCard(id); if (!card) return;
+  const key = cardKey(card), exists = comparison.some(item => cardKey(item.card) === key);
+  if (exists) comparison = comparison.filter(item => cardKey(item.card) !== key);
+  else {
+    if (comparison.length === 2) { toast('Remove a comparison card before choosing another.'); return; }
+    const context = results.some(c => c.id === id) ? resultContext : null;
+    comparison.push({ card, query: context?.query || 'Selected from your deck; no result-query membership checked.', tags: [...(context?.tags || [])], match: context?.match || 'all',
+      roles: [...(current()?.cards.find(e => cardKey(e.card) === key)?.tags || [])],
+      reason: context?.reason || 'Selected manually from your deck. No search match or card equivalence is inferred.' });
+  }
+  comparisonOpen = true; render(); $('#comparison-title')?.focus();
+}
+function broaden(key) {
+  readFilters();
+  const result = relaxSearch(broadening?.original || filters, current(), key);
+  broadening = result; filters = result.filters; comparisonOpen = true; queryOpen = true;
+  return search(false, true).then(()=>$('#result-heading')?.focus());
+}
+function restoreSearch() {
+  if (!broadening) return;
+  filters = broadening.original; broadening = null;
+  return search().then(()=>$('#result-heading')?.focus());
+}
 function cardTile(c) {
   const entry = current()?.cards.find(e=>cardKey(e.card)===cardKey(c));
   const image = imageFor(c);
-  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="Add ${esc(c.name)} to deck">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${c.prices?.usd ? '$' + esc(c.prices.usd) : '—'}</span></div></article>`;
+  const compared = comparison.some(item=>cardKey(item.card)===cardKey(c));
+  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="Add ${esc(c.name)} to deck">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${c.prices?.usd ? '$' + esc(c.prices.usd) : '—'}</span></div><button class="text-button compare-card" data-compare="${esc(c.id)}" aria-label="${esc(compared ? `Remove ${c.name} from comparison` : `Compare ${c.name}`)}" aria-pressed="${compared}">${compared ? 'Remove comparison' : 'Compare'}</button></article>`;
 }
 function deckPanel(d) {
   if (!d) return `<div class="panel-title">${icon('cards',18)} Your deck</div><div class="empty-deck">${icon('cards',40)}<h2>Build as you browse.</h2><p>Create a deck and add cards as you explore. Your curve and card counts will take shape here.</p><button class="primary" data-action="new">${icon('plus',16)} Create a deck</button><button class="text-button" data-action="sample">Try an example deck</button></div><div class="panel-footnote">Your decks stay on this device.<br>Export a backup to take them with you.</div>`;
@@ -98,6 +150,7 @@ function library() { return `<div class="library"><div class="page-heading"><div
 function readFilters() { const form=$('#search-form'); if (!form) return; const data=new FormData(form); for(const key of ['raw','name','oracle','type','mv','mvOp','cost']) filters[key]=String(data.get(key)||''); }
 function updateQuery() { const node=$('#query'); if(node) node.textContent=queryFor(filters,current()); }
 function bind() {
+  $('#comparison-tools')?.addEventListener('toggle',e=>{comparisonOpen=e.target.open;});
   $('#query-details')?.addEventListener('toggle',e=>{queryOpen=e.target.open;});
   $('#search-filters')?.addEventListener('toggle',e=>{filtersOpen=e.target.open;});
   $('#function-tags')?.addEventListener('toggle',e=>{tagsOpen=e.target.open;});
@@ -106,14 +159,17 @@ function bind() {
   $('#search-form')?.addEventListener('change',e=>{readFilters();updateQuery();if(e.target.tagName==='SELECT')search();});
   $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagLimit=30;$('#tag-options').innerHTML=tagOptions();});
   $('#tag-match')?.addEventListener('change',e=>{readFilters();filters.match=e.target.value;search();});
-  $('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search();});
+  $('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true);});
   $('#legal')?.addEventListener('change',e=>{readFilters();filters.legal=e.target.checked;search();});
 }
 $('#app').addEventListener('click',async e=>{
   const button=e.target.closest('button');if(!button)return;readFilters();
   if(button.dataset.view){view=button.dataset.view;render();return;}
-  if(button.dataset.deck){active=button.dataset.deck;view='explore';if(filters.legal)search();else render();return;}
+  if(button.dataset.deck){broadening=null;active=button.dataset.deck;view='explore';if(filters.legal)search();else render();return;}
   if(button.dataset.tab){deckTab=button.dataset.tab;render();return;}
+  if(button.dataset.compare){toggleComparison(button.dataset.compare);return;}
+  if(button.dataset.removeCompare){comparison=comparison.filter(item=>cardKey(item.card)!==button.dataset.removeCompare);render();$('#comparison-title')?.focus();return;}
+  if(button.dataset.relax){await broaden(button.dataset.relax);return;}
   if(button.dataset.browseTag){browsedTag=button.dataset.browseTag;$('#tag-options').innerHTML=tagOptions();$('#tag-options .tag-detail h3').tabIndex=-1;$('#tag-options .tag-detail h3').focus();return;}
   if(button.dataset.tag){readFilters();const t=button.dataset.tag;filters.tags=filters.tags.includes(t)?filters.tags.filter(x=>x!==t):[...filters.tags,t];search();return;}
   if(button.dataset.preset){filters.tags=[button.dataset.preset];search();return;}
@@ -127,7 +183,8 @@ $('#app').addEventListener('click',async e=>{
   if(action==='edit') deckForm(current());
   if(action==='settings')settings();
   if(action==='reset'){filters={raw:'',name:'',oracle:'',type:'',mv:'',mvOp:'<=',cost:'',colors:[],tags:[],match:'all',legal:false};tagSearch='';search();}
-  if(action==='retry')search();
+  if(action==='retry')search(false,true);
+  if(action==='restore-search')await restoreSearch();
   if(action==='more')search(true);
   if(action==='all-tags'||action==='more-tags'){allTags=true;if(action==='more-tags')tagLimit+=30;$('#tag-options').innerHTML=tagOptions();}
   if(action==='custom-tag')customTag();
@@ -140,14 +197,16 @@ $('#app').addEventListener('click',async e=>{
   if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Match all” narrows your results; “Match any” broadens them. Open “View Scryfall query” to see what goes to Scryfall.</p><p>Starting points and their descriptions are curated. Search names and aliases across the bundled Scryfall Oracle Tags snapshot; use the arrow beside a tag to browse its recorded broader and narrower relationships. The snapshot date is shown because live Tagger can change. Use Custom tag for newer or other known tags.</p><p>Create a deck to start adding cards. Inspect a card to set your commander or assign personal role tags. These role tags power deck statistics and are separate from Scryfall’s tags.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Format checks cover common main-deck rules. Review special restrictions and tournament rules manually.</p>`);
 });
 async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw new Error(data.error || 'Request failed.');return data; }
-async function search(append=false) {
+async function search(append=false,keepBroadening=false) {
+  if(!append && (!keepBroadening || (broadening && queryFor(filters,current())!==broadening.query)))broadening=null;
   if(append && visibleLimit < results.length){visibleLimit+=24;render();return;}
+  const context=append&&resultContext ? resultContext : {query:queryFor(filters,current()),tags:[...filters.tags],match:filters.match,reason:broadening ? `Matched the query with ${broadening.label} ignored. Other original conditions were retained.` : 'Matched the recorded search query. Selected manually; card equivalence is not inferred.'};
   const id=++requestId;loading=true;error='';if(!append){page=1;results=[];visibleLimit=24;}else{visibleLimit+=24;}const requestedPage=append?page+1:1;render();
-  try {const data=await api('/api/search?'+new URLSearchParams({q:queryFor(filters,current()),page:requestedPage,order}));if(id!==requestId)return;results=append?[...results,...data.data]:data.data;total=data.total_cards;more=data.has_more;page=requestedPage;}
+  try {const data=await api('/api/search?'+new URLSearchParams({q:context.query,page:requestedPage,order}));if(id!==requestId)return;results=append?[...results,...data.data]:data.data;resultContext=context;total=data.total_cards;more=data.has_more;page=requestedPage;}
   catch(e){if(id!==requestId)return;error=/0 cards|No cards|didn.t match any cards/i.test(e.message)?'No cards matched these filters. A custom tag may be unsupported. Remove a tag, switch to Match any, or broaden your Oracle text.':e.message;more=false;}
   finally{if(id===requestId){loading=false;searched=true;render();}}
 }
-function findCard(id) {return results.find(c=>c.id===id)||current()?.cards.find(e=>e.card.id===id)?.card;}
+function findCard(id) {return results.find(c=>c.id===id)||current()?.cards.find(e=>e.card.id===id)?.card||comparison.find(item=>item.card.id===id)?.card;}
 function addCard(id) {const c=findCard(id);if(!c)return;if(!current()){deckForm(undefined,()=>addCard(id));return;}changeDeck(d=>{const found=d.cards.find(e=>cardKey(e.card)===cardKey(c));if(found){if(found.qty>=500)return;found.qty++;}else d.cards.push({card:c,qty:1,tags:[]});});toast(`${c.name} added`);}
 function showDialog(html) {const dialog=$('#dialog');dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=()=>dialog.close();}
 $('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
@@ -165,7 +224,8 @@ function settings() {
 function customTag(){showDialog('<h2>Explore a specific tag</h2><p>Enter a Scryfall function tag, such as mana-rock or reanimate. Names and aliases in the snapshot resolve to their canonical tags. Tags outside the snapshot are allowed, but may be unsupported by Scryfall.</p><form id="custom-tag-form"><label>Function tag<input name="tag" required maxlength="80" placeholder="e.g. mana-rock"></label><p id="custom-tag-error" role="alert"></p><button class="primary">Add to search</button></form>');$('#custom-tag-form').onsubmit=e=>{e.preventDefault();readFilters();const value=String(new FormData(e.target).get('tag')).trim().toLowerCase();const t=resolveTag(value)?.id || value.replace(/\s+/g,'-');if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t)){$('#custom-tag-error').textContent='Use a tag name with letters, numbers and single hyphens.';return;}if(!filters.tags.includes(t))filters.tags.push(t);$('#dialog').close();search();};}
 function inspect(id) {
   const c=findCard(id);if(!c)return;const entry=current()?.cards.find(e=>cardKey(e.card)===cardKey(c));const image=imageFor(c);
-  showDialog(`<div class="card-detail">${image?`<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}">`:''}<div><h2>${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost)}</div><p>${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><p class="hint">Mana value ${c.cmc} · ${esc(c.set_name)}${c.artist?' · Artist: '+esc(c.artist):''}</p><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><button class="primary" id="detail-add">${icon('plus',16)} Add to deck${entry?' ('+entry.qty+' in deck)':''}</button>${entry?`<form id="roles-form"><label>Your role tags<input name="roles" placeholder="Ramp, Removal" maxlength="500" value="${esc(entry.tags.join(', '))}"></label><label class="checkbox-label"><input type="checkbox" name="commander" ${entry.commander?'checked':''}> Set as commander</label><button class="secondary">Save roles</button></form>`:''}<p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View on Scryfall ↗</a></p></div></div>`);
+  showDialog(`<div class="card-detail">${image?`<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}">`:''}<div><h2>${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost)}</div><p>${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><p class="hint">Mana value ${c.cmc} · ${esc(c.set_name)}${c.artist?' · Artist: '+esc(c.artist):''}</p><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><button class="secondary" id="detail-compare">${comparison.some(item=>cardKey(item.card)===cardKey(c)) ? 'Remove from comparison' : 'Compare this card'}</button><button class="primary" id="detail-add">${icon('plus',16)} Add to deck${entry?' ('+entry.qty+' in deck)':''}</button>${entry?`<form id="roles-form"><label>Your role tags<input name="roles" placeholder="Ramp, Removal" maxlength="500" value="${esc(entry.tags.join(', '))}"></label><label class="checkbox-label"><input type="checkbox" name="commander" ${entry.commander?'checked':''}> Set as commander</label><button class="secondary">Save roles</button></form>`:''}<p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View on Scryfall ↗</a></p></div></div>`);
+  $('#detail-compare').onclick=()=>{$('#dialog').close();toggleComparison(id);};
   $('#detail-add').onclick=()=>{addCard(id);if(current())inspect(id);};
   $('#roles-form')?.addEventListener('submit',e=>{e.preventDefault();const data=new FormData(e.target);changeDeck(d=>{entry.tags=[...new Set(String(data.get('roles')).split(',').map(t=>t.trim().slice(0,80)).filter(Boolean))];if(data.has('commander'))d.cards.forEach(x=>x.commander=x===entry);else entry.commander=false;});$('#dialog').close();toast('Card roles saved');});
 }
