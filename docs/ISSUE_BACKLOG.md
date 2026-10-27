@@ -5,6 +5,8 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 - [D01 / #1: Discover and navigate a broader function-tag taxonomy](https://github.com/RuneBrix/magic-the-deckbuilder/issues/1)
 - [D02 / #2: Compare related effects and explain search broadening](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2)
 - [D03 / #3: Extend format checks and support deck zones](https://github.com/RuneBrix/magic-the-deckbuilder/issues/3)
+- [D03 follow-up / #13: Commander pairings and special command-zone rules](https://github.com/RuneBrix/magic-the-deckbuilder/issues/13)
+- [D03 follow-up / #14: Companions and starting-deck restrictions](https://github.com/RuneBrix/magic-the-deckbuilder/issues/14)
 - [D04 / #4: Decide durable storage and cross-device workflow](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4)
 - [D05 / #5: Verify macOS and automate cross-platform tests](https://github.com/RuneBrix/magic-the-deckbuilder/issues/5)
 - [D06 / #6: Improve decklist interoperability](https://github.com/RuneBrix/magic-the-deckbuilder/issues/6)

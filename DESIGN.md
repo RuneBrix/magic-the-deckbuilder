@@ -35,6 +35,8 @@ Compare alternatives is a native disclosure beside the search tools. Compare con
 
 Settings, available in the header on every viewport, holds appearance and complete JSON backup/restore. Import/export stays with the working deck. The Cards tab focuses on quantities; the mana curve lives in Statistics. Checks retains its partial-legality explanation and refresh action.
 
+Cards groups entries by Main deck, Sideboard and Command zone with individual counts and zone-specific quantity controls. Inspecting a row exposes its zone beside role tags; moves preserve all copies and merged roles. Playing-deck progress and Statistics exclude the sideboard. Checks separates failed rules, unavailable data and manual-review notices; manual items use supporting text rather than failure styling. Modern coverage and remaining rule families are documented in `docs/DECK_ZONES.md`.
+
 ## Layout and states
 
 Wide screens retain navigation, flexible explorer and a sticky deck inspector. At 1200px, columns narrow; at 960px the deck enters document flow; at 600px navigation becomes a compact header. Phones retain two card columns and a fixed deck shortcut. Expanded text filters stack vertically; settings actions wrap or stack. Dialogs stay within the viewport and preserve native focus containment and Escape dismissal.
