@@ -1,8 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { queryFor, stats, legality, parseImport, validateBackup, safeUrl } from '../public/core.js';
+import { queryFor, stats, legality, parseImport, validateBackup, safeUrl, primaryRole, deckEntries, deckIdentity } from '../public/core.js';
 const card=(name,type,cmc,identity=[],extra={})=>({id:name,oracle_id:name,name,type_line:type,cmc,color_identity:identity,colors:identity,oracle_text:'',legalities:{commander:'legal',modern:'legal',vintage:'legal'},...extra});
 const entry=(c,qty=1,extra={})=>({card:c,qty,tags:[],...extra});
+
+test('deck views filter every role and type, sort without mutation, and use command identity for Commander',()=>{
+  const d={format:'commander',cards:[entry(card('Leader','Legendary Creature',4,['G']),1,{zone:'command'}),entry(card('B','Artifact Creature',2,['U']),3,{zone:'main',tags:['Draw','Ramp']}),entry(card('A','Sorcery',1,['R']),2,{zone:'main',tags:['Ramp']})]};
+  const before=JSON.stringify(d);
+  assert.equal(primaryRole(d.cards[1]),'Draw');
+  assert.deepEqual(deckEntries(d,{role:'Ramp'}).map(e=>e.card.name),['A','B']);
+  assert.deepEqual(deckEntries(d,{type:'Artifact'}).map(e=>e.card.name),['B']);
+  assert.deepEqual(deckEntries(d,{order:'quantity'}).map(e=>e.qty),[3,2,1]);
+  assert.deepEqual(deckEntries(d,{order:'mana'}).map(e=>e.card.cmc),[1,2,4]);
+  assert.deepEqual(deckIdentity(d),['G']);assert.equal(JSON.stringify(d),before);
+  assert.deepEqual(deckIdentity({...d,format:'modern'}),['U','R']);
+  assert.deepEqual(validateBackup([{...d,id:'d',name:'Deck'}])[0].cards[1].tags,['Draw','Ramp']);
+});
 test('guided filters compose without losing advanced syntax',()=>{
   const f={raw:'usd<5',name:'A "name"',oracle:'draw a card',type:'instant',mv:'3',mvOp:'<=',cost:'{U}',colors:['U'],tags:['ramp','card-draw'],match:'any',legal:true};
   assert.equal(queryFor(f,{format:'modern'}),'usd<5 name:"A \\"name\\"" o:"draw a card" t:instant mv<=3 m:{U} id<=U (otag:ramp OR otag:card-draw) f:modern'.replaceAll('\\\\','\\'));

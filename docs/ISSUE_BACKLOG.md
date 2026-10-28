@@ -15,4 +15,8 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 
 - [D09 / #9: Redesign typography, icons, appearance and focused workflows](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9)
 
+- [#16: Shared top navigation](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16)
+- [#17: Dedicated deck workspace](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17)
+- [#18: Deck library management and creation](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18)
+
 See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the development workflow](DEVELOPMENT.md).
