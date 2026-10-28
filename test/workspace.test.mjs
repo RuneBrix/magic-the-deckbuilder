@@ -65,7 +65,7 @@ test('search disclosures start closed and preserve the opened state and selected
   assert.doesNotMatch(w.node('#app').innerHTML, /id="function-tags"[^>]*\bopen\b/);
   w.node('#search-filters').toggle({ target: { open: true } });
   w.node('#function-tags').toggle({ target: { open: true } });
-  vm.runInContext("filters.oracle = 'draw a card'; filters.tags = ['ramp']; render()", w.context);
+  vm.runInContext("filters=parseQuery('o:\"draw a card\" otag:ramp'); render()", w.context);
   const html = w.node('#app').innerHTML;
   assert.match(html, /id="search-filters"[^>]*\bopen\b/);
   assert.match(html, /id="function-tags"[^>]*\bopen\b/);
@@ -76,7 +76,7 @@ test('search disclosures start closed and preserve the opened state and selected
 
 test('tag discovery renders aliases, verified relationships, limits and custom tag guidance', () => {
   const w = workspace();
-  vm.runInContext("tagSearch = 'blink'; browsedTag = 'flicker'; filters.tags = ['unknown-arcana-tag']; render()", w.context);
+  vm.runInContext("tagSearch = 'blink'; browsedTag = 'flicker'; filters=parseQuery('otag:unknown-arcana-tag'); render()", w.context);
   const html = w.node('#app').innerHTML;
   assert.match(html, /Add flicker filter/);
   assert.match(html, /Aliases: blink/);
@@ -85,19 +85,19 @@ test('tag discovery renders aliases, verified relationships, limits and custom t
   assert.match(html, /data-browse-tag="flicker-creature"/);
   assert.match(html, /outside this snapshot/);
   assert.match(html, /Snapshot \d{4}-\d{2}-\d{2}/);
-  assert.match(html, /Match all requires every tag/);
+  assert.match(html, /All selected functions \(AND\)/);
   assert.match(html, /otag:unknown-arcana-tag/);
   vm.runInContext("tagSearch = 'unknown-arcana-tag'; render()", w.context);
   assert.match(w.node('#app').innerHTML, /No matching name or alias/);
   vm.runInContext("tagSearch = ''; allTags = true; render()", w.context);
-  assert.match(w.node('#app').innerHTML, /showing 30/);
-  assert.match(w.node('#app').innerHTML, /Show more tags/);
+  assert.match(w.node('#app').innerHTML, /Browsing the full bundled catalog/);
+  assert.match(w.node('#app').innerHTML, /Show next 30 catalog tags/);
 });
 
 test('upstream no-match responses explain recovery and possible unsupported custom tags', async () => {
   const w = workspace();
   w.context.fetch = async () => ({ ok: false, json: async () => ({ error: 'Your query didn’t match any cards. Adjust your search terms.' }) });
-  await vm.runInContext("filters.tags = ['unknown-arcana-tag']; search()", w.context);
+  await vm.runInContext("filters=parseQuery('otag:unknown-arcana-tag'); search()", w.context);
   assert.match(w.node('#app').innerHTML, /No cards matched these filters/);
   assert.match(w.node('#app').innerHTML, /custom tag may be unsupported/);
   assert.match(w.node('#app').innerHTML, /switch to Match any/);
@@ -108,11 +108,11 @@ test('comparison retains result provenance across unsent edits and subsequent se
   const w = workspace();
   const card = name => ({id:name,oracle_id:name,name,type_line:'Instant',cmc:2,mana_cost:'{1}{U}',colors:['U'],color_identity:['U'],oracle_text:'Draw a card.'});
   w.context.fetch = async () => ({ok:true,json:async()=>({data:[card('First')],total_cards:1,has_more:false})});
-  await vm.runInContext("filters.tags=['draw']; filters.mv='2'; search();",w.context);
-  vm.runInContext("filters.tags=['removal']; toggleComparison('First');",w.context);
+  await vm.runInContext("filters=parseQuery('mv<=2 otag:draw'); search();",w.context);
+  vm.runInContext("filters=parseQuery('otag:removal'); toggleComparison('First');",w.context);
   let html=w.node('#app').innerHTML;
   assert.match(html,/Searched for all: draw/);
-  assert.match(html,/mv&lt;=2 \(otag:draw\)/);
+  assert.match(html,/mv&lt;=2 otag:draw/);
   assert.doesNotMatch(html,/Searched for all: removal/);
   w.context.fetch = async () => ({ok:true,json:async()=>({data:[card('Second'),card('Third')],total_cards:2,has_more:false})});
   await vm.runInContext('search()',w.context);
@@ -132,18 +132,18 @@ test('broadening always starts from original settings and restoration survives u
   const w=workspace(), queries=[];
   w.context.FormData=class {get(key){return vm.runInContext(`filters[${JSON.stringify(key)}]`,w.context);}};
   w.context.fetch=async url=>{queries.push(String(url));return {ok:false,json:async()=>({error:'Offline test'})};};
-  vm.runInContext("filters.raw='usd<5'; filters.tags=['ramp']; filters.mv='3'; filters.type='creature';",w.context);
+  vm.runInContext("filters=parseQuery('usd<5 t:creature mv<=3 otag:ramp');",w.context);
   await vm.runInContext("broaden('mv')",w.context);
   let html=w.node('#app').innerHTML;
-  assert.match(html,/Ignored Mana value: &lt;=3/);
-  assert.match(html,/Original query: <code>usd&lt;5 t:creature mv&lt;=3 \(otag:ramp\)/);
+  assert.match(html,/Ignored Mana values/);
+  assert.match(html,/Original query: <code>usd&lt;5 t:creature mv&lt;=3 otag:ramp/);
   assert.match(html,/Return to original search/);
   await vm.runInContext("broaden('type')",w.context);
-  assert.equal(vm.runInContext('filters.mv',w.context),'3');
-  assert.equal(vm.runInContext('filters.type',w.context),'');
+  assert.equal(vm.runInContext('filters.values[0].value',w.context),'3');
+  assert.equal(vm.runInContext('filters.types.length',w.context),0);
   await vm.runInContext('restoreSearch()',w.context);
-  assert.equal(vm.runInContext('filters.type',w.context),'creature');
-  assert.equal(vm.runInContext('filters.mv',w.context),'3');
+  assert.equal(vm.runInContext('filters.types[0]',w.context),'creature');
+  assert.equal(vm.runInContext('filters.values[0].value',w.context),'3');
   assert.equal(vm.runInContext('broadening',w.context),null);
   assert.ok(decodeURIComponent(queries[0]).includes('t:creature'));
   assert.ok(decodeURIComponent(queries[1]).includes('mv<=3'));
@@ -153,21 +153,21 @@ test('broadening always starts from original settings and restoration survives u
 test('stale alternative responses cannot overwrite restored results or their comparison context',async()=>{
   const w=workspace();let finish;
   w.context.fetch=()=>new Promise(resolve=>{finish=resolve;});
-  const stale=vm.runInContext("filters.tags=['ramp']; search()",w.context);
+  const stale=vm.runInContext("filters=parseQuery('otag:ramp'); search()",w.context);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
-  await vm.runInContext("filters.tags=['draw']; search()",w.context);
+  await vm.runInContext("filters=parseQuery('otag:draw'); search()",w.context);
   finish({ok:true,json:async()=>({data:[],total_cards:99,has_more:true})});
   await stale;
   assert.equal(vm.runInContext('total',w.context),0);
-  assert.equal(vm.runInContext('resultContext.query',w.context),'(otag:draw)');
+  assert.equal(vm.runInContext('resultContext.query',w.context),'otag:draw');
 });
 
 test('pagination uses the completed result query rather than unsent filter edits',async()=>{
   const w=workspace(), queries=[];
   w.context.fetch=async url=>{queries.push(String(url));return {ok:true,json:async()=>({data:[],total_cards:300,has_more:true})};};
-  await vm.runInContext("filters.tags=['ramp']; search()",w.context);
-  await vm.runInContext("filters.tags=['draw']; search(true)",w.context);
-  assert.equal(new URLSearchParams(queries[1].split('?')[1]).get('q'),'(otag:ramp)');
+  await vm.runInContext("filters=parseQuery('otag:ramp'); search()",w.context);
+  await vm.runInContext("filters=parseQuery('otag:draw'); search(true)",w.context);
+  assert.equal(new URLSearchParams(queries[1].split('?')[1]).get('q'),'otag:ramp');
   assert.equal(new URLSearchParams(queries[1].split('?')[1]).get('page'),'2');
 });
 
@@ -175,9 +175,9 @@ test('applying unsent changes while sorting clears an obsolete relaxation explan
   const w=workspace();
   w.context.FormData=class {get(key){return vm.runInContext(`filters[${JSON.stringify(key)}]`,w.context);}};
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
-  await vm.runInContext("filters.tags=['ramp']; filters.mv='3'; broaden('mv')",w.context);
+  await vm.runInContext("filters=parseQuery('otag:ramp mv<=3'); broaden('mv')",w.context);
   assert.ok(vm.runInContext('broadening',w.context));
-  await vm.runInContext("filters.raw='usd<5'; search(false,true)",w.context);
+  await vm.runInContext("filters=parseQuery('usd<5'); search(false,true)",w.context);
   assert.equal(vm.runInContext('broadening',w.context),null);
   assert.doesNotMatch(vm.runInContext('resultContext.reason',w.context),/ignored/);
 });
@@ -216,7 +216,7 @@ const editorDeck=()=>({id:'editor',name:'Garden',format:'commander',cards:[{card
 function formValues(w,values){w.context.FormData=class{get(key){return Object.hasOwn(values,key)?values[key]:'';}};}
 
 test('top navigation opens a full deck destination and retains the explorer search',async()=>{
-  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});formValues(w,{raw:'draw',mvOp:'<='});
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("filters=parseQuery('draw')",w.context);
   const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
   await click({view:'decks'});
   assert.doesNotMatch(w.node('#app').innerHTML,/class="sidebar"|YOUR DECKS|class="deck-nav"/);
@@ -231,7 +231,7 @@ test('top navigation opens a full deck destination and retains the explorer sear
   assert.doesNotMatch(w.node('#app').innerHTML,/data-inspect="Leader"/);
   await click({tab:'checks'});assert.match(w.node('#app').innerHTML,/Manual review/);
   await click({tab:'stats'});assert.match(w.node('#app').innerHTML,/Mana curve/);
-  await click({view:'explore'});assert.equal(vm.runInContext('filters.raw',w.context),'draw');
+  await click({view:'explore'});assert.equal(vm.runInContext('filters.query',w.context),'draw');
 });
 
 test('duplicate is a deep independent backup-compatible copy; delete requires explicit confirmation',()=>{
@@ -294,4 +294,80 @@ test('targeted imports preserve edits made while resolving and roll back quantit
   await form.onsubmit({preventDefault(){},target:form});
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
   assert.match(w.node('#import-error').textContent,/Maximum 500/);
+});
+
+test('typed query projects controls without replacing the focused search input; typed tags can be removed',async()=>{
+  const w=workspace(),raw=w.node('#raw'),shell=w.node('#app').innerHTML;
+  raw.selectionStart=12;raw.selectionEnd=12;
+  raw.input({target:{value:'(t:instant OR t:sorcery) (otag:ramp OR otag:draw) usd<5'}});
+  assert.equal(w.node('#raw'),raw);assert.equal(raw.selectionStart,12);assert.equal(raw.selectionEnd,12);
+  assert.equal(w.node('#app').innerHTML,shell);
+  assert.match(w.node('#guided-controls').innerHTML,/value="instant, sorcery"/);
+  assert.match(w.node('#selected-functions').innerHTML,/Remove ramp filter/);
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
+  await w.node('#app').click({target:{closest:()=>({dataset:{tag:'ramp'}})}});
+  assert.doesNotMatch(vm.runInContext('filters.query',w.context),/otag:ramp/);
+  assert.match(vm.runInContext('filters.query',w.context),/otag:draw/);
+  assert.match(vm.runInContext('filters.query',w.context),/usd<5/);
+});
+
+test('typing and clearing invalidate pending requests; incomplete queries are never sent',async()=>{
+  const w=workspace();let finish,calls=0;
+  w.context.fetch=()=>{calls++;return new Promise(resolve=>{finish=resolve;});};
+  const pending=vm.runInContext("filters=parseQuery('otag:ramp'); search()",w.context);
+  w.node('#raw').input({target:{value:'(t:creature'}});
+  await vm.runInContext('search()',w.context);assert.equal(calls,1);
+  finish({ok:true,json:async()=>({data:[],total_cards:99,has_more:true})});await pending;
+  assert.equal(vm.runInContext('total',w.context),0);assert.equal(vm.runInContext('loading',w.context),false);
+  w.node('#raw').input({target:{value:''}});
+  assert.equal(vm.runInContext('searched',w.context),false);assert.equal(vm.runInContext('results.length',w.context),0);
+  assert.equal(vm.runInContext('resultContext',w.context),null);assert.equal(calls,1);
+});
+
+test('inactive matching preferences survive choosing a mode before its first color/type/value',()=>{
+  const w=workspace();
+  vm.runInContext("setCondition('color',{...filters,color:{mode:'exact',values:[]}})",w.context);
+  assert.equal(vm.runInContext('filters.color.mode',w.context),'exact');
+  assert.equal(vm.runInContext('filters.query',w.context),'');
+  vm.runInContext("setCondition('type',{...filters,typeMatch:'any',types:[]})",w.context);
+  assert.equal(vm.runInContext('filters.typeMatch',w.context),'any');
+  vm.runInContext("setCondition('mv',{...filters,valueMatch:'any',values:[{op:'=',value:''}]})",w.context);
+  assert.equal(vm.runInContext('filters.valueMatch',w.context),'any');
+  assert.equal(vm.runInContext('filters.color.mode',w.context),'exact');
+  assert.equal(vm.runInContext('filters.typeMatch',w.context),'any');
+});
+
+test('guided numeric input updates the same query without replacing its active form',()=>{
+  const w=workspace(),form=w.node('#guided-form'),shell=w.node('#app').innerHTML;
+  formValues(w,{'symbol-U':'2','symbol-C':'1'});
+  form.input({target:{closest:()=>({dataset:{family:'symbols'}})}});
+  assert.equal(vm.runInContext('filters.query',w.context),'m>={U}{U}{C}');
+  assert.equal(w.node('#raw').value,'m>={U}{U}{C}');
+  assert.equal(w.node('#guided-form'),form);assert.equal(w.node('#app').innerHTML,shell);
+  assert.equal(vm.runInContext('loading',w.context),false);
+});
+
+test('sequential ANY choices keep their intent after the first operand and an unrelated edit',()=>{
+  const w=workspace();
+  for(const family of ['color','identity']){
+    vm.runInContext(`filters=parseQuery(''); setCondition('${family}',{...filters,${family}:{mode:'any',values:[]}},false); setCondition('${family}',{...filters,${family}:{...filters.${family},values:['W']}},false)`,w.context);
+    assert.equal(vm.runInContext(`filters.${family}.mode`,w.context),'any');
+    vm.runInContext("setCondition('legal',{...filters,legal:'modern'},false)",w.context);
+    vm.runInContext(`setCondition('${family}',{...filters,${family}:{...filters.${family},values:['W','U']}},false)`,w.context);
+    assert.match(vm.runInContext('filters.query',w.context),/ OR /);
+  }
+  for(const [family,key,mode,one,two] of [['type','types','typeMatch',['instant'],['instant','sorcery']],['tags','tags','match',['draw'],['draw','ramp']],['mv','values','valueMatch',[{op:'=',value:'2'}],[{op:'=',value:'2'},{op:'=',value:'4'}]]]){
+    vm.runInContext(`filters=parseQuery(''); setCondition('${family}',{...filters,${mode}:'any',${key}:${JSON.stringify(one)}},false)`,w.context);
+    assert.equal(vm.runInContext(`filters.${mode}`,w.context),'any');
+    vm.runInContext(`setCondition('${family}',{...filters,${key}:${JSON.stringify(two)}},false)`,w.context);
+    assert.match(vm.runInContext('filters.query',w.context),/ OR /);
+  }
+});
+
+test('an explicit blank search exposes its effective broad query in the primary input',async()=>{
+  const w=workspace(),queries=[];
+  w.context.fetch=async url=>{queries.push(new URLSearchParams(String(url).split('?')[1]).get('q'));return {ok:true,json:async()=>({data:[],total_cards:0,has_more:false})};};
+  await vm.runInContext('search()',w.context);
+  assert.deepEqual(queries,['game:paper']);assert.equal(vm.runInContext('filters.query',w.context),'game:paper');
+  assert.match(w.node('#app').innerHTML,/id="raw"[^>]*value="game:paper"/);
 });
