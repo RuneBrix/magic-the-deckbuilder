@@ -6,9 +6,10 @@ This inventory describes what the app does today. GitHub Issues track future wor
 
 | Capability | Status | Current behavior / gap | Evidence |
 | --- | --- | --- | --- |
-| Create, rename, delete and switch decks | Implemented | Seven format presets; no account needed | `public/app.js` |
+| Deck library and management | Implemented | Create/open a dedicated editor, rename/format, confirmed deletion, independent duplication, text import and text/complete JSON export; optional commander selection at creation, eligibility/pairings remain partial | [#18](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18); [workflow](DECK_WORKSPACE.md); workspace regression tests |
+| Dedicated deck workspace | Implemented | Cards, statistics, checks, copy controls, zone moves, mana costs and identity; type/primary-function grouping, name/mana/quantity ordering, type and all-role filtering; complete desktop previews and keyboard/touch details | [#17](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17); core/workspace regression tests |
 | Save decks | Partial | Browser-local storage; no device sync | `public/app.js`; backup validation test |
-| Add/remove card copies | Implemented | Shared deck panel beside discovery | Browser add/persistence check |
+| Add/remove card copies | Implemented | Full deck editor and secondary deck panel beside discovery; Find cards to add retains exploration state and names the destination | [#17](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17); browser and workspace checks |
 | Card exploration | Implemented | Scryfall search, details, full images, sorting, result batches | Live search verified |
 | Guided card filters | Implemented | Name, Oracle text, type, mana value/cost, color identity, format | Query composition test |
 | Advanced Scryfall syntax | Implemented | Search bar accepts native syntax | `queryFor` in `public/core.js` |
@@ -20,7 +21,7 @@ This inventory describes what the app does today. GitHub Issues track future wor
 | Current card data | Partial | Explicit refresh; server caches responses for five minutes | `server.mjs`, refresh action |
 | Text decklist import/export | Partial | Quantities, names and main/sideboard/command headings; atomic import; personal roles require JSON | Parser/zone round-trip tests and browser import checks; [D06](https://github.com/RuneBrix/magic-the-deckbuilder/issues/6) |
 | JSON backup/restore | Implemented | Preserve complete decks and roles; restore adds decks | Backup and URL-validation tests |
-| Responsive interface | Implemented | Desktop inspector; mobile panel shortcut and backup controls | Desktop/mobile browser checks |
+| Responsive interface | Implemented | Shared top navigation, full editor/library and compact local-save status; discovery inspector and mobile panel shortcut | [#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16); Windows desktop/390px browser checks |
 | Focused workspace and appearance | Implemented | Expandable filters, function tags and query; Settings contains backups and persisted light/dark/device appearance; self-hosted typefaces and custom SVG navigation icons | [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9); `test/workspace.test.mjs`; desktop/mobile browser checks |
 | macOS support | Partial | Cross-platform Node 22+ implementation; directly tested on Windows only | Roadmap D05 |
 | Collection ownership | Planned | No inventory of owned cards | Roadmap D07 |

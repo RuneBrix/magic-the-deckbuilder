@@ -44,6 +44,16 @@ export function moveEntry(deck, key, zone) {
 }
 export const isLand = card => /\bLand\b/.test(card.type_line);
 export const category = card => ['Land', 'Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Battle'].find(t => card.type_line?.includes(t)) || 'Other';
+// The first personal role is primary; keeping the ordered tags preserves legacy backups.
+export const primaryRole = entry => entry.tags[0] || 'Unassigned';
+export function deckEntries(deck, { type = '', role = '', order = 'name' } = {}) {
+  return deck.cards.filter(e => (!type || e.card.type_line.includes(type)) && (!role || e.tags.includes(role)))
+    .sort((a, b) => (order === 'mana' ? a.card.cmc - b.card.cmc : order === 'quantity' ? b.qty - a.qty : 0) || a.card.name.localeCompare(b.card.name));
+}
+export function deckIdentity(deck) {
+  const entries = deck.cards.filter(e => zoneFor(e) === (deck.format === 'commander' ? 'command' : 'main'));
+  return [...'WUBRG'].filter(c => entries.some(e => e.card.color_identity.includes(c)));
+}
 export const imageFor = card => card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
 export function safeUrl(value, image = false) {
   try { const u = new URL(value); return u.protocol === 'https:' && (image ? u.hostname.endsWith('.scryfall.io') || u.hostname === 'cards.scryfall.io' : u.hostname === 'scryfall.com') ? u.href : ''; }

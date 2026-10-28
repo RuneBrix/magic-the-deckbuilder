@@ -16,6 +16,12 @@
 
 Acceptance criteria and implementation progress live in the linked issues. [The issue index](ISSUE_BACKLOG.md) provides a compact overview.
 
+## Deck workflow improvements
+
+The first feedback group is [#16: shared top navigation](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16), [#17: dedicated deck workspace](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17), and [#18: library management and creation](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18). The implementation and its data/interaction boundaries are described in [Deck workspace](DECK_WORKSPACE.md); GitHub tracks review and merge status.
+
+The optional/resizable exploration tracker remains [#19](https://github.com/RuneBrix/magic-the-deckbuilder/issues/19). Card-details autosave/redesign is [#25](https://github.com/RuneBrix/magic-the-deckbuilder/issues/25); clearer check states and automatic freshness are [#27](https://github.com/RuneBrix/magic-the-deckbuilder/issues/27) and [#28](https://github.com/RuneBrix/magic-the-deckbuilder/issues/28). These are not completed by the dedicated editor.
+
 ## How this relates to the MVP
 
 The [feature inventory](FEATURES.md) records implemented and partial functionality. The [changelog](../CHANGELOG.md) records completed user-facing changes. A future idea belongs in an issue, not in the changelog as though it shipped.

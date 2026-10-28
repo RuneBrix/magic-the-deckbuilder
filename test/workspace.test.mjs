@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { randomUUID } from 'node:crypto';
 import * as core from '../public/core.js';
 
 const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/, '');
@@ -25,7 +26,7 @@ function workspace({ savedTheme = null, savedDecks = null, dark = false, blocked
       getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.theme.v1' ? savedTheme : savedDecks; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },
     },
-    setTimeout: () => 1, clearTimeout() {}, URLSearchParams, structuredClone,
+    setTimeout: () => 1, clearTimeout() {}, URLSearchParams, structuredClone, crypto: { randomUUID },
   });
   vm.runInContext(source, context);
   return { context, document, media, node, writes };
@@ -208,4 +209,89 @@ test('zone row quantity buttons target only their entry and sideboard does not i
   assert.match(w.node('#app').innerHTML,/<strong>60<span> \/ 60\+/);
   vm.runInContext("deckTab='checks'; render()",w.context);
   assert.match(w.node('#app').innerHTML,/Sideboard has 16/);
+});
+
+const editorCard=(id,type='Creature')=>({id,oracle_id:id,name:id,type_line:type,cmc:2,color_identity:['G'],colors:['G'],mana_cost:'{1}{G}',oracle_text:'',legalities:{commander:'legal'}});
+const editorDeck=()=>({id:'editor',name:'Garden',format:'commander',cards:[{card:editorCard('Leader','Legendary Creature'),qty:1,tags:['Draw'],zone:'command'},{card:editorCard('Ramp spell','Sorcery'),qty:2,tags:['Removal','Ramp'],zone:'main'}]});
+function formValues(w,values){w.context.FormData=class{get(key){return Object.hasOwn(values,key)?values[key]:'';}};}
+
+test('top navigation opens a full deck destination and retains the explorer search',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});formValues(w,{raw:'draw',mvOp:'<='});
+  const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
+  await click({view:'decks'});
+  assert.doesNotMatch(w.node('#app').innerHTML,/class="sidebar"|YOUR DECKS|class="deck-nav"/);
+  assert.match(w.node('#app').innerHTML,/class="workspace-nav"/);
+  await click({deck:'editor'});
+  assert.match(w.node('#app').innerHTML,/class="deck-workspace"/);
+  assert.match(w.node('#app').innerHTML,/data-view="decks" class="nav-item selected" aria-current="location"/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/class="deck-panel"/);
+  assert.match(w.node('#app').innerHTML,/Command-zone identity/);
+  w.node('#editor-role').change({target:{value:'Ramp'}});
+  assert.match(w.node('#app').innerHTML,/Ramp spell/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/data-inspect="Leader"/);
+  await click({tab:'checks'});assert.match(w.node('#app').innerHTML,/Manual review/);
+  await click({tab:'stats'});assert.match(w.node('#app').innerHTML,/Mana curve/);
+  await click({view:'explore'});assert.equal(vm.runInContext('filters.raw',w.context),'draw');
+});
+
+test('duplicate is a deep independent backup-compatible copy; delete requires explicit confirmation',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  vm.runInContext('duplicateDeck(decks[0]); decks[1].cards[1].qty++; decks[1].cards[1].tags.push("New role")',w.context);
+  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
+  assert.equal(vm.runInContext('decks[0].cards[1].tags.length',w.context),2);
+  assert.notEqual(vm.runInContext('decks[1].id',w.context),'editor');
+  core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context)));
+  vm.runInContext('deleteDeck(decks[1])',w.context);
+  assert.equal(vm.runInContext('decks.length',w.context),2);
+  w.node('#cancel-delete').onclick();assert.equal(vm.runInContext('decks.length',w.context),2);
+  vm.runInContext('deleteDeck(decks[1])',w.context);w.node('#confirm-delete').onclick();
+  assert.equal(vm.runInContext('decks.length',w.context),1);
+});
+
+test('new Commander decks designate an optional selected card and other formats omit it',async()=>{
+  for(const format of ['commander','modern']){
+    const w=workspace();formValues(w,{name:'New deck',format});
+    w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Leader','Legendary Creature')]})});
+    vm.runInContext('deckForm()',w.context);w.node('#commander-name').value='Leader';
+    await w.node('#find-commander').onclick();w.node('#commander-card').value='Leader';
+    w.node('#deck-form').onsubmit({preventDefault(){},target:{}});
+    assert.equal(vm.runInContext('view',w.context),'deck');
+    assert.equal(vm.runInContext('decks[0].cards.length',w.context),format==='commander'?1:0);
+    if(format==='commander')assert.equal(vm.runInContext('decks[0].cards[0].zone',w.context),'command');
+  }
+  const w=workspace();formValues(w,{name:'Incomplete',format:'commander'});vm.runInContext('deckForm()',w.context);
+  w.node('#deck-form').onsubmit({preventDefault(){},target:{}});assert.equal(vm.runInContext('decks[0].cards.length',w.context),0);
+});
+
+test('library imports create a deck only after successful resolution, and cancelled forms cannot mutate decks',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});formValues(w,{name:'Imported',format:'modern',list:'2 Ramp spell'});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[],not_found:[{name:'Ramp spell'}]})});
+  vm.runInContext('importDialog(null)',w.context);
+  const form=w.node('#import-form');
+  await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(vm.runInContext('decks.length',w.context),1);assert.match(w.node('#import-error').textContent,/Not imported/);
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});
+  form.isConnected=false;await form.onsubmit({preventDefault(){},target:form});assert.equal(vm.runInContext('decks.length',w.context),1);
+  form.isConnected=true;w.node('#dialog').open=false;await form.onsubmit({preventDefault(){},target:form});assert.equal(vm.runInContext('decks.length',w.context),1);
+  w.node('#dialog').open=true;
+  form.isConnected=true;await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(vm.runInContext('decks.length',w.context),2);assert.equal(vm.runInContext('current().cards[0].qty',w.context),2);
+  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
+});
+
+test('targeted imports preserve edits made while resolving and roll back quantity overflow',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});formValues(w,{list:'2 Ramp spell'});
+  let finish;w.context.fetch=()=>new Promise(resolve=>{finish=resolve;});
+  vm.runInContext('importDialog(decks[0])',w.context);const form=w.node('#import-form');
+  const pending=form.onsubmit({preventDefault(){},target:form});
+  vm.runInContext('decks[0].cards[1].qty=4; decks[0].cards[1].tags.push("Edited while loading")',w.context);
+  finish({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});await pending;
+  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),6);
+  assert.equal(vm.runInContext('decks[0].cards[1].tags[2]',w.context),'Edited while loading');
+  vm.runInContext('decks[0].cards[1].qty=499; importDialog(decks[0])',w.context);
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  assert.match(w.node('#import-error').textContent,/Maximum 500/);
 });
