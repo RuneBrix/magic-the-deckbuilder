@@ -14,7 +14,7 @@ Discovery uses one editable Scryfall query with guided type/subtype matching, ma
 
 Decks have main, sideboard and command zones. Modern construction checks are zone-aware; Commander and companion rules remain partial and are labeled for manual review. Existing browser data and legacy backups remain compatible.
 
-My decks opens a dedicated deck editor with grouping, role/type filters, statistics and checks. The first ordered personal role tag is the primary function; every assigned role can be filtered. Exploration retains a secondary deck panel and an explicit route back to the editor. The library supports independent duplication, text imports, full per-deck JSON export and optional commander designation during creation.
+My decks opens a dedicated deck editor with grouping, role/type filters, statistics and checks. The first ordered personal role tag is the primary function; every assigned role can be filtered. Exploration supports no tracked deck or a separately selected, hideable and resizable compact tracker, explicit add destinations and a route back to the editor. Search results and optional starting searches lead over secondary comparison tools. The library supports independent duplication, text imports, full per-deck JSON export and optional commander designation during creation.
 
 ## Open decisions
 

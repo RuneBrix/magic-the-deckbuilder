@@ -8,14 +8,14 @@ import * as core from '../public/core.js';
 const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/, '');
 
 // Exercise the browser module's preferences and rendering without a DOM dependency.
-function workspace({ savedTheme = null, savedDecks = null, dark = false, blocked = false } = {}) {
+function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, dark = false, blocked = false } = {}) {
   const writes = [], nodes = new Map();
   const node = selector => {
     if (!nodes.has(selector)) nodes.set(selector, {
       innerHTML: '', content: '', addEventListener(type, fn) { this[type] = fn; },
       contains() { return false; }, querySelector: node,
       setAttribute() {}, showModal() {}, focus() {}, close() {},
-      classList: { add() {}, remove() {} },
+      classList: { add() {}, remove() {}, toggle() {} }, style: { setProperty() {} },
     });
     return nodes.get(selector);
   };
@@ -23,7 +23,7 @@ function workspace({ savedTheme = null, savedDecks = null, dark = false, blocked
   const document = { querySelector: node, documentElement: { dataset: {} }, activeElement: null };
   const context = vm.createContext({ ...core, document, matchMedia: () => media,
     localStorage: {
-      getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.theme.v1' ? savedTheme : savedDecks; },
+      getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.theme.v1' ? savedTheme : key === 'arcana.explorer.v1' ? savedTracker : savedDecks; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },
     },
     setTimeout: () => 1, clearTimeout() {}, URLSearchParams, structuredClone, crypto: { randomUUID },
@@ -190,7 +190,7 @@ test('legacy saved decks get explicit in-memory zones without writing storage',(
   assert.equal(vm.runInContext('decks[0].cards[0].tags[0]',w.context),'Role');
   assert.equal(w.writes.length,0);
   assert.match(w.node('#app').innerHTML,/Command zone: 1/);
-  vm.runInContext("deckTab='checks'; render()",w.context);
+  vm.runInContext("view='deck'; deckTab='checks'; render()",w.context);
   assert.match(w.node('#app').innerHTML,/Failed checks/);
   assert.match(w.node('#app').innerHTML,/Data unavailable/);
   assert.match(w.node('#app').innerHTML,/Manual review/);
@@ -206,8 +206,8 @@ test('zone row quantity buttons target only their entry and sideboard does not i
   await w.node('#app').click({target:{closest:()=>button}});
   assert.equal(vm.runInContext('decks[0].cards[0].qty',w.context),60);
   assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),16);
-  assert.match(w.node('#app').innerHTML,/<strong>60<span> \/ 60\+/);
-  vm.runInContext("deckTab='checks'; render()",w.context);
+  assert.match(w.node('#app').innerHTML,/<strong>60<\/strong> in playing deck/);
+  vm.runInContext("view='deck'; deckTab='checks'; render()",w.context);
   assert.match(w.node('#app').innerHTML,/Sideboard has 16/);
 });
 
@@ -370,4 +370,135 @@ test('an explicit blank search exposes its effective broad query in the primary 
   await vm.runInContext('search()',w.context);
   assert.deepEqual(queries,['game:paper']);assert.equal(vm.runInContext('filters.query',w.context),'game:paper');
   assert.match(w.node('#app').innerHTML,/id="raw"[^>]*value="game:paper"/);
+});
+
+test('tracker visibility and selection preserve the search, editor destination and stored decks',async()=>{
+  const a=editorDeck(),b={...editorDeck(),id:'second',name:'Second deck'};
+  const w=workspace({savedDecks:JSON.stringify([a,b])});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Result')],total_cards:1,has_more:false})});
+  await vm.runInContext("filters=parseQuery('otag:ramp f:modern'); search()",w.context);
+  const original=vm.runInContext('JSON.stringify({decks,filters,results,resultContext,page,comparison})',w.context);
+  const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
+  await click({action:'toggle-tracker'});
+  assert.doesNotMatch(w.node('#app').innerHTML,/<aside/);
+  assert.match(w.node('#app').innerHTML,/Show tracker/);
+  assert.match(w.node('#app').innerHTML,/Add Result to Garden · Main deck/);
+  assert.equal(vm.runInContext('JSON.stringify({decks,filters,results,resultContext,page,comparison})',w.context),original);
+  w.node('#tracked-deck').change({target:{value:''}});
+  assert.equal(vm.runInContext('current()',w.context),undefined);
+  assert.match(w.node('#app').innerHTML,/Add Result to a chosen deck/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/<aside|data-action="jump-deck"/);
+  await click({deck:'second'});
+  assert.equal(vm.runInContext('current().id',w.context),'second');
+  await click({view:'explore'});
+  assert.equal(vm.runInContext('current()',w.context),undefined);
+  await click({deck:'second'});await click({action:'find-cards'});
+  assert.equal(vm.runInContext('tracker.id',w.context),'second');
+  assert.equal(vm.runInContext('filters.query',w.context),'otag:ramp f:modern');
+  assert.equal(vm.runInContext('results[0].name',w.context),'Result');
+  assert.ok(w.writes.every(([key])=>key==='arcana.explorer.v1'));
+  const saved=w.writes.at(-1)[1];
+  const reloaded=workspace({savedDecks:JSON.stringify([a,b]),savedTracker:saved});
+  assert.equal(vm.runInContext('tracker.id',reloaded.context),'second');
+  assert.equal(reloaded.writes.length,0);
+});
+
+test('adding with no tracker requires a destination and never changes the selected tracker',()=>{
+  const a=editorDeck(),b={...editorDeck(),id:'second',name:'Second deck'};
+  const w=workspace({savedDecks:JSON.stringify([a,b]),savedTracker:JSON.stringify({id:'',visible:false,width:340})});
+  vm.runInContext("results=[{id:'new',oracle_id:'new',name:'New card',type_line:'Instant',cmc:1,color_identity:[]}]; addCard('new')",w.context);
+  assert.equal(w.writes.length,0);
+  assert.match(w.node('#dialog').innerHTML,/Destination deck/);
+  assert.match(w.node('#dialog').innerHTML,/Main deck/);
+  w.node('#add-destination').value='';
+  w.node('#add-destination-form').onsubmit({preventDefault(){}});
+  assert.match(w.node('#add-destination-error').textContent,/Choose a destination/);
+  assert.equal(w.writes.length,0);
+  w.node('#add-destination').value='second';
+  w.node('#add-destination-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('decks[1].cards.at(-1).qty',w.context),1);
+  assert.equal(vm.runInContext('decks[1].cards.at(-1).zone',w.context),'main');
+  assert.equal(vm.runInContext('decks[0].cards.length',w.context),a.cards.length);
+  assert.equal(vm.runInContext('tracker.id',w.context),'');
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  vm.runInContext("chooseDestination('new')",w.context);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  vm.runInContext("decks[1].cards.at(-1).qty=500",w.context);
+  w.node('#add-destination-form').onsubmit({preventDefault(){}});
+  assert.match(w.node('#add-destination-error').textContent,/Maximum 500/);
+  assert.equal(vm.runInContext('decks[1].cards.at(-1).qty',w.context),500);
+  core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context)));
+});
+
+test('tracker resizing is bounded, keyboard accessible and does not write deck data',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  const handle=w.node('#tracker-resize');let prevented=0;
+  for(const key of ['End','ArrowLeft'])handle.keydown({key,preventDefault(){prevented++;}});
+  assert.equal(vm.runInContext('tracker.width',w.context),480);
+  for(const key of ['Home','ArrowRight'])handle.keydown({key,preventDefault(){prevented++;}});
+  assert.equal(vm.runInContext('tracker.width',w.context),280);
+  handle.setPointerCapture=()=>{};
+  handle.pointerdown({button:0,clientX:600,pointerId:1,preventDefault(){}});
+  handle.onpointermove({clientX:520});handle.onpointerup();
+  assert.equal(vm.runInContext('tracker.width',w.context),360);
+  assert.equal(prevented,4);
+  assert.ok(w.writes.every(([key])=>key==='arcana.explorer.v1'));
+  const reloaded=workspace({savedDecks:JSON.stringify([editorDeck()]),savedTracker:w.writes.at(-1)[1]});
+  assert.equal(vm.runInContext('tracker.width',reloaded.context),360);
+  const invalid=workspace({savedDecks:JSON.stringify([editorDeck()]),savedTracker:JSON.stringify({id:'deleted',width:900,visible:false})});
+  assert.equal(vm.runInContext('tracker.width',invalid.context),480);
+  assert.equal(vm.runInContext('tracker.id',invalid.context),'');
+});
+
+test('adding the first card creates an explicit destination without starting tracking',()=>{
+  const w=workspace();
+  vm.runInContext("results=[{id:'new',name:'New card',type_line:'Instant',cmc:1,color_identity:[]}]; addCard('new')",w.context);
+  assert.equal(w.writes.length,0);
+  w.node('#create-destination').onclick();
+  formValues(w,{name:'First deck',format:'modern'});
+  w.node('#deck-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('decks[0].cards[0].card.id',w.context),'new');
+  assert.equal(vm.runInContext('decks[0].cards[0].zone',w.context),'main');
+  assert.equal(vm.runInContext('view',w.context),'explore');
+  assert.equal(vm.runInContext('tracker.id',w.context),'');
+  core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context)));
+});
+
+test('deleting the tracked deck clears only that preference, and blocked preferences remain usable',()=>{
+  const a=editorDeck(),b={...editorDeck(),id:'second',name:'Second deck'};
+  const w=workspace({savedDecks:JSON.stringify([a,b])});
+  vm.runInContext('deleteDeck(decks[0])',w.context);w.node('#confirm-delete').onclick();
+  assert.equal(vm.runInContext('tracker.id',w.context),'');
+  assert.equal(vm.runInContext('decks[0].id',w.context),'second');
+  assert.equal(vm.runInContext('current()',w.context),undefined);
+  const blocked=workspace({blocked:true});
+  assert.doesNotThrow(()=>vm.runInContext("trackDeck(''); resizeTracker(400); saveTracker()",blocked.context));
+  assert.equal(vm.runInContext('tracker.width',blocked.context),400);
+  assert.match(blocked.node('#toast').textContent,/session/);
+});
+
+test('exploration separates initial/loading/no-match/error/results and ignores cleared pending searches',async()=>{
+  const w=workspace();
+  assert.match(w.node('#app').innerHTML,/data-state="initial"/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/id="sort"|What does your deck need/);
+  let complete;
+  w.context.fetch=()=>new Promise(resolve=>complete=resolve);
+  const pending=vm.runInContext("filters=parseQuery('otag:ramp'); search()",w.context);
+  assert.match(w.node('#app').innerHTML,/data-state="loading"/);
+  vm.runInContext("setCondition('tags',{...filters,tags:[]},false)",w.context);
+  assert.match(w.node('#results-area').outerHTML,/data-state="initial"/);
+  complete({ok:true,json:async()=>({data:[editorCard('Obsolete')],total_cards:1,has_more:false})});
+  await pending;assert.equal(vm.runInContext('results.length',w.context),0);
+  w.context.fetch=async()=>({ok:false,json:async()=>({error:'No cards'})});
+  await vm.runInContext("filters=parseQuery('impossible'); search()",w.context);
+  assert.match(w.node('#app').innerHTML,/data-state="no-match"/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Choose a starting point/);
+  w.context.fetch=async()=>{throw Error('Offline');};
+  await vm.runInContext('search()',w.context);
+  assert.match(w.node('#app').innerHTML,/data-state="error"/);
+  assert.match(w.node('#app').innerHTML,/Try again/);
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Current')],total_cards:1,has_more:false})});
+  await vm.runInContext('search()',w.context);
+  assert.match(w.node('#app').innerHTML,/data-state="populated"/);
+  assert.match(w.node('#app').innerHTML,/Sort results/);
 });
