@@ -20,6 +20,15 @@ try { const saved = localStorage.getItem('arcana.decks.v1'); decks = saved ? val
 catch { decks = []; storageError = 'Saved decks could not be read. Restore a JSON backup before making changes.'; }
 for (const deck of decks) for (const entry of deck.cards) entry.zone = zoneFor(entry);
 let active = decks[0]?.id;
+let tracker = { id: active || '', visible: true, width: 340 };
+try {
+  const saved = JSON.parse(localStorage.getItem('arcana.explorer.v1'));
+  if (saved && typeof saved === 'object') {
+    if (typeof saved.id === 'string') tracker.id = decks.some(d=>d.id===saved.id) ? saved.id : '';
+    if (typeof saved.visible === 'boolean') tracker.visible = saved.visible;
+    if (Number.isFinite(saved.width)) tracker.width = Math.max(280,Math.min(480,saved.width));
+  }
+} catch {}
 let view = 'explore', deckTab = 'cards', results = [], total = 0, page = 1, more = false, loading = false, error = '', requestId = 0, searched = false;
 let filters = parseQuery('');
 let filtersOpen = false, tagsOpen = false;
@@ -27,7 +36,16 @@ let order = 'edhrec', tagSearch = '', visibleLimit = 24;
 let browsedTag = '', tagLimit = 30, allTags = false;
 let comparison = [], comparisonOpen = false, broadening = null, resultContext = null;
 let editorOptions = { group: 'type', type: '', role: '', order: 'name' };
-const current = () => decks.find(d => d.id === active);
+const current = () => decks.find(d => d.id === (view === 'explore' ? tracker.id : active));
+function saveTracker() {
+  try { localStorage.setItem('arcana.explorer.v1', JSON.stringify(tracker)); }
+  catch { toast('Tracker changed for this session. Browser preferences could not be saved.'); }
+}
+function trackDeck(id) {
+  tracker.id = decks.some(d=>d.id===id) ? id : '';
+  if (tracker.id) tracker.visible = true;
+  saveTracker(); render();
+}
 const cardKey = c => c.oracle_id || c.id;
 function save() {
   if (storageError) { toast(storageError); return; }
@@ -49,8 +67,10 @@ function render() {
     else {const attribute=[...focused.attributes].find(a=>a.name.startsWith('data-'));if(attribute)focusSelector='['+attribute.name+'="'+CSS.escape(attribute.value)+'"]';}
   }
   const d = current();
+  $('#app').style.setProperty('--tracker-width', tracker.width+'px');
+  $('#app').classList.toggle('has-tracker', view==='explore' && Boolean(d) && tracker.visible);
   $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-view="explore" aria-label="Arcana home — Explore cards"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Explore cards</button><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button class="nav-item" data-action="settings">Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
-  <main>${storageError ? `<div class="storage-warning" role="alert">${esc(storageError)} <button data-action="backup">Export backup</button></div>` : ''}${view === 'decks' ? library() : view === 'deck' ? deckWorkspace(d) : explorer()}</main>${view === 'explore' ? `<button class="mobile-deck-jump primary" data-action="jump-deck">${icon('cards',16)} ${d ? 'View deck · '+count(d)+' cards' : 'Create a deck'}</button><aside class="deck-panel">${deckPanel(d)}</aside>` : ''}`;
+  <main>${storageError ? `<div class="storage-warning" role="alert">${esc(storageError)} <button data-action="backup">Export backup</button></div>` : ''}${view === 'decks' ? library() : view === 'deck' ? deckWorkspace(d) : explorer()}</main>${view === 'explore' && d && tracker.visible ? `<button class="mobile-deck-jump primary" data-action="jump-deck">View tracker · ${esc(d.name)}</button><aside id="deck-tracker" class="deck-panel" aria-label="Tracked deck: ${esc(d.name)}"><div id="tracker-resize" role="separator" tabindex="0" aria-label="Resize deck tracker" aria-orientation="vertical" aria-controls="deck-tracker" aria-valuemin="280" aria-valuemax="480" aria-valuenow="${tracker.width}" aria-valuetext="${tracker.width} pixels, subject to available space" title="Drag to resize. Left widens; Right narrows; Home and End set limits."></div>${deckPanel(d)}</aside>` : ''}`;
   bind();
   if(focusSelector) {const target=document.querySelector(focusSelector)||document.querySelector('.deck-tabs [aria-selected="true"]');target?.focus({preventScroll:true});}
 }
@@ -72,13 +92,15 @@ function selectedFunctions() {
 }
 function explorer() {
   const d=current();
-  return `<div class="explorer">${d?`<div class="exploration-target">Adding to <strong>${esc(d.name)}</strong> · Main deck <button class="text-button" data-deck="${esc(d.id)}">Open full deck</button></div>`:''}<div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div><details id="search-filters" class="search-disclosure" ${filtersOpen?'open':''}><summary>${icon('filters',16)} Filters</summary><div id="guided-controls">${guidedControls()}</div></details><details id="function-tags" class="tag-browser" ${tagsOpen?'open':''}><summary>Browse by function <span>Find existing Scryfall tags</span></summary><div class="tag-browser-content"><label class="tag-search-label" for="tag-search">Find a function</label><div class="tag-search"><input id="tag-search" value="${esc(tagSearch)}" placeholder="e.g. ramp or removal" aria-label="Find function tags"></div><div id="tag-options">${tagOptions()}</div><div class="tag-footer"><button class="text-button" data-action="custom-tag">Enter an existing Scryfall tag…</button><details class="tag-info"><summary>About this tag catalog</summary><p>${TAG_CATALOG.tags.length.toLocaleString()} tags from <a href="https://scryfall.com/docs/api/tags" target="_blank" rel="noreferrer">Scryfall Tagger</a> · Snapshot ${esc(TAG_CATALOG.updated.slice(0,10))}. May lag behind live tags. This bundled catalog does not update live. Entering a tag searches existing Scryfall tagging; it does not create tags.</p></details></div></div></details><div id="selected-functions">${selectedFunctions()}</div>${comparisonTools()}${searchResults()}</div>`;
+  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck"><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Quick add: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<span>Browse freely. Choose a destination when adding a card.</span>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div><details id="search-filters" class="search-disclosure" ${filtersOpen?'open':''}><summary>Filters</summary><div id="guided-controls">${guidedControls()}</div></details><details id="function-tags" class="tag-browser" ${tagsOpen?'open':''}><summary>Browse by function <span>Find existing Scryfall tags</span></summary><div class="tag-browser-content"><label class="tag-search-label" for="tag-search">Find a function</label><div class="tag-search"><input id="tag-search" value="${esc(tagSearch)}" placeholder="e.g. ramp or removal" aria-label="Find function tags"></div><div id="tag-options">${tagOptions()}</div><div class="tag-footer"><button class="text-button" data-action="custom-tag">Enter an existing Scryfall tag…</button><details class="tag-info"><summary>About this tag catalog</summary><p>${TAG_CATALOG.tags.length.toLocaleString()} tags from <a href="https://scryfall.com/docs/api/tags" target="_blank" rel="noreferrer">Scryfall Tagger</a> · Snapshot ${esc(TAG_CATALOG.updated.slice(0,10))}. May lag behind live tags. This bundled catalog does not update live. Entering a tag searches existing Scryfall tagging; it does not create tags.</p></details></div></div></details><div id="selected-functions">${selectedFunctions()}</div>${searchResults()}${comparisonTools()}</div>`;
 }
 function searchResults(){
-  return `<div id="results-area">  <div class="results-heading"><div><h2 id="result-heading" tabindex="-1">${searched ? 'Cards' : 'Start a search'}</h2><span id="result-count" role="status" aria-live="polite">${loading ? 'Searching Scryfall…' : searched && !error ? `${total.toLocaleString()} cards found` : 'Choose a starting point below'}</span></div><div class="results-controls">${filters.query.trim() ? '<button class="text-button" data-action="reset">Clear filters</button>' : ''}<select id="sort" aria-label="Sort cards">${[['edhrec','Popular first'],['cmc','Mana value'],['name','Name A–Z'],['usd','Price: low first']].map(([v,l])=>`<option value="${v}" ${order === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+  const noMatch=Boolean(error)&&error.startsWith('No cards');
+  const status=loading?'Searching Scryfall…':error?(noMatch?'0 cards found':'Search failed'):searched?total.toLocaleString()+(total===1?' card found':' cards found'):'Search above, or try an optional starting point.';
+  return `<section id="results-area" aria-labelledby="result-heading" data-state="${loading?'loading':error?(noMatch?'no-match':'error'):searched?'populated':'initial'}"><div class="results-heading"><div><h2 id="result-heading" tabindex="-1">${searched||loading||error?'Cards':'Discover cards'}</h2><span id="result-count" role="status" aria-live="polite">${status}</span></div>${searched||loading||error?`<div class="results-controls"><label>Sort results<select id="sort" aria-label="Sort cards">${[['edhrec','Popular first'],['cmc','Mana value'],['name','Name A–Z'],['usd','Price: low first']].map(([v,l])=>`<option value="${v}" ${order===v?'selected':''}>${l}</option>`).join('')}</select></label></div>`:''}</div>
   ${resultContext&&resultContext.query!==queryFor(filters,current())?'<p class="query-stale" role="status">These results are from the previous query. Press Search to update them.</p>':''}
-  ${error ? `<div class="empty-state" role="alert">${icon('search',32)}<h3>${error.startsWith('No cards') ? 'A little too specific?' : 'Search couldn’t finish'}</h3><p>${esc(error)}</p><div><button class="secondary" data-action="reset">Clear filters</button><button class="primary" data-action="retry">Try again</button></div></div>` : loading && !results.length ? `<div class="loading-state"><span class="spinner"></span><p>Looking through the library…</p></div>` : `<div class="card-grid" aria-busy="${loading}">${results.slice(0,visibleLimit).map(cardTile).join('')}</div>${!searched && !results.length ? `<div class="welcome-state"><span class="welcome-icon">${icon('leaf', 32)}</span><h3>What does your deck need?</h3><p>Start with a common role, or search for a card above.</p><div><button data-preset="ramp">Find ramp</button><button data-preset="draw">Find card draw</button><button data-preset="removal">Find removal</button></div></div>` : ''}`}
-  ${(more || visibleLimit < results.length) && !error ? `<button class="load-more secondary" data-action="more" ${loading ? 'disabled' : ''}>${loading ? 'Loading…' : 'Load more cards'}</button>` : ''}<footer>Card data and images by <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. Magic: The Gathering © Wizards of the Coast.</footer></div>`;
+  ${error?`<div class="empty-state" role="alert"><h3>${noMatch?'No cards matched':'Search couldn’t finish'}</h3><p>${esc(error)}</p><div><button class="secondary" data-action="reset">Clear search and filters</button>${!noMatch?'<button class="primary" data-action="retry">Try again</button>':''}</div></div>`:loading&&!results.length?'<div class="loading-state" role="status"><p>Loading cards…</p></div>':`<div class="card-grid" aria-busy="${loading}">${results.slice(0,visibleLimit).map(cardTile).join('')}</div>${!searched&&!results.length?'<div class="search-starts"><p>Try a function</p><div><button class="secondary" data-preset="ramp">Find ramp</button><button class="secondary" data-preset="draw">Find card draw</button><button class="secondary" data-preset="removal">Find removal</button></div></div>':''}`}
+  ${(more||visibleLimit<results.length)&&!error?`<button class="load-more secondary" data-action="more" ${loading?'disabled':''}>${loading?'Loading…':'Load more cards'}</button>`:''}<footer>Card data and images by <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. Magic: The Gathering © Wizards of the Coast.</footer></section>`;
 }
 function tagOptions() {
   const searching=Boolean(tagSearch.trim()), matches=searching||allTags?findTags(tagSearch):TAGS.map(([id])=>tagById.get(id)||resolveTag(id)).filter(Boolean);
@@ -96,7 +118,7 @@ function comparisonTools() {
     <p class="hint">Choose Compare on two cards to inspect their tradeoffs. Results follow your chosen Scryfall sort, with no synergy score or best-card ranking. Loaded batches are not exhaustive.</p>
     <h3 id="comparison-title" tabindex="-1">${comparison.length ? 'Your comparison' : 'Choose cards to compare'}</h3>
     ${comparison.length ? `<table class="comparison-table"><caption class="sr-only">Card attributes and search context</caption><thead><tr><th scope="col">Attribute</th>${comparison.map(({card}) => `<th scope="col">${esc(card.name)}<button class="text-button" data-remove-compare="${esc(cardKey(card))}" aria-label="Remove ${esc(card.name)} from comparison">Remove</button></th>`).join('')}${comparison.length === 1 ? '<th scope="col">Choose a second card</th>' : ''}</tr></thead><tbody>
-      ${row('Card', ({card}) => { const image = safeUrl(imageFor(card),true); return `${image ? `<img src="${esc(image)}" alt="${esc(card.name)}" loading="lazy">` : ''}<button class="text-button" data-inspect="${esc(card.id)}" aria-label="Inspect ${esc(card.name)}">Inspect</button> <button class="text-button" data-add="${esc(card.id)}" aria-label="Add ${esc(card.name)} to deck">Add to deck</button>`; })}
+      ${row('Card', ({card}) => { const image = safeUrl(imageFor(card),true); return `${image ? `<img src="${esc(image)}" alt="${esc(card.name)}" loading="lazy">` : ''}<button class="text-button" data-inspect="${esc(card.id)}" aria-label="Inspect ${esc(card.name)}">Inspect</button> <button class="text-button" data-add="${esc(card.id)}" aria-label="${esc(addLabel(card))}">${current()?'Add to tracked deck':'Add to…'}</button>`; })}
       ${row('Mana value', ({card}) => esc(card.cmc))}
       ${row('Mana cost', ({card}) => mana(card.mana_cost) || 'No mana cost')}
       ${row('Colors', ({card}) => esc(colors(card.colors || (card.card_faces?.some(f => Array.isArray(f.colors)) ? card.card_faces.flatMap(f => f.colors || []) : undefined))))}
@@ -140,12 +162,10 @@ function cardTile(c) {
   const entry = current()?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');
   const image = imageFor(c);
   const compared = comparison.some(item=>cardKey(item.card)===cardKey(c));
-  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="Add ${esc(c.name)} to deck">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${c.prices?.usd ? '$' + esc(c.prices.usd) : '—'}</span></div><button class="text-button compare-card" data-compare="${esc(c.id)}" aria-label="${esc(compared ? `Remove ${c.name} from comparison` : `Compare ${c.name}`)}" aria-pressed="${compared}">${compared ? 'Remove comparison' : 'Compare'}</button></article>`;
+  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${c.prices?.usd ? '$' + esc(c.prices.usd) : '—'}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}<button class="text-button compare-card" data-compare="${esc(c.id)}" aria-label="${esc(compared ? `Remove ${c.name} from comparison` : `Compare ${c.name}`)}" aria-pressed="${compared}">${compared ? 'Remove comparison' : 'Compare'}</button></article>`;
 }
 function deckPanel(d) {
-  if (!d) return `<div class="panel-title">${icon('cards',18)} Your deck</div><div class="empty-deck">${icon('cards',40)}<h2>Build as you browse.</h2><p>Create a deck and add cards as you explore. Your curve and card counts will take shape here.</p><button class="primary" data-action="new">${icon('plus',16)} Create a deck</button><button class="text-button" data-action="sample">Try an example deck</button></div><div class="panel-footnote">Your decks stay on this device.<br>Export a backup to take them with you.</div>`;
-  const s = stats(d), report = legalityReport(d), issues = [...report.failed,...report.unavailable,...report.manual];
-  return `<div class="panel-title">${icon('cards',18)} <span class="sr-only">Deck workspace</span><button class="text-button" data-action="edit">Edit deck</button></div><div class="deck-header"><h2>${esc(d.name)}</h2><div><span class="format-badge">${esc(d.format)}</span><span class="save-note">${storageError ? 'Unsaved changes' : 'Saved locally'}</span></div></div><div class="deck-progress"><strong>${s.total}<span> / ${d.format === 'commander' ? '100' : '60+'}</span></strong><span>in playing deck · ${zoneCount(d,'sideboard')} sideboard</span></div><div class="deck-tabs" role="tablist"><button role="tab" aria-selected="${deckTab==='cards'}" data-tab="cards">Cards</button><button role="tab" aria-selected="${deckTab==='stats'}" data-tab="stats">Statistics</button><button role="tab" aria-selected="${deckTab==='checks'}" data-tab="checks">Checks ${issues.length ? `<span>${issues.length}</span>` : ''}</button></div><div class="panel-content">${deckTab === 'cards' ? `<div class="mini-stats"><span><b>${s.lands}</b> lands</span><span><b>${s.spells}</b> spells</span><span><b>${s.average.toFixed(2)}</b> avg. MV</span></div>${count(d) ? deckList(d) : '<div class="small-empty"><h3>No cards yet.</h3><p>Use the + on any card to add it here.</p></div>'}` : deckTab === 'stats' ? statPanel(s) : checksPanel(d,report)}</div><div class="panel-bottom"><div class="deck-actions"><button data-action="import">${icon('upload',15)} Import</button><button data-action="export">${icon('download',15)} Export</button></div></div>`;
+  return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Quick add goes to Main deck.</p><button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use quick add on a result to add to this deck’s Main deck.</p>'}</div>`;
 }
 function identitySummary(d) {
   const colors=deckIdentity(d), names={W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'};
@@ -154,7 +174,7 @@ function identitySummary(d) {
 }
 function openDeck(id) {
   if(!decks.some(d=>d.id===id))return;
-  const changed=active!==id;active=id;view='deck';broadening=null;deckTab='cards';
+  const changed=active!==id;active=id;view='deck';deckTab='cards';
   if(changed)editorOptions={group:'type',type:'',role:'',order:'name'};
   render();$('#deck-title')?.focus();
 
@@ -164,7 +184,7 @@ function deckWorkspace(d) {
   const s=stats(d), report=legalityReport(d), roles=[...new Set(d.cards.flatMap(e=>e.tags))].sort();
   const types=[...new Set(d.cards.flatMap(e=>e.card.type_line.split(' — ')[0].split(' ')))].sort();
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><button class="text-button" data-view="decks">Back to My decks</button><div class="page-heading"><div><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><p>${esc(d.format)} · ${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</p>${identitySummary(d)}</div><div class="workspace-actions"><button class="primary" data-view="explore">${icon('plus',16)} Find cards to add</button><button class="secondary" data-action="rename">Rename / format</button></div></div><div class="workspace-actions deck-management"><button class="secondary" data-action="import">Import cards</button><button class="secondary" data-action="export">Export deck</button><button class="secondary" data-manage="duplicate" data-target="${esc(d.id)}">Duplicate</button><button class="text-button danger" data-manage="delete" data-target="${esc(d.id)}">Delete deck…</button></div><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('group','Group by',[['type','Card type'],['role','Primary function'],['none','No grouping']])}${select('order','Order by',[['name','Name'],['mana','Mana value'],['quantity','Quantity (most first)']])}${select('type','Filter card type',[['','All types'],...types.map(t=>[t,t])])}${select('role','Filter any assigned role',[['','All roles'],...roles.map(t=>[t,t])])}<button class="text-button" data-action="clear-deck-filters">Clear filters</button></div><p class="hint role-help">Primary function is the first personal role tag. Filtering matches every assigned role. Inspect a card to edit its ordered role tags.</p>${deckList(d,true)}`}</div></div>`;
+  return `<div class="deck-workspace"><button class="text-button" data-view="decks">Back to My decks</button><div class="page-heading"><div><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><p>${esc(d.format)} · ${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</p>${identitySummary(d)}</div><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button><button class="secondary" data-action="rename">Rename / format</button></div></div><div class="workspace-actions deck-management"><button class="secondary" data-action="import">Import cards</button><button class="secondary" data-action="export">Export deck</button><button class="secondary" data-manage="duplicate" data-target="${esc(d.id)}">Duplicate</button><button class="text-button danger" data-manage="delete" data-target="${esc(d.id)}">Delete deck…</button></div><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('group','Group by',[['type','Card type'],['role','Primary function'],['none','No grouping']])}${select('order','Order by',[['name','Name'],['mana','Mana value'],['quantity','Quantity (most first)']])}${select('type','Filter card type',[['','All types'],...types.map(t=>[t,t])])}${select('role','Filter any assigned role',[['','All roles'],...roles.map(t=>[t,t])])}<button class="text-button" data-action="clear-deck-filters">Clear filters</button></div><p class="hint role-help">Primary function is the first personal role tag. Filtering matches every assigned role. Inspect a card to edit its ordered role tags.</p>${deckList(d,true)}`}</div></div>`;
 }
 function checksPanel(d, report) {
   const section = (label, items) => `<section class="check-section"><h3>${label} · ${items.length}</h3>${items.map(t=>`<p class="${label === 'Failed checks' ? 'check-issue' : 'hint'}">${esc(t)}</p>`).join('') || '<p class="hint">None found.</p>'}</section>`;
@@ -189,7 +209,7 @@ function duplicateDeck(deck) {
 function deleteDeck(deck) {
   showDialog(`<h2>Delete ${esc(deck.name)}?</h2><p>This removes only this deck from this browser. Export a JSON backup first to keep a complete copy.</p><div class="workspace-actions"><button id="cancel-delete" class="secondary">Keep deck</button><button id="confirm-delete" class="danger">Delete ${esc(deck.name)}</button></div>`);
   $('#cancel-delete').onclick=()=>$('#dialog').close();
-  $('#confirm-delete').onclick=()=>{decks=decks.filter(d=>d.id!==deck.id);if(active===deck.id){active=decks[0]?.id;if(view==='deck')view='decks';}save();$('#dialog').close();render();$('#library-title')?.focus();toast('Deck deleted');};
+  $('#confirm-delete').onclick=()=>{decks=decks.filter(d=>d.id!==deck.id);if(active===deck.id){active=decks[0]?.id;if(view==='deck')view='decks';}if(tracker.id===deck.id){tracker.id='';saveTracker();}save();$('#dialog').close();render();$('#library-title')?.focus();toast('Deck deleted');};
   $('#cancel-delete').focus();
 }
 function exportDialog(deck) {
@@ -215,7 +235,7 @@ function setCondition(family,model,run=true){
       for(const field of fields)filters[field]=source[field];
     }
     if(run)runGuidedSearch();
-    else{++requestId;loading=false;error='';broadening=null;$('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();$('#results-area').outerHTML=searchResults();$('#comparison-tools').outerHTML=comparisonTools();$('#comparison-tools')?.addEventListener('toggle',e=>{comparisonOpen=e.target.open;});bindSort();}
+    else{if(!filters.query.trim())resetResults();++requestId;loading=false;error='';broadening=null;$('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();$('#results-area').outerHTML=searchResults();$('#comparison-tools').outerHTML=comparisonTools();$('#comparison-tools')?.addEventListener('toggle',e=>{comparisonOpen=e.target.open;});bindSort();}
     return true;
   }
   catch(error){const node=$('#guided-error');if(node)node.textContent=error.message;toast(error.message);return false;}
@@ -241,7 +261,30 @@ function refreshSearchTools(){
   $('#results-area').outerHTML=searchResults();bindGuided();bindSort();
 }
 function bindSort(){$('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true);});}
+function resizeTracker(width) {
+  tracker.width = Math.round(Math.max(280,Math.min(480,width)));
+  $('#app').style.setProperty('--tracker-width',tracker.width+'px');
+  $('#tracker-resize')?.setAttribute('aria-valuenow',tracker.width);
+  $('#tracker-resize')?.setAttribute('aria-valuetext',tracker.width+' pixels, subject to available space');
+}
+function bindTrackerResize() {
+  const handle=$('#tracker-resize');if(!handle)return;
+  handle.addEventListener('keydown',e=>{
+    const width={ArrowLeft:tracker.width+20,ArrowRight:tracker.width-20,Home:280,End:480}[e.key];
+    if(width===undefined)return;e.preventDefault();resizeTracker(width);saveTracker();
+  });
+  handle.addEventListener('pointerdown',e=>{
+    if(e.button!==0)return;
+    e.preventDefault();const start=e.clientX,width=tracker.width;
+    handle.setPointerCapture(e.pointerId);
+    handle.onpointermove=event=>resizeTracker(width+start-event.clientX);
+    const finish=()=>{handle.onpointermove=null;handle.onpointerup=null;handle.onpointercancel=null;saveTracker();};
+    handle.onpointerup=finish;handle.onpointercancel=finish;
+  });
+}
 function bind() {
+  $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
+  bindTrackerResize();
   for(const key of ['group','order','type','role'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
   $('#comparison-tools')?.addEventListener('toggle',e=>{comparisonOpen=e.target.open;});
   $('#search-filters')?.addEventListener('toggle',e=>{filtersOpen=e.target.open;});
@@ -269,11 +312,14 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.preset){setCondition('tags',{...filters,tags:[button.dataset.preset]});return;}
 
   if(button.dataset.inspect){inspect(button.dataset.inspect,button.dataset.entry);return;}
+  if(button.dataset.chooseAdd){chooseDestination(button.dataset.chooseAdd);return;}
   if(button.dataset.add){addCard(button.dataset.add);return;}
   if(button.dataset.zoneMinus || button.dataset.zonePlus){const key=button.dataset.zoneMinus || button.dataset.zonePlus;changeDeck(d=>{const e=d.cards.find(x=>entryKey(x)===key);if(!e)return;if(button.dataset.zonePlus){if(e.qty<500)e.qty++;}else if(--e.qty===0)d.cards=d.cards.filter(x=>x!==e);});return;}
   const action=button.dataset.action;
   if(action==='clear-deck-filters'){editorOptions.type='';editorOptions.role='';render();}
-  if(action==='jump-deck')$('.deck-panel').scrollIntoView({behavior:'smooth'});
+  if(action==='toggle-tracker'){tracker.visible=!tracker.visible;saveTracker();render();$('#toggle-tracker')?.focus();}
+  if(action==='find-cards'){view='explore';trackDeck(active);$('#raw')?.focus();}
+  if(action==='jump-deck'){$('.deck-panel')?.scrollIntoView({behavior:'auto'});$('#tracker-heading')?.focus();}
   if(action==='new') deckForm();
   if(action==='edit'&&current()) openDeck(current().id);
   if(action==='rename') deckForm(current());
@@ -306,7 +352,35 @@ async function search(append=false,keepBroadening=false) {
   finally{if(id===requestId){loading=false;searched=true;render();}}
 }
 function findCard(id) {return results.find(c=>c.id===id)||current()?.cards.find(e=>e.card.id===id)?.card||comparison.find(item=>item.card.id===id)?.card;}
-function addCard(id,zone='main') {const c=findCard(id);if(!c)return;if(!current()){deckForm(undefined,()=>addCard(id,zone));return;}changeDeck(d=>{const found=d.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone);if(found){if(found.qty>=500)return;found.qty++;}else d.cards.push({card:c,qty:1,tags:[],zone});});toast(`${c.name} added`);}
+function addLabel(c) {
+  const d=current();
+  const qty=d?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main')?.qty||0;
+  return d?`Add ${c.name} to ${d.name} · Main deck (${qty} currently in Main deck)`:`Add ${c.name} to a chosen deck`;
+}
+function addToDeck(c,d,zone='main') {
+  if(!decks.includes(d))throw new Error('That deck is no longer available. Choose another deck.');
+  const found=d.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone);
+  if(!found && d.cards.length>=1000)throw new Error('Maximum 1000 card entries per deck. No cards were added.');
+  if(found?.qty>=500)throw new Error('Maximum 500 copies per card and zone. No cards were added.');
+  if(found)found.qty++;else d.cards.push({card:c,qty:1,tags:[],zone});
+  d.updated=new Date().toISOString();save();render();
+  toast(storageError?storageError:`${c.name} added to ${d.name} · ${ZONES[zone]}`);
+}
+function addCard(id,zone='main') {
+  const c=findCard(id);if(!c)return;
+  if(!current()){chooseDestination(id);return;}
+  try{addToDeck(c,current(),zone);}catch(error){toast(error.message);}
+}
+function chooseDestination(id,zone='main') {
+  const c=findCard(id);if(!c)return;
+  showDialog(`<h2>Add ${esc(c.name)}</h2><p>Choose the destination for one copy. Your tracked deck will stay selected.</p>${decks.length?`<form id="add-destination-form"><label>Destination deck<select name="deck" id="add-destination"><option value="">Choose a deck…</option>${decks.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label><p>Destination zone: <strong>${ZONES[zone]}</strong></p><p id="add-destination-error" role="alert"></p><button class="primary" type="submit">Add 1 to ${ZONES[zone]}</button></form>`:'<p>Create a deck to keep this card.</p><button class="primary" id="create-destination">Create deck…</button>'}`);
+  if(decks.length)$('#add-destination-form').onsubmit=e=>{
+    e.preventDefault();const d=decks.find(d=>d.id===$('#add-destination').value);
+    if(!d){$('#add-destination-error').textContent='Choose a destination deck first.';return;}
+    try{addToDeck(c,d,zone);$('#dialog').close();}catch(error){$('#add-destination-error').textContent=error.message;}
+  };
+  else $('#create-destination').onclick=()=>deckForm(undefined,d=>{view='explore';try{addToDeck(c,d,zone);}catch(error){toast(error.message);}});
+}
 function showDialog(html) {const dialog=$('#dialog');dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=()=>dialog.close();}
 $('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
 function deckForm(deck,after) {
@@ -325,7 +399,7 @@ function deckForm(deck,after) {
   $('#deck-form').onsubmit=e=>{e.preventDefault();const data=new FormData(e.target),name=String(data.get('name')).trim(),format=String(data.get('format'));if(!name||!FORMATS.includes(format))return;
     if(deck){if(!decks.includes(deck))return;deck.name=name;deck.format=format;deck.updated=new Date().toISOString();save();$('#dialog').close();render();}
     else{if(decks.length>=200){$('#deck-form-error').textContent='Maximum 200 decks per workspace.';return;}const d=blankDeck(name,format),commander=format==='commander'?choices.find(c=>c.id===$('#commander-card').value):null;if(commander)d.cards.push({card:commander,qty:1,tags:[],zone:'command'});decks.push(d);save();$('#dialog').close();openDeck(d.id);}
-    after?.();
+    after?.(deck || decks.at(-1));
   };
 }
 function settings() {
@@ -337,9 +411,9 @@ function settings() {
 function customTag(){showDialog('<h2>Enter an existing Scryfall tag</h2><p>Search an existing Scryfall function tag, such as mana-rock or reanimate. This does not create public tags. Names and aliases in the snapshot resolve to their canonical tags. Tags outside the snapshot are allowed, but may be unsupported by Scryfall.</p><form id="custom-tag-form"><label>Function tag<input name="tag" required maxlength="80" placeholder="e.g. mana-rock"></label><p id="custom-tag-error" role="alert"></p><button class="primary">Add to search</button></form>');$('#custom-tag-form').onsubmit=e=>{e.preventDefault();readFilters();const value=String(new FormData(e.target).get('tag')).trim().toLowerCase();const t=resolveTag(value)?.id || value.replace(/\s+/g,'-');if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t)){$('#custom-tag-error').textContent='Use a tag name with letters, numbers and single hyphens.';return;}try{const model={...filters,tags:[...new Set([...filters.tags,t])]};const next=replaceCondition(filters,'tags',conditionQuery(model,'tags'));filters=next;$('#dialog').close();runGuidedSearch();}catch(error){$('#custom-tag-error').textContent=error.message;}};}
 function inspect(id,entryId) {
   const c=findCard(id);if(!c)return;const entry=entryId ? current()?.cards.find(e=>entryKey(e)===entryId) : current()?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');const image=imageFor(c);
-  showDialog(`<div class="card-detail">${image?`<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}">`:''}<div><h2>${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost)}</div><p>${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><p class="hint">Mana value ${c.cmc} · ${esc(c.set_name)}${c.artist?' · Artist: '+esc(c.artist):''}</p><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><button class="secondary" id="detail-compare">${comparison.some(item=>cardKey(item.card)===cardKey(c)) ? 'Remove from comparison' : 'Compare this card'}</button><button class="primary" id="detail-add">${icon('plus',16)} Add to ${entry?ZONES[zoneFor(entry)]:'main deck'}${entry?' ('+entry.qty+' in deck)':''}</button>${entry?`<form id="roles-form"><p>Editing ${esc(current().name)} · ${ZONES[zoneFor(entry)]}</p><label>Your ordered role tags<input name="roles" placeholder="e.g. Ramp, Removal" maxlength="500" value="${esc(entry.tags.join(', '))}"></label><p class="hint">Separate personal roles with commas. The first role is the primary function for grouping; every role can be filtered. These are separate from Scryfall function tags.</p><label>Deck zone<select name="zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zoneFor(entry)===z?'selected':''}>${label}</option>`).join('')}</select></label><p class="hint">Moves all copies of this entry and preserves roles. The command zone is checked separately; it does not make an ineligible card a legal commander.</p><p id="zone-error" role="alert"></p><button class="secondary">Save zone and roles</button></form>`:''}<p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View on Scryfall ↗</a></p></div></div>`);
+  showDialog(`<div class="card-detail">${image?`<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}">`:''}<div><h2>${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost)}</div><p>${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><p class="hint">Mana value ${c.cmc} · ${esc(c.set_name)}${c.artist?' · Artist: '+esc(c.artist):''}</p><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><button class="secondary" id="detail-compare">${comparison.some(item=>cardKey(item.card)===cardKey(c)) ? 'Remove from comparison' : 'Compare this card'}</button><button class="primary" id="detail-add">${icon('plus',16)} ${current()?'Add to '+esc(current().name)+' · '+(entry?ZONES[zoneFor(entry)]:'Main deck'):'Add to…'}${entry?' ('+entry.qty+' in this zone)':''}</button>${entry?`<form id="roles-form"><p>Editing ${esc(current().name)} · ${ZONES[zoneFor(entry)]}</p><label>Your ordered role tags<input name="roles" placeholder="e.g. Ramp, Removal" maxlength="500" value="${esc(entry.tags.join(', '))}"></label><p class="hint">Separate personal roles with commas. The first role is the primary function for grouping; every role can be filtered. These are separate from Scryfall function tags.</p><label>Deck zone<select name="zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zoneFor(entry)===z?'selected':''}>${label}</option>`).join('')}</select></label><p class="hint">Moves all copies of this entry and preserves roles. The command zone is checked separately; it does not make an ineligible card a legal commander.</p><p id="zone-error" role="alert"></p><button class="secondary">Save zone and roles</button></form>`:''}<p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View on Scryfall ↗</a></p></div></div>`);
   $('#detail-compare').onclick=()=>{$('#dialog').close();toggleComparison(id);};
-  $('#detail-add').onclick=()=>{const zone=entry?zoneFor(entry):'main';addCard(id,zone);if(current())inspect(id,entry?entryKey(entry):undefined);};
+  $('#detail-add').onclick=()=>{const zone=entry?zoneFor(entry):'main';if(!current()){chooseDestination(id,zone);return;}addCard(id,zone);inspect(id,entry?entryKey(entry):undefined);};
   $('#roles-form')?.addEventListener('submit',e=>{e.preventDefault();const data=new FormData(e.target);try{const zone=String(data.get('zone'));const updatedTags=[...new Set(String(data.get('roles')).split(',').map(t=>t.trim().slice(0,80)).filter(Boolean))];changeDeck(d=>{const otherRoles=d.cards.find(e=>e!==entry&&cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone)?.tags||[];moveEntry(d,entryKey(entry),zone);const moved=d.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone);moved.tags=[...new Set([...otherRoles,...updatedTags])];});$('#dialog').close();$('[data-entry="'+CSS.escape(entryKey({card:c,zone}))+'"]')?.focus();toast('Card zone and roles saved');}catch(error){$('#zone-error').textContent=error.message;}});
 }
 async function fetchNames(names) {const cards=[],missing=[];for(let i=0;i<names.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x.name));}return {cards,missing};}

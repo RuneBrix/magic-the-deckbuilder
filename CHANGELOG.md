@@ -6,6 +6,9 @@ Record completed user-facing changes here. Future work belongs in [GitHub issues
 
 ### Changed
 
+- Make exploration deck tracking optional and separate from the full editor, with persisted hide/show and desktop drag/keyboard width, compact zone quantity tracking and explicit alternate add destinations. Preserve search state when changing the tracker ([#19](https://github.com/RuneBrix/magic-the-deckbuilder/issues/19); [workflow](docs/EXPLORATION.md)).
+- Simplify the initial exploration area to optional starting searches, ordinary result headings and result-associated sorting. Distinguish loading/no-match/error/results feedback and clear the last staged guided clause back to initial without accepting obsolete responses. Keep the existing comparison tools secondary after results ([#20](https://github.com/RuneBrix/magic-the-deckbuilder/issues/20)); candidate lists remain separate.
+
 - Expand guided discovery with type/subtype all/any matching, two mana-value comparisons, separate card-color/identity modes and exact mana-symbol minimums. Keep the effective Scryfall query editable in the primary search bar; guided edits and typed tags share that query, with preserved query-only expressions and explicit parsing limits ([#21](https://github.com/RuneBrix/magic-the-deckbuilder/issues/21), [#22](https://github.com/RuneBrix/magic-the-deckbuilder/issues/22); [workflow](docs/UNIFIED_SEARCH.md)).
 - Clarify function discovery with labeled Add filter / Related actions, secondary catalog/count help, matching beside selected tags, and entry of existing Scryfall tags. Relationship browsing leaves the query unchanged ([#23](https://github.com/RuneBrix/magic-the-deckbuilder/issues/23)).
 - Replace the duplicate navigation sidebar with a shared top navigation and compact local-save status ([#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16)).

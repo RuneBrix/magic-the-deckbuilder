@@ -18,6 +18,8 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 - [#16: Shared top navigation](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16)
 - [#17: Dedicated deck workspace](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17)
 - [#18: Deck library management and creation](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18)
+- [#19: Optional/resizable exploration tracker and explicit destinations](https://github.com/RuneBrix/magic-the-deckbuilder/issues/19)
+- [#20: Exploration hierarchy, result states and reset behavior](https://github.com/RuneBrix/magic-the-deckbuilder/issues/20)
 - [#21: Guided type, color and mana matching](https://github.com/RuneBrix/magic-the-deckbuilder/issues/21)
 - [#22: Unified editable Scryfall query](https://github.com/RuneBrix/magic-the-deckbuilder/issues/22)
 - [#23: Function-tag interaction clarity](https://github.com/RuneBrix/magic-the-deckbuilder/issues/23)
