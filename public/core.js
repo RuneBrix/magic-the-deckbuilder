@@ -1,4 +1,6 @@
 import { TAG_CATALOG } from './tag-catalog.js';
+import { replaceCondition, searchOptions } from './search.js';
+export { parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './search.js';
 export { TAG_CATALOG };
 export const FORMATS = ['commander', 'standard', 'modern', 'pioneer', 'pauper', 'legacy', 'vintage'];
 export const TAGS = [
@@ -62,6 +64,7 @@ export function safeUrl(value, image = false) {
 export const oracle = card => card.oracle_text || card.card_faces?.map(f => f.oracle_text).join('\n\n') || '';
 const hasOracle = card => typeof card.oracle_text === 'string' || Boolean(card.card_faces?.length && card.card_faces.every(f => typeof f.oracle_text === 'string'));
 export function queryFor(f, deck) {
+  if(typeof f.query==='string')return f.query.trim()||'game:paper';
   const bits = [f.raw.trim()];
   if (f.name.trim()) bits.push('name:' + JSON.stringify(f.name.trim()));
   if (f.oracle.trim()) bits.push('o:' + JSON.stringify(f.oracle.trim()));
@@ -74,6 +77,7 @@ export function queryFor(f, deck) {
   return bits.filter(Boolean).join(' ') || 'game:paper';
 }
 export function relaxationOptions(f, deck) {
+  if(typeof f.query==='string')return searchOptions(f);
   return [
     ['name', f.name.trim(), `Card name: ${f.name}`],
     ['oracle', f.oracle.trim(), `Oracle phrase: ${f.oracle}`],
@@ -89,6 +93,7 @@ export function relaxSearch(f, deck, key) {
   const option = relaxationOptions(f, deck).find(o => o.key === key);
   if (!option) throw Error('Choose an active guided condition to relax.');
   const original = structuredClone(f), relaxed = structuredClone(f);
+  if(typeof f.query==='string')return {original,filters:replaceCondition(f,key,''),originalQuery:queryFor(f),query:queryFor(replaceCondition(f,key,'')),label:option.label};
   relaxed[key] = Array.isArray(f[key]) ? [] : key === 'legal' ? false : '';
   return { original, filters: relaxed, originalQuery: queryFor(original, deck), query: queryFor(relaxed, deck), label: option.label };
 }

@@ -24,6 +24,8 @@ The optional/resizable exploration tracker remains [#19](https://github.com/Rune
 
 ## How this relates to the MVP
 
+The next feedback group is [#21: guided filter semantics](https://github.com/RuneBrix/magic-the-deckbuilder/issues/21), [#22: unified editable query](https://github.com/RuneBrix/magic-the-deckbuilder/issues/22), and [#23: function-tag interactions](https://github.com/RuneBrix/magic-the-deckbuilder/issues/23). [Unified search](UNIFIED_SEARCH.md) records supported expressions, preservation boundaries and verified examples. Broader exploration hierarchy (#20) and candidate-list discovery (#24) remain separate scopes.
+
 The [feature inventory](FEATURES.md) records implemented and partial functionality. The [changelog](../CHANGELOG.md) records completed user-facing changes. A future idea belongs in an issue, not in the changelog as though it shipped.
 
 ## Previous tracker
