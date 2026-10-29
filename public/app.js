@@ -4,13 +4,17 @@ const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const icon = (name, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${({ search: '<path d="m10 2 8 8-8 8-8-8zM10 6v8M6 10h8m2 6 6 6"/>', cards: '<path d="M8 3h12v16H8zM4 7v14h12M11 8l3-2 3 2-3 4z"/>' , settings: '<path d="M4 7h16M4 17h16M8 4v6M16 14v6"/>' , filters: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', plus: '<path d="M12 5v14M5 12h14"/>', arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>', leaf: '<path d="M20 4C8 2 2 10 7 16s14-1 13-12ZM5 21 16 10"/>', check: '<path d="m5 12 4 4L19 6"/>', down: '<path d="m6 9 6 6 6-6"/>', upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>', download: '<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>', chart: '<path d="M4 20V4m0 16h17M9 16v-5m5 5V7m5 9v-8"/>', book: '<path d="M12 5C8 2 4 3 2 4v15c4-2 7-1 10 1 3-2 6-3 10-1V4c-4-2-7-1-10 1Zm0 0v15"/>' })[name] || ''}</svg>`;
 const blankDeck = (name = 'Untitled deck', format = 'commander') => ({ id: crypto.randomUUID(), name, format, cards: [], updated: new Date().toISOString() });
+const DARK_PALETTES = [['green','Dark green'],['blue','Dark blue'],['white','Black / white'],['orange','Black / orange']];
+let palette = 'green';
+try { const saved = localStorage.getItem('arcana.palette.v1'); if (DARK_PALETTES.some(([key])=>key===saved)) palette=saved; } catch {}
 let theme = 'system';
 try { const saved = localStorage.getItem('arcana.theme.v1'); if (['light','dark','system'].includes(saved)) theme = saved; } catch {}
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
   const dark = theme === 'dark' || (theme === 'system' && systemTheme.matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  document.querySelector('meta[name="theme-color"]').content = dark ? '#171e1b' : '#f4f1e9';
+  document.documentElement.dataset.palette = palette;
+  document.querySelector('meta[name="theme-color"]').content = dark ? ({green:'#171e1b',blue:'#141c29',white:'#101010',orange:'#101010'})[palette] : '#f4f1e9';
 }
 systemTheme.addEventListener('change', applyTheme);
 applyTheme();
@@ -36,6 +40,8 @@ let order = 'edhrec', tagSearch = '', visibleLimit = 24;
 let browsedTag = '', tagLimit = 30, allTags = false;
 let comparison = [], comparisonOpen = false, broadening = null, resultContext = null;
 let editorOptions = { group: 'type', type: '', role: '', order: 'name' };
+const legalityStates = new Map();
+let legalityQueue = Promise.resolve();
 const current = () => decks.find(d => d.id === (view === 'explore' ? tracker.id : active));
 function saveTracker() {
   try { localStorage.setItem('arcana.explorer.v1', JSON.stringify(tracker)); }
@@ -67,6 +73,7 @@ function render() {
     else {const attribute=[...focused.attributes].find(a=>a.name.startsWith('data-'));if(attribute)focusSelector='['+attribute.name+'="'+CSS.escape(attribute.value)+'"]';}
   }
   const d = current();
+  if (d && view !== 'decks') ensureLegality(d);
   $('#app').style.setProperty('--tracker-width', tracker.width+'px');
   $('#app').classList.toggle('has-tracker', view==='explore' && Boolean(d) && tracker.visible);
   $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-view="explore" aria-label="Arcana home — Explore cards"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Explore cards</button><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button class="nav-item" data-action="settings">Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
@@ -165,7 +172,7 @@ function cardTile(c) {
   return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${c.prices?.usd ? '$' + esc(c.prices.usd) : '—'}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}<button class="text-button compare-card" data-compare="${esc(c.id)}" aria-label="${esc(compared ? `Remove ${c.name} from comparison` : `Compare ${c.name}`)}" aria-pressed="${compared}">${compared ? 'Remove comparison' : 'Compare'}</button></article>`;
 }
 function deckPanel(d) {
-  return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Quick add goes to Main deck.</p><button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use quick add on a result to add to this deck’s Main deck.</p>'}</div>`;
+  return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Quick add goes to Main deck.</p>${freshnessNotice(d)}<button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use quick add on a result to add to this deck’s Main deck.</p>'}</div>`;
 }
 function identitySummary(d) {
   const colors=deckIdentity(d), names={W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'};
@@ -187,9 +194,13 @@ function deckWorkspace(d) {
   return `<div class="deck-workspace"><button class="text-button" data-view="decks">Back to My decks</button><div class="page-heading"><div><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><p>${esc(d.format)} · ${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</p>${identitySummary(d)}</div><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button><button class="secondary" data-action="rename">Rename / format</button></div></div><div class="workspace-actions deck-management"><button class="secondary" data-action="import">Import cards</button><button class="secondary" data-action="export">Export deck</button><button class="secondary" data-manage="duplicate" data-target="${esc(d.id)}">Duplicate</button><button class="text-button danger" data-manage="delete" data-target="${esc(d.id)}">Delete deck…</button></div><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('group','Group by',[['type','Card type'],['role','Primary function'],['none','No grouping']])}${select('order','Order by',[['name','Name'],['mana','Mana value'],['quantity','Quantity (most first)']])}${select('type','Filter card type',[['','All types'],...types.map(t=>[t,t])])}${select('role','Filter any assigned role',[['','All roles'],...roles.map(t=>[t,t])])}<button class="text-button" data-action="clear-deck-filters">Clear filters</button></div><p class="hint role-help">Primary function is the first personal role tag. Filtering matches every assigned role. Inspect a card to edit its ordered role tags.</p>${deckList(d,true)}`}</div></div>`;
 }
 function checksPanel(d, report) {
-  const section = (label, items) => `<section class="check-section"><h3>${label} · ${items.length}</h3>${items.map(t=>`<p class="${label === 'Failed checks' ? 'check-issue' : 'hint'}">${esc(t)}</p>`).join('') || '<p class="hint">None found.</p>'}</section>`;
-  return `<div class="checks"><h3>${report.failed.length ? 'Construction checks failed' : report.unavailable.length ? 'Checks incomplete' : 'Supported checks passed'}</h3><p>${d.format === 'modern' ? 'Modern: main deck 60+, sideboard up to 15, combined copy limits and stored card legality.' : 'Partial format coverage; review the notices below.'} Stored data can be outdated; refresh before playing.</p>${section('Failed checks',report.failed)}${section('Data unavailable',report.unavailable)}${section('Manual review',report.manual)}<p class="hint">Passing supported checks is not tournament certification. Companions, special construction text and formats outside the selected Modern rule family may require manual review.</p><button class="secondary" data-action="refresh">Refresh card legality</button></div>`;
+  const section = (label, items, status, symbol) => `<section class="check-section check-${items.length?status:'info'}"><h3>${icon(items.length?symbol:'check',18)} ${label} · ${items.length}</h3>${items.length?`<ul>${items.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p>None found.</p>'}</section>`;
+  const state=legalityStates.get(d.id), fresh=state?.status==='fresh' && Date.now()-state.time<300_000;
+  const status = report.failed.length ? 'failure' : report.unavailable.length || !fresh ? 'warning' : report.manual.length ? 'info' : 'success';
+  const title = report.failed.length ? 'Construction checks failed' : report.unavailable.length || !fresh ? 'Checks incomplete' : report.manual.length ? 'Supported checks passed · manual review needed' : 'Supported checks passed';
+  return `<div class="checks"><h3 class="check-summary check-${status}">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3><p>${d.format === 'modern' ? 'Modern: main deck 60+, sideboard up to 15, combined copy limits and stored card legality.' : 'Partial format coverage; review the notices below.'}</p>${freshnessNotice(d)}${section('Failed checks',report.failed,'failure','close')}${section('Data unavailable',report.unavailable,'warning','book')}${section('Manual review',report.manual,'info','book')}<p class="hint">Passing supported checks is not tournament certification. Companions, special construction text and formats outside the selected Modern rule family may require manual review. Details name affected cards and zones where available.</p></div>`;
 }
+
 function deckList(d, full=false) {
   return `<div class="zone-counts" aria-label="Deck zone counts">${Object.entries(ZONES).map(([z,label])=>`<span>${label}: ${zoneCount(d,z)}</span>`).join('')}</div>` + Object.entries(ZONES).map(([zone,label]) => {
     const entries = (full?deckEntries(d,editorOptions):d.cards).filter(e=>zoneFor(e)===zone), groups=new Map();
@@ -403,7 +414,8 @@ function deckForm(deck,after) {
   };
 }
 function settings() {
-  showDialog(`<h2>Workspace settings</h2><p>Appearance and backups for this browser.</p><label class="theme-setting">Appearance<select id="theme">${[['system','Use device setting'],['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${theme===v?'selected':''}>${l}</option>`).join('')}</select></label><h3 class="settings-heading">Deck backups</h3><p>Decks are saved only in this browser. A JSON backup preserves cards, commanders, and role tags.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Export JSON backup</button><button class="secondary" id="settings-restore">${icon('upload',16)} Restore JSON backup</button></div>`);
+  showDialog(`<h2>Workspace settings</h2><p>Appearance and backups for this browser.</p><label class="theme-setting">Appearance<select id="theme">${[['system','Use device setting'],['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${theme===v?'selected':''}>${l}</option>`).join('')}</select></label><label class="theme-setting">Dark palette<select id="dark-palette">${DARK_PALETTES.map(([v,l])=>`<option value="${v}" ${palette===v?'selected':''}>${l}</option>`).join('')}</select></label><p class="hint">Used in Dark mode and when the device uses dark appearance.</p><h3 class="settings-heading">Deck backups</h3><p>Decks are saved only in this browser. A JSON backup preserves cards, commanders, and role tags.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Export JSON backup</button><button class="secondary" id="settings-restore">${icon('upload',16)} Restore JSON backup</button></div>`);
+  $('#dark-palette').onchange=e=>{palette=e.target.value;applyTheme();try{localStorage.setItem('arcana.palette.v1',palette);}catch{toast('Palette changed for this session. Browser storage is unavailable.');}};
   $('#theme').onchange=e=>{theme=e.target.value;applyTheme();try{localStorage.setItem('arcana.theme.v1',theme);}catch{toast('Appearance changed for this session. Browser storage is unavailable.');}};
   $('#settings-backup').onclick=()=>download('arcana-decks.json',JSON.stringify(decks,null,2),'application/json');
   $('#settings-restore').onclick=restore;
@@ -435,6 +447,48 @@ function importDialog(target=current()){
   }catch(error){form.querySelector('#import-error').textContent=error.message;}finally{button.disabled=false;button.textContent='Import cards';}};
 }
 function restore(){showDialog('<h2>Restore your workspace</h2><p>Choose an Arcana JSON backup. Restored decks are added alongside existing decks.</p><input id="backup-file" type="file" accept="application/json,.json" aria-label="Deck backup file"><p id="restore-error" role="alert"></p>');$('#backup-file').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>15_000_000)throw new Error('Backup is too large (maximum 15 MB).');const imported=validateBackup(JSON.parse(await file.text()));if(decks.length+imported.length>200)throw new Error('Maximum 200 decks per workspace.');for(const d of imported){for(const e of d.cards)e.zone=zoneFor(e);d.id=crypto.randomUUID();decks.push(d);}storageError='';active=imported[0]?.id||active;save();$('#dialog').close();render();toast('Backup restored');}catch(error){$('#restore-error').textContent=error.message;}};}
-async function refresh(){const d=current();if(!d?.cards.length){toast('Add some cards first.');return;}toast('Refreshing card data…');try{const {cards,missing}=await fetchNames(d.cards.map(e=>e.card.name));if(missing.length)throw new Error('Some cards could not be refreshed. Your deck is unchanged.');const byName=new Map(cards.map(c=>[c.name,c]));if(d.cards.some(e=>!byName.has(e.card.name)))throw new Error('Could not refresh every card. Your deck is unchanged.');d.cards.forEach(e=>e.card=byName.get(e.card.name));save();render();toast('Card data and legality refreshed');}catch(e){toast(e.message);}}
+function legalitySignature(d) { return [...new Set(d.cards.map(e=>cardKey(e.card)+':'+e.card.name))].sort().join('|'); }
+function ensureLegality(d) {
+  if (!d.cards.length) return;
+  const signature=legalitySignature(d), state=legalityStates.get(d.id);
+  if (state?.pending || state?.signature===signature) return;
+  legalityStates.set(d.id,{status:'refreshing',signature,pending:true});
+  setTimeout(()=>refresh(d),0);
+}
+function freshnessNotice(d) {
+  if (!d.cards.length) return '<p class="hint">No stored cards to refresh.</p>';
+  const state=legalityStates.get(d.id), status=state?.status;
+  const stale=status==='fresh' && Date.now()-state.time>=300_000;
+  const message=status==='refreshing'?'Refreshing legality… Editing stays available.':status==='failed'?'Legality refresh unavailable. Last usable data retained.':status==='fresh'&&!stale?'Legality refreshed this session (server cache up to five minutes).':'Legality data is stale; current rules have not been verified.';
+  return `<div class="freshness check-${status==='fresh'&&!stale?'success':'warning'}" role="status"><p>${icon(status==='fresh'&&!stale?'check':'book',16)} ${message}</p>${status==='failed'?`<p>${esc(state.error)}</p>`:''}${status==='failed'||stale?'<button class="text-button" data-action="refresh">Retry legality refresh</button>':''}</div>`;
+}
+function refresh(d=current()) {
+  if (!d?.cards.length) return Promise.resolve();
+  const previous=legalityStates.get(d.id);
+  if (previous?.promise) return previous.promise;
+  const entries=d.cards.map(e=>({entry:e,card:e.card})), signature=legalitySignature(d);
+  const state={status:'refreshing',signature,pending:true};
+  legalityStates.set(d.id,state);
+  const task=legalityQueue.then(async()=>{
+    try {
+      const {cards,missing}=await fetchNames([...new Set(entries.map(({card})=>card.name))].sort());
+      const byName=new Map(cards.map(c=>[c.name,c]));
+      if(missing.length || entries.some(({card})=>{const c=byName.get(card.name);return !c || !c.legalities || typeof c.legalities!=='object' || Array.isArray(c.legalities) || (c.oracle_id && card.oracle_id && c.oracle_id!==card.oracle_id);})) throw new Error('Some card legality data is missing or mismatched. Retry when available.');
+      if (!decks.includes(d)) return;
+      if (d.cards.some(e=>!entries.some(({entry,card})=>entry===e && card===e.card))) state.signature='';
+      for (const {entry,card} of entries) {
+        // Only patch the surviving original card; quantities, roles, zones and printing stay live.
+        if (d.cards.includes(entry) && entry.card===card) entry.card={...card,legalities:byName.get(card.name).legalities};
+      }
+      state.status='fresh';state.time=Date.now();save();
+      setTimeout(()=>{if(current()===d)render();},300_000);
+    } catch(error) { state.status='failed';state.error=error.message; }
+    finally {state.pending=false;delete state.promise;if(current()===d)render();}
+  });
+  state.promise=task;legalityQueue=task.catch(()=>{});
+  if(current()===d)render();
+  return task;
+}
+
 async function sample(){if(decks.length>=200){toast('Maximum 200 decks per workspace.');return;}toast('Loading a small example from Scryfall…');try{const names=['Tatyova, Benthic Druid','Sol Ring','Arcane Signet','Cultivate',"Kodama's Reach",'Llanowar Elves','Rampant Growth','Growth Spiral','Beast Within','Counterspell','Eternal Witness','Command Tower','Forest','Island'];const {cards,missing}=await fetchNames(names);if(missing.length)throw new Error('Example cards could not be loaded. Try again.');const d=blankDeck('The garden grows');d.cards=cards.map(card=>({card,qty:card.name==='Forest'?12:card.name==='Island'?10:1,tags:['Cultivate',"Kodama's Reach",'Rampant Growth','Sol Ring','Arcane Signet','Llanowar Elves'].includes(card.name)?['Ramp']:[],zone:card.name==='Tatyova, Benthic Druid'?'command':'main'}));decks.push(d);active=d.id;save();openDeck(d.id);toast('Example loaded — an unfinished Commander deck to build on');}catch(e){toast(e.message);}}
 render();
