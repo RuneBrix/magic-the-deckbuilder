@@ -16,6 +16,8 @@ Decks have main, sideboard and command zones. Modern construction checks are zon
 
 My decks opens a dedicated deck editor with grouping, role/type filters, statistics and checks. The first ordered personal role tag is the primary function; every assigned role can be filtered. Exploration supports no tracked deck or a separately selected, hideable and resizable compact tracker, explicit add destinations and a route back to the editor. Search results and optional starting searches lead over secondary comparison tools. The library supports independent duplication, text imports, full per-deck JSON export and optional commander designation during creation.
 
+Card details separates general facts from a named deck/zone context, with validated role/zone autosave. Set/printing choices preview independently and apply explicitly to all copies of one named entry. JSON preserves the stored printing; text interchange does not.
+
 ## Open decisions
 
 Accounts and cross-device storage, live taxonomy synchronization, complete Commander/companion validation, collection tracking, and native desktop packaging.

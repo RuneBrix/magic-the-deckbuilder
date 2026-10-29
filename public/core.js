@@ -44,6 +44,35 @@ export function moveEntry(deck, key, zone) {
   if (target) { target.qty += entry.qty; target.tags = [...new Set([...target.tags, ...entry.tags])]; deck.cards = deck.cards.filter(e => e !== entry); }
   else { entry.zone = zone; entry.commander = zone === 'command'; }
 }
+export function editEntry(deck, key, roles, zone) {
+  if (typeof roles !== 'string' || roles.length > 500) throw Error('Use at most 500 characters for personal roles.');
+  const tags=[...new Set(roles.split(',').map(t=>t.trim()).filter(Boolean))];
+  if (tags.some(t=>t.length>80)) throw Error('Each personal role must be 80 characters or fewer. Your text is kept for correction.');
+  const entry=deck.cards.find(e=>entryKey(e)===key);
+  if (!entry) throw Error('This deck entry no longer exists. Reopen the card from your deck.');
+  const other=deck.cards.find(e=>e!==entry && (e.card.oracle_id||e.card.id)===(entry.card.oracle_id||entry.card.id) && zoneFor(e)===zone);
+  const otherTags=other?[...other.tags]:[];
+  moveEntry(deck,key,zone);
+  const moved=other || entry;
+  moved.tags=other?[...new Set([...otherTags,...tags])]:tags;
+  return moved;
+}
+export function validatePrinting(original, printing) {
+  if (printing?.layout==='reversible_card' && !printing.oracle_id && printing.card_faces?.length && printing.card_faces.every(f=>f.oracle_id===original.oracle_id)) {
+    const face=printing.card_faces[0];
+    printing={...printing,oracle_id:original.oracle_id,name:original.name,type_line:face.type_line,cmc:face.cmc,colors:face.colors || original.colors,color_identity:original.color_identity,oracle_text:face.oracle_text,mana_cost:face.mana_cost,power:face.power,toughness:face.toughness,loyalty:face.loyalty};
+  }
+  if (!original.oracle_id || printing?.oracle_id!==original.oracle_id) throw Error('This printing does not match the card’s rules identity.');
+  validateBackup([{id:'printing',name:'Printing',format:'commander',cards:[{card:printing,qty:1,tags:[],zone:'main'}]}]);
+  return printing;
+}
+export function setEntryPrinting(deck, key, printing) {
+  const entry=deck.cards.find(e=>entryKey(e)===key);
+  if (!entry) throw Error('This deck entry no longer exists. Reopen the card from your deck.');
+  printing=validatePrinting(entry.card,printing);
+  entry.card={...printing,legalities:entry.card.legalities || printing.legalities};
+  return entry;
+}
 export const isLand = card => /\bLand\b/.test(card.type_line);
 export const category = card => ['Land', 'Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Battle'].find(t => card.type_line?.includes(t)) || 'Other';
 // The first personal role is primary; keeping the ordered tags preserves legacy backups.

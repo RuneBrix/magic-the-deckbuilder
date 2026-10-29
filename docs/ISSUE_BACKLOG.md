@@ -24,4 +24,7 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 - [#22: Unified editable Scryfall query](https://github.com/RuneBrix/magic-the-deckbuilder/issues/22)
 - [#23: Function-tag interaction clarity](https://github.com/RuneBrix/magic-the-deckbuilder/issues/23)
 
+- [#25: Card details, explicit deck context and role/zone autosave](https://github.com/RuneBrix/magic-the-deckbuilder/issues/25)
+- [#26: Set and printing preview/selection](https://github.com/RuneBrix/magic-the-deckbuilder/issues/26)
+
 See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the development workflow](DEVELOPMENT.md).
