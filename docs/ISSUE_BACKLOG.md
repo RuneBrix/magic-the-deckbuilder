@@ -27,4 +27,7 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 - [#25: Card details, explicit deck context and role/zone autosave](https://github.com/RuneBrix/magic-the-deckbuilder/issues/25)
 - [#26: Set and printing preview/selection](https://github.com/RuneBrix/magic-the-deckbuilder/issues/26)
 
+- [#24: Session-only candidate overview with optional comparison](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24)
+- [#29: Manual Commander brackets and explainable discussion guidance](https://github.com/RuneBrix/magic-the-deckbuilder/issues/29)
+
 See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the development workflow](DEVELOPMENT.md).

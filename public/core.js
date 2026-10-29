@@ -1,3 +1,5 @@
+import { COMMANDER_BRACKETS } from './commander-brackets.js';
+export { COMMANDER_BRACKETS };
 import { TAG_CATALOG } from './tag-catalog.js';
 import { replaceCondition, searchOptions } from './search.js';
 export { parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './search.js';
@@ -72,6 +74,23 @@ export function setEntryPrinting(deck, key, printing) {
   printing=validatePrinting(entry.card,printing);
   entry.card={...printing,legalities:entry.card.legalities || printing.legalities};
   return entry;
+}
+export const BRACKETS = {1:'Exhibition',2:'Core',3:'Upgraded',4:'Optimized',5:'cEDH'};
+export function bracketReport(deck, snapshot=COMMANDER_BRACKETS, now=Date.now()) {
+  const verified=Date.parse(snapshot?.verifiedAt), age=(now-verified)/86_400_000;
+  const available=Boolean(snapshot && Array.isArray(snapshot.names) && snapshot.names.length && snapshot.names.every(n=>typeof n==='string' && n.trim()) && Number.isFinite(age) && age>=-1 && Number.isFinite(snapshot.reviewAfterDays));
+  const stale=available && age>snapshot.reviewAfterDays;
+  const normalize=name=>name.trim().replaceAll('’',"'").toLowerCase();
+  const names=new Map(available?snapshot.names.map(name=>[normalize(name),name]):[]), matches=new Map();
+  for(const entry of deck.cards.filter(e=>zoneFor(e)!=='sideboard')) {
+    if(typeof entry.card?.name!=='string' || !Number.isInteger(entry.qty) || entry.qty<1)continue;
+    const name=names.get(normalize(entry.card.name.split(' // ')[0]));
+    if(name){const item=matches.get(name)||{name,qty:0,zones:[]};item.qty+=entry.qty;if(!item.zones.includes(zoneFor(entry)))item.zones.push(zoneFor(entry));matches.set(name,item);}
+  }
+  const count=[...matches.values()].reduce((sum,m)=>sum+m.qty,0);
+  const missing=deck.cards.some(e=>zoneFor(e)!=='sideboard' && (typeof e.card?.name!=='string' || !e.card.name.trim() || !Number.isInteger(e.qty) || e.qty<1));
+  const canSuggest=available && !stale && !missing && deck.format==='commander' && deck.cards.some(e=>zoneFor(e)!=='sideboard');
+  return {available,stale,missing,count,matches:[...matches.values()],range:canSuggest&&count>0?(count<=3?[3,5]:[4,5]):null,canSuggest};
 }
 export const isLand = card => /\bLand\b/.test(card.type_line);
 export const category = card => ['Land', 'Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Battle'].find(t => card.type_line?.includes(t)) || 'Other';
@@ -217,6 +236,7 @@ export function validateBackup(data) {
   const ids = new Set();
   for (const d of data) {
     if (!d || typeof d.id !== 'string' || ids.has(d.id) || typeof d.name !== 'string' || d.name.length > 100 || !FORMATS.includes(d.format) || !Array.isArray(d.cards) || d.cards.length > 1000) throw new Error('Invalid deck backup.');
+    if (d.bracket !== undefined && (!Number.isInteger(d.bracket) || !Object.hasOwn(BRACKETS,d.bracket))) throw Error('Invalid assigned Commander bracket.');
     ids.add(d.id);
     const cards = new Set();
     for (const e of d.cards) {

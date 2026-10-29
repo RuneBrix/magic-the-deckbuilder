@@ -713,7 +713,7 @@ test('printing failures retain viewed/stored cards and show retry; invalid ident
   assert.equal(vm.runInContext('decks[0].cards[1].card.id',w.context),'Ramp spell');
 });
 
-test('no-tracker details preview and compare without deck writes; adding the viewed printing requires a named destination',()=>{
+test('no-tracker details preview and collect candidates without deck writes; adding the viewed printing requires a named destination',()=>{
   const c=editorCard('Preview'),w=workspace({savedDecks:JSON.stringify([editorDeck()]),savedTracker:JSON.stringify({id:''})});
   w.context.preview=c;vm.runInContext('results=[preview];inspect(preview.id)',w.context);
   assert.match(w.node('#detail-deck').innerHTML,/No deck is tracked/);
@@ -723,8 +723,8 @@ test('no-tracker details preview and compare without deck writes; adding the vie
   w.node('#add-destination').value='editor';w.node('#add-destination-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[0].cards.at(-1).card.id',w.context),'specific-print');
   assert.equal(vm.runInContext('tracker.id',w.context),'');
-  vm.runInContext('inspect(preview.id)',w.context);w.node('#detail-compare').onclick();
-  assert.equal(vm.runInContext('comparison[0].card.id',w.context),'Preview');
+  vm.runInContext('inspect(preview.id)',w.context);w.node('#detail-candidate').onclick();
+  assert.equal(vm.runInContext('candidates[0].card.id',w.context),'Preview');
 });
 
 
@@ -735,4 +735,81 @@ test('legacy cards without Oracle identity remain inspectable with a clear print
   assert.equal(w.node('#load-printings').disabled,true);
   assert.match(w.node('#printing-status').textContent,/Find the card again in search/);
   assert.equal(w.writes.length,0);
+});
+
+
+test('candidate collection retains completed-query snapshots, deduplicates identities, caps at 20 and keeps exploration primary',async()=>{
+  const w=workspace();w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('One')],total_cards:1,has_more:false})});
+  await vm.runInContext("filters=parseQuery('otag:ramp');search()",w.context);
+  vm.runInContext("filters=parseQuery('otag:draw');toggleCandidate('One')",w.context);
+  assert.equal(vm.runInContext('candidates[0].query',w.context),'otag:ramp');
+  assert.equal(vm.runInContext('view',w.context),'explore');
+  vm.runInContext("results[0].name='Edited result'",w.context);assert.equal(vm.runInContext('candidates[0].card.name',w.context),'One');
+  assert.match(w.node('#app').innerHTML,/Candidates · 1/);assert.match(w.node('#app').innerHTML,/Save candidate|Remove candidate/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Compare alternatives|Choose cards to compare/);
+  vm.runInContext("results=[{...candidates[0].card,id:'other-print'}];toggleCandidate('other-print')",w.context);
+  assert.equal(vm.runInContext('candidates.length',w.context),0);
+  w.context.cards=Array.from({length:21},(_,i)=>editorCard('Card '+i));
+  vm.runInContext('results=cards;for(const c of cards)toggleCandidate(c.id)',w.context);
+  assert.equal(vm.runInContext('candidates.length',w.context),20);assert.match(w.node('#toast').textContent,/full/);
+  assert.equal(w.writes.length,0);
+  assert.equal(vm.runInContext('candidates.length',workspace().context),0);
+});
+
+test('candidate overview preserves query and tracker context, supports optional pair comparison and removes stale selections',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()]),savedTracker:JSON.stringify({id:''})});
+  vm.runInContext("filters=parseQuery('mv<=3');results=[decks[0].cards[0].card,decks[0].cards[1].card];toggleCandidate('Leader');toggleCandidate('Ramp spell')",w.context);
+  await w.node('#app').click({target:{closest:()=>({dataset:{view:'candidates'}})}});
+  assert.match(w.node('#app').innerHTML,/Candidate cards · 2/);assert.match(w.node('#app').innerHTML,/This session only/);
+  assert.equal(vm.runInContext('current()',w.context),undefined);
+  vm.runInContext("toggleComparison('Leader');toggleComparison('Ramp spell')",w.context);
+  assert.equal(vm.runInContext('comparison.length',w.context),2);
+  await w.node('#app').click({target:{closest:()=>({dataset:{removeCandidate:'Leader'}})}});
+  assert.equal(vm.runInContext('comparison.length',w.context),1);
+  await w.node('#app').click({target:{closest:()=>({dataset:{view:'explore'}})}});
+  assert.equal(vm.runInContext('filters.query',w.context),'mv<=3');assert.equal(vm.runInContext('tracker.id',w.context),'');
+  await w.node('#app').click({target:{closest:()=>({dataset:{action:'clear-candidates'}})}});
+  assert.equal(vm.runInContext('candidates.length+comparison.length',w.context),0);
+  assert.equal(w.writes.length,0);
+});
+
+test('saving a candidate from details retains invalid role drafts and opening the overview requires correction or discard',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("inspect('Ramp spell')",w.context);
+  w.node('#detail-roles').value='x'.repeat(81);w.node('#detail-roles').input();
+  w.node('#detail-candidate').onclick();assert.equal(vm.runInContext('candidates.length',w.context),1);
+  assert.equal(w.node('#detail-roles').value,'x'.repeat(81));
+  w.node('#detail-open-candidates').onclick();assert.equal(vm.runInContext('view',w.context),'explore');
+  w.node('#detail-roles').value='Ramp';w.node('#detail-roles').input();w.node('#detail-open-candidates').onclick();
+  assert.equal(vm.runInContext('view',w.context),'candidates');
+});
+
+test('manual bracket assignment is explicit, preserved by duplication/backups and displayed separately from discussion ranges',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  w.context.bracketReport=d=>core.bracketReport(d,core.COMMANDER_BRACKETS,Date.parse('2026-10-29T12:00:00Z'));
+  vm.runInContext("view='deck';deckTab='checks';render()",w.context);
+  w.node('#assigned-bracket').change({target:{value:'2'}});
+  assert.equal(vm.runInContext('decks[0].bracket',w.context),2);
+  assert.match(w.node('#app').innerHTML,/Player assigned:<\/strong> Bracket 2/);
+  vm.runInContext("decks[0].cards[1].card.name='Farewell';render();duplicateDeck(decks[0])",w.context);
+  assert.equal(vm.runInContext('decks[0].bracket',w.context),2);assert.equal(vm.runInContext('decks[1].bracket',w.context),2);
+  assert.match(w.node('#app').innerHTML,/Suggested discussion range: Brackets 3–5/);
+  assert.match(w.node('#app').innerHTML,/below this standard count-based range/);
+  assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
+  vm.runInContext("view='decks';render()",w.context);assert.match(w.node('#app').innerHTML,/Player assigned: Bracket 2/);
+  vm.runInContext("view='deck';render()",w.context);w.node('#assigned-bracket').change({target:{value:''}});
+  assert.equal(vm.runInContext('decks[0].bracket',w.context),undefined);
+});
+
+
+test('stale and missing bracket data stay visibly unavailable rather than producing a suggested bracket',()=>{
+  const d=editorDeck();d.cards[1].card.name='Farewell';d.bracket=2;
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  w.context.bracketReport=d=>core.bracketReport(d,null,Date.parse('2026-10-29'));
+  vm.runInContext("view='deck';deckTab='checks';render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Suggestion unavailable: bundled list data is missing/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Suggested discussion range/);
+  w.context.bracketReport=d=>core.bracketReport(d,core.COMMANDER_BRACKETS,Date.parse('2027-02-01'));
+  vm.runInContext('render()',w.context);assert.match(w.node('#app').innerHTML,/overdue for review/);
+  assert.match(w.node('#app').innerHTML,/Player assigned:<\/strong> Bracket 2/);
+  assert.equal(vm.runInContext('decks[0].bracket',w.context),2);
 });
