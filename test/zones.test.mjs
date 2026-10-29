@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { zoneFor, zoneCount, entryKey, moveEntry, stats, legalityReport, validateBackup, exportDeckText, parseImport } from '../public/core.js';
+import { zoneFor, zoneCount, entryKey, moveEntry, editEntry, setEntryPrinting, stats, legalityReport, validateBackup, exportDeckText, parseImport } from '../public/core.js';
 
 const card = (name, extra={}) => ({id:name,oracle_id:name,name,type_line:'Creature',cmc:1,colors:['G'],color_identity:['G'],oracle_text:'',legalities:{modern:'legal',commander:'legal',vintage:'legal'},...extra});
 const entry = (name,qty,zone='main',extra={}) => ({card:card(name),qty,zone,tags:[],...extra});
@@ -81,4 +81,31 @@ test('zone headings round-trip quantities without merging the same name across z
     {name:'Forest',qty:60,zone:'main'},{name:'Forest',qty:15,zone:'sideboard'},{name:'Sol Ring',qty:1,zone:'command'},
   ]);
   assert.throws(()=>parseImport('Sideboard\nnot a card line'));
+});
+
+
+test('validated detail edits and printing changes preserve rules identity and data through JSON round trips',()=>{
+  const d={id:'details',name:'Details',format:'modern',cards:[entry('Card',2),entry('Card',3,'sideboard')]};
+  d.cards[0].tags=['Old'];d.cards[1].tags=['Destination'];
+  const key=entryKey(d.cards[0]);
+  const before=structuredClone(d);assert.throws(()=>editEntry(d,key,'x'.repeat(81),'sideboard'));assert.deepEqual(d,before);
+  const moved=editEntry(d,key,'New, New','sideboard');assert.equal(moved.qty,5);assert.deepEqual(moved.tags,['Destination','New']);
+  const valid={...moved.card,id:'new-print',set_name:'New set',collector_number:'12'};
+  setEntryPrinting(d,entryKey(moved),valid);assert.equal(d.cards.length,1);assert.equal(moved.card.id,'new-print');assert.equal(moved.qty,5);
+  const saved=structuredClone(d);assert.throws(()=>setEntryPrinting(d,entryKey(moved),{...valid,oracle_id:'other'}));assert.deepEqual(d,saved);
+  assert.throws(()=>setEntryPrinting(d,entryKey(moved),{...valid,cmc:'invalid'}));assert.deepEqual(d,saved);
+  assert.deepEqual(validateBackup(JSON.parse(JSON.stringify([d]))),[d]);
+  assert.doesNotMatch(exportDeckText(d),/new-print|New set/);
+});
+
+
+test('same-identity reversible printings normalize face rules while retaining both artwork faces',()=>{
+  const d={id:'reversible',name:'Reversible',format:'modern',cards:[entry('Sol Ring',1)]};
+  const original=d.cards[0].card;
+  const face={name:'Sol Ring',oracle_id:original.oracle_id,type_line:'Artifact',cmc:1,oracle_text:'Add mana.',image_uris:{normal:'https://cards.scryfall.io/front.jpg'}};
+  const printing={id:'reversible',layout:'reversible_card',name:'Sol Ring // Sol Ring',cmc:null,type_line:null,color_identity:[],card_faces:[face,{...face,image_uris:{normal:'https://cards.scryfall.io/back.jpg'}}]};
+  setEntryPrinting(d,entryKey(d.cards[0]),printing);
+  assert.equal(d.cards[0].card.oracle_id,original.oracle_id);assert.equal(d.cards[0].card.type_line,'Artifact');assert.equal(d.cards[0].card.card_faces.length,2);
+  assert.doesNotThrow(()=>validateBackup([d]));
+  assert.throws(()=>setEntryPrinting(d,entryKey(d.cards[0]),{...printing,card_faces:[face,{...face,oracle_id:'other'}]}));
 });

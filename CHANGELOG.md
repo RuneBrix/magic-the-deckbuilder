@@ -6,6 +6,9 @@ Record completed user-facing changes here. Future work belongs in [GitHub issues
 
 ### Changed
 
+- Separate card facts/artwork from explicit named-deck controls, autosave validated role and zone edits, and keep invalid drafts visible for correction or deliberate discard ([#25](https://github.com/RuneBrix/magic-the-deckbuilder/issues/25)).
+- Browse paginated paper printings with consistent artwork/release facts; preview without deck mutation, then explicitly apply to a named entry while preserving copies, roles and zone. JSON preserves printing choices; text lists do not ([#26](https://github.com/RuneBrix/magic-the-deckbuilder/issues/26); [workflow](docs/CARD_DETAILS.md)).
+
 - Distinguish supported passes, failures, stale/unavailable legality and manual review with labeled icons and semantic colors in deck Checks ([#27](https://github.com/RuneBrix/magic-the-deckbuilder/issues/27)).
 - Refresh legality automatically for the tracked/open deck each app session and after card-set changes; retain stored printing and live edits, surface cache/freshness limits and offer retry on failure ([#28](https://github.com/RuneBrix/magic-the-deckbuilder/issues/28)).
 - Add persisted dark green, dark blue, black/white and black/orange palette choices alongside Light/Dark/device appearance ([#30](https://github.com/RuneBrix/magic-the-deckbuilder/issues/30)).

@@ -1,4 +1,4 @@
-import { FORMATS, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, validateBackup, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, validateBackup, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -42,6 +42,7 @@ let comparison = [], comparisonOpen = false, broadening = null, resultContext = 
 let editorOptions = { group: 'type', type: '', role: '', order: 'name' };
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
+let detail = null;
 const current = () => decks.find(d => d.id === (view === 'explore' ? tracker.id : active));
 function saveTracker() {
   try { localStorage.setItem('arcana.explorer.v1', JSON.stringify(tracker)); }
@@ -141,16 +142,16 @@ function comparisonTools() {
     ${broadening ? `<div class="broadening-note" role="status"><p><strong>Why these results:</strong> Ignored ${esc(broadening.label)}. Other original conditions were retained. A match is a candidate for manual comparison, not a guarantee of the same effect.</p><p>Original query: <code>${esc(broadening.originalQuery)}</code></p><p>Alternative query: <code>${esc(broadening.query)}</code></p><button class="secondary" data-action="restore-search">Return to original search</button><p class="hint">Applying other search controls starts a new search. Compare selections remain.</p></div>` : ''}
   </div></details>`;
 }
-function toggleComparison(id) {
-  const card = findCard(id); if (!card) return;
+function toggleComparison(id, preview) {
+  const card = preview || findCard(id); if (!card) return;
   const key = cardKey(card), exists = comparison.some(item => cardKey(item.card) === key);
   if (exists) comparison = comparison.filter(item => cardKey(item.card) !== key);
   else {
     if (comparison.length === 2) { toast('Remove a comparison card before choosing another.'); return; }
     const context = results.some(c => c.id === id) ? resultContext : null;
-    comparison.push({ card, query: context?.query || 'Selected from your deck; no result-query membership checked.', tags: [...(context?.tags || [])], match: context?.match || 'all',
+    comparison.push({ card, query: context?.query || 'Selected manually; no result-query membership checked.', tags: [...(context?.tags || [])], match: context?.match || 'all',
       roles: [...(current()?.cards.find(e => cardKey(e.card) === key)?.tags || [])],
-      reason: context?.reason || 'Selected manually from your deck. No search match or card equivalence is inferred.' });
+      reason: context?.reason || 'Selected manually. No search match or card equivalence is inferred.' });
   }
   comparisonOpen = true; render(); $('#comparison-title')?.focus();
 }
@@ -382,8 +383,8 @@ function addCard(id,zone='main') {
   if(!current()){chooseDestination(id);return;}
   try{addToDeck(c,current(),zone);}catch(error){toast(error.message);}
 }
-function chooseDestination(id,zone='main') {
-  const c=findCard(id);if(!c)return;
+function chooseDestination(id,zone='main',preview) {
+  const c=preview || findCard(id);if(!c)return;
   showDialog(`<h2>Add ${esc(c.name)}</h2><p>Choose the destination for one copy. Your tracked deck will stay selected.</p>${decks.length?`<form id="add-destination-form"><label>Destination deck<select name="deck" id="add-destination"><option value="">Choose a deck…</option>${decks.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label><p>Destination zone: <strong>${ZONES[zone]}</strong></p><p id="add-destination-error" role="alert"></p><button class="primary" type="submit">Add 1 to ${ZONES[zone]}</button></form>`:'<p>Create a deck to keep this card.</p><button class="primary" id="create-destination">Create deck…</button>'}`);
   if(decks.length)$('#add-destination-form').onsubmit=e=>{
     e.preventDefault();const d=decks.find(d=>d.id===$('#add-destination').value);
@@ -392,8 +393,12 @@ function chooseDestination(id,zone='main') {
   };
   else $('#create-destination').onclick=()=>deckForm(undefined,d=>{view='explore';try{addToDeck(c,d,zone);}catch(error){toast(error.message);}});
 }
-function showDialog(html) {const dialog=$('#dialog');dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=()=>dialog.close();}
-$('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
+function closeDialog(discard=false) {if(discard!==true && detail && !saveDetailRoles())return false;const s=detail;detail=null;$('#dialog').close();if(s && typeof CSS!=='undefined')document.querySelector(s.key?'[data-entry="'+CSS.escape(s.key)+'"]':'[data-inspect="'+CSS.escape(s.source.id)+'"]')?.focus({preventScroll:true});return true;}
+function showDialog(html) {detail=null;const dialog=$('#dialog');dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=closeDialog;}
+$('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}});
+$('#dialog').addEventListener('cancel',e=>{if(detail){e.preventDefault();closeDialog();}});
+globalThis.addEventListener?.('beforeunload',e=>{if(detail?.invalidRoles){e.preventDefault();e.returnValue='';}});
+$('#dialog').addEventListener('close',()=>{detail=null;});
 function deckForm(deck,after) {
   if(!deck&&decks.length>=200){toast('Maximum 200 decks per workspace.');return;}
   let choices=[],selectionRequest=0;
@@ -421,13 +426,92 @@ function settings() {
   $('#settings-restore').onclick=restore;
 }
 function customTag(){showDialog('<h2>Enter an existing Scryfall tag</h2><p>Search an existing Scryfall function tag, such as mana-rock or reanimate. This does not create public tags. Names and aliases in the snapshot resolve to their canonical tags. Tags outside the snapshot are allowed, but may be unsupported by Scryfall.</p><form id="custom-tag-form"><label>Function tag<input name="tag" required maxlength="80" placeholder="e.g. mana-rock"></label><p id="custom-tag-error" role="alert"></p><button class="primary">Add to search</button></form>');$('#custom-tag-form').onsubmit=e=>{e.preventDefault();readFilters();const value=String(new FormData(e.target).get('tag')).trim().toLowerCase();const t=resolveTag(value)?.id || value.replace(/\s+/g,'-');if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t)){$('#custom-tag-error').textContent='Use a tag name with letters, numbers and single hyphens.';return;}try{const model={...filters,tags:[...new Set([...filters.tags,t])]};const next=replaceCondition(filters,'tags',conditionQuery(model,'tags'));filters=next;$('#dialog').close();runGuidedSearch();}catch(error){$('#custom-tag-error').textContent=error.message;}};}
-function inspect(id,entryId) {
-  const c=findCard(id);if(!c)return;const entry=entryId ? current()?.cards.find(e=>entryKey(e)===entryId) : current()?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');const image=imageFor(c);
-  showDialog(`<div class="card-detail">${image?`<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}">`:''}<div><h2>${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost)}</div><p>${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><p class="hint">Mana value ${c.cmc} · ${esc(c.set_name)}${c.artist?' · Artist: '+esc(c.artist):''}</p><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><button class="secondary" id="detail-compare">${comparison.some(item=>cardKey(item.card)===cardKey(c)) ? 'Remove from comparison' : 'Compare this card'}</button><button class="primary" id="detail-add">${icon('plus',16)} ${current()?'Add to '+esc(current().name)+' · '+(entry?ZONES[zoneFor(entry)]:'Main deck'):'Add to…'}${entry?' ('+entry.qty+' in this zone)':''}</button>${entry?`<form id="roles-form"><p>Editing ${esc(current().name)} · ${ZONES[zoneFor(entry)]}</p><label>Your ordered role tags<input name="roles" placeholder="e.g. Ramp, Removal" maxlength="500" value="${esc(entry.tags.join(', '))}"></label><p class="hint">Separate personal roles with commas. The first role is the primary function for grouping; every role can be filtered. These are separate from Scryfall function tags.</p><label>Deck zone<select name="zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zoneFor(entry)===z?'selected':''}>${label}</option>`).join('')}</select></label><p class="hint">Moves all copies of this entry and preserves roles. The command zone is checked separately; it does not make an ineligible card a legal commander.</p><p id="zone-error" role="alert"></p><button class="secondary">Save zone and roles</button></form>`:''}<p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View on Scryfall ↗</a></p></div></div>`);
-  $('#detail-compare').onclick=()=>{$('#dialog').close();toggleComparison(id);};
-  $('#detail-add').onclick=()=>{const zone=entry?zoneFor(entry):'main';if(!current()){chooseDestination(id,zone);return;}addCard(id,zone);inspect(id,entry?entryKey(entry):undefined);};
-  $('#roles-form')?.addEventListener('submit',e=>{e.preventDefault();const data=new FormData(e.target);try{const zone=String(data.get('zone'));const updatedTags=[...new Set(String(data.get('roles')).split(',').map(t=>t.trim().slice(0,80)).filter(Boolean))];changeDeck(d=>{const otherRoles=d.cards.find(e=>e!==entry&&cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone)?.tags||[];moveEntry(d,entryKey(entry),zone);const moved=d.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone);moved.tags=[...new Set([...otherRoles,...updatedTags])];});$('#dialog').close();$('[data-entry="'+CSS.escape(entryKey({card:c,zone}))+'"]')?.focus();toast('Card zone and roles saved');}catch(error){$('#zone-error').textContent=error.message;}});
+function detailEntry(s=detail) { return s?.deck?.cards.find(e=>entryKey(e)===s.key); }
+function detailMessage(message, error=false) {
+  $('#detail-save-status').textContent=message;
+  $('#detail-save-status').className=error?'detail-error':'detail-saved';
+  $('#discard-roles').hidden=!error;
 }
+function saveDetailRoles(zone) {
+  const s=detail;if(!s?.key)return true;
+  try {
+    if(!decks.includes(s.deck))throw Error('This deck no longer exists. Your role text is kept below.');
+    const entry=detailEntry(s);if(!entry)throw Error('This entry changed or was removed. Your role text is kept below.');
+    const raw=$('#detail-roles').value;
+    const target=zone || zoneFor(entry);
+    // Keep the raw input intact while typing; only the validated tags are stored.
+    const before=JSON.stringify([entry.tags,zoneFor(entry)]);
+    const moved=editEntry(s.deck,s.key,raw,target);s.key=entryKey(moved);
+    if(before!==JSON.stringify([moved.tags,zoneFor(moved)])) {s.deck.updated=new Date().toISOString();save();render();}
+    if(zone) {$('#detail-roles').value=moved.tags.join(', ');renderDetailDeck();}
+    s.invalidRoles=false;
+    detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Saved to '+s.deck.name+' · '+ZONES[zoneFor(moved)],Boolean(storageError));
+    return true;
+  }catch(error){s.invalidRoles=true;detailMessage(error.message,true);if(zone)$('#detail-zone').value=detailEntry(s)?zoneFor(detailEntry(s)):'main';return false;}
+}
+function printingLabel(c) { return `${c.set_name || c.set || 'Unknown set'} · #${c.collector_number || '?'} · ${(c.lang || 'en').toUpperCase()}${c.released_at?' · '+c.released_at:''}`; }
+function renderDetailFacts() {
+  const s=detail,c=s.card;
+  const images=c.image_uris?[{name:c.name,image:c.image_uris.normal}]:c.card_faces?.map(f=>({name:f.name,image:f.image_uris?.normal})) || [];
+  $('#detail-images').innerHTML=images.some(f=>safeUrl(f.image,true))?images.filter(f=>safeUrl(f.image,true)).map(f=>`<img src="${esc(safeUrl(f.image,true))}" alt="${esc(f.name)}" width="488" height="680">`).join(''):'<p class="hint">Artwork unavailable for this printing.</p>';
+  $('#detail-facts').innerHTML=`<h2 id="detail-title">${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost || c.card_faces?.map(f=>f.mana_cost||'').join(' // '))}</div><p class="detail-type">${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><dl class="card-facts"><div><dt>Mana value</dt><dd>${esc(c.cmc)}</dd></div>${c.power!==undefined?`<div><dt>Power / toughness</dt><dd>${esc(c.power)} / ${esc(c.toughness)}</dd></div>`:''}${c.loyalty!==undefined?`<div><dt>Loyalty</dt><dd>${esc(c.loyalty)}</dd></div>`:''}<div><dt>Release</dt><dd>${esc(printingLabel(c))}</dd></div><div><dt>Rarity</dt><dd>${esc(c.rarity || 'Unavailable')}</dd></div><div><dt>Artist</dt><dd>${esc(c.artist || c.card_faces?.map(f=>f.artist).filter(Boolean).join(' / ') || 'Unavailable')}</dd></div></dl><details class="detail-legality"><summary>Stored format legality</summary><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><p class="hint">Stored data can be outdated. Deck Checks shows refresh status and validation limits.</p></details><p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View this printing on Scryfall</a></p>`;
+  $('#detail-compare').textContent=comparison.some(item=>cardKey(item.card)===cardKey(c))?'Remove from comparison':'Compare this card';
+}
+function renderDetailDeck() {
+  const s=detail,entry=detailEntry(s),d=s.deck;
+  $('#detail-deck').innerHTML=`<h3>${d?'Deck: '+esc(d.name):'Add to a deck'}</h3>${entry?`<p id="detail-entry-context">${entry.qty} ${entry.qty===1?'copy':'copies'} · ${ZONES[zoneFor(entry)]} · Stored printing: ${esc(printingLabel(entry.card))}</p><label for="detail-zone">Deck zone</label><select id="detail-zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zoneFor(entry)===z?'selected':''}>${label}</option>`).join('')}</select><p class="hint">Moves every copy. Matching entries merge quantities and roles, keeping the destination printing.</p>`:`<p>${d?'This card is not in '+esc(d.name)+'’s Main deck.':'No deck is tracked. Choose a destination before adding a card.'}</p>`}<button class="primary" id="detail-add">${entry?'Add 1 to '+esc(d.name)+' · '+ZONES[zoneFor(entry)] : d?'Add 1 to '+esc(d.name)+' · Main deck':'Add to…'}</button>${entry?`<button class="secondary" id="apply-printing" ${entry.card.id===s.card.id?'disabled':''}>Use viewed printing in ${esc(d.name)} · ${ZONES[zoneFor(entry)]}</button><p class="hint">Changes the printing for all copies in this entry (${entry.qty}). Other zones stay unchanged.</p>`:''}`;
+  $('#detail-zone')?.addEventListener('change',e=>saveDetailRoles(e.target.value));
+  $('#detail-add').onclick=()=>{
+    if(!saveDetailRoles())return;
+    if(!d) {const card=s.card;closeDialog();chooseDestination(card.id,'main',card);return;}
+    try {if(!decks.includes(d))throw Error('This deck no longer exists.');const zone=entry?zoneFor(entry):'main';addToDeck(s.card,d,zone);s.key=entryKey({card:s.card,zone});renderDetailDeck();renderDetailRoles();detailMessage('Added to '+d.name+' · '+ZONES[zone]);}catch(error){detailMessage(error.message,true);}
+  };
+  $('#apply-printing')?.addEventListener('click',()=>{
+    if(!saveDetailRoles())return;
+    try{if(!decks.includes(d))throw Error('This deck no longer exists.');setEntryPrinting(d,s.key,s.card);d.updated=new Date().toISOString();save();render();renderDetailDeck();detailMessage(storageError?'Printing kept for this session. Export a JSON backup.':'Printing saved to '+d.name+' · '+ZONES[zoneFor(detailEntry(s))],Boolean(storageError));}catch(error){detailMessage(error.message,true);}
+  });
+}
+function renderDetailRoles() {
+  const entry=detailEntry();
+  $('#detail-roles-section').innerHTML=entry?`<label for="detail-roles">Your ordered personal roles</label><input id="detail-roles" maxlength="500" value="${esc(entry.tags.join(', '))}" placeholder="e.g. Ramp, Removal" aria-describedby="detail-roles-help detail-save-status"><p class="hint" id="detail-roles-help">Separate roles with commas. The first role groups this card by primary function; all roles appear in filters and statistics. These are your private deck labels, separate from Scryfall function tags. Valid edits save as you type.</p>`:'';
+  $('#detail-roles')?.addEventListener('input',()=>saveDetailRoles());
+  $('#detail-roles')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveDetailRoles();}});
+}
+function renderPrintings() {
+  const s=detail;
+  $('#printing-options').innerHTML=s.loaded?`<label for="view-printing">View a set / printing</label><select id="view-printing">${s.printings.map(c=>`<option value="${esc(c.id)}" ${c.id===s.card.id?'selected':''}>${esc(printingLabel(c))}</option>`).join('')}</select><p class="hint">Selection changes this preview. Apply it below to change a named deck entry.</p>`:'';
+  $('#view-printing')?.addEventListener('change',e=>{s.card=s.printings.find(c=>c.id===e.target.value)||s.card;renderDetailFacts();renderDetailDeck();});
+  $('#printing-status').textContent=s.printingError || (s.loading?'Loading printings…':s.loaded?`${s.printings.length} printings loaded${s.more?'; more available':''}.`:'Browse paper releases for this card.');
+  $('#load-printings').textContent=s.printingError?'Retry loading printings':s.loaded&&s.more?'Load more printings':'Browse printings';
+  $('#load-printings').disabled=s.loading || !s.source.oracle_id;
+  $('#load-printings').hidden=s.loaded&&!s.more&&!s.printingError;
+  if(!s.source.oracle_id)$('#printing-status').textContent='Printing lookup unavailable for this stored card. Find the card again in search.';
+}
+async function loadPrintings() {
+  const s=detail;if(!s || s.loading || !s.source.oracle_id)return;
+  s.loading=true;s.printingError='';renderPrintings();
+  try {
+    const page=s.page+1,data=await api('/api/printings?'+new URLSearchParams({oracle:s.source.oracle_id,page}));
+    if(detail!==s)return;
+    if(!Array.isArray(data.data)||!data.data.length)throw Error('No printings returned. The current preview is unchanged.');
+    const printings=data.data.map(c=>validatePrinting(s.source,c));
+    s.printings=[...new Map([...s.printings,...printings].map(c=>[c.id,c])).values()];s.page=page;s.more=Boolean(data.has_more);s.loaded=true;
+  }catch(error){if(detail===s)s.printingError=error.message;}
+  finally{if(detail===s){s.loading=false;renderPrintings();}}
+}
+function inspect(id,entryId) {
+  const d=current(), row=entryId?d?.cards.find(e=>entryKey(e)===entryId):null;
+  const c=row?.card || findCard(id);if(!c)return;
+  const entry=row || d?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');
+  showDialog(`<div class="card-detail"><div id="detail-images" class="detail-images"></div><div class="detail-information"><div id="detail-facts"></div><section class="printing-browser" aria-label="Card printings"><h3>Sets and printings</h3><div id="printing-options"></div><p id="printing-status" role="status"></p><button class="secondary" id="load-printings">Browse printings</button></section><section class="detail-deck-context" aria-label="Deck-specific changes"><div id="detail-deck"></div><div id="detail-roles-section"></div><p id="detail-save-status" role="status"></p><button class="text-button" id="discard-roles" hidden>Discard unsaved role text and close</button></section><button class="text-button" id="detail-compare">Compare this card</button></div></div>`);
+  detail={deck:d,key:entry?entryKey(entry):null,source:c,card:c,printings:[c],page:0,more:false,loaded:false,loading:false,printingError:''};
+  renderDetailFacts();renderDetailDeck();renderDetailRoles();renderPrintings();
+  $('#dialog').setAttribute('aria-label',c.name+' — Card details');
+  $('#load-printings').onclick=loadPrintings;
+  $('#discard-roles').onclick=()=>closeDialog(true);
+  $('#detail-compare').onclick=()=>{const card=detail.card;if(!closeDialog())return;toggleComparison(card.id,card);};
+}
+
 async function fetchNames(names) {const cards=[],missing=[];for(let i=0;i<names.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x.name));}return {cards,missing};}
 function importDialog(target=current()){
   showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste quantity/name lines with optional Main deck, Sideboard and Command zone headings. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><button class="primary">Import cards</button></form>`);
