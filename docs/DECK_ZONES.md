@@ -6,7 +6,7 @@ Implemented for [D03 / #3](https://github.com/RuneBrix/magic-the-deckbuilder/iss
 
 Checked on 2026-10-27 against Wizards' [current rules-document index](https://wpn.wizards.com/en/rules-documents), its linked [Magic Tournament Rules effective February 27, 2026](https://media.wizards.com/ContentResources/WPN/MTG_MTR_2026_Feb27_EN.pdf), sections 6.1–6.2, and the [Modern format page](https://magic.wizards.com/en/formats/modern).
 
-The implemented constructed checks require at least 60 main-deck cards, no more than 15 sideboard cards, and combined name-based copy limits across both zones. Basic supertypes and supported explicit card-text copy exceptions override the normal four-copy limit. Restricted status applies across zones. Card-pool eligibility and banned status come from stored Scryfall legality data rather than a hardcoded set/ban list; refresh before playing. A command zone is rejected for Modern.
+The implemented constructed checks require at least 60 main-deck cards, no more than 15 sideboard cards, and combined name-based copy limits across both zones. Basic supertypes and supported explicit card-text copy exceptions override the normal four-copy limit. Restricted status applies across zones. Card-pool eligibility and banned status come from stored Scryfall legality data rather than a hardcoded set/ban list; review freshness before playing. A command zone is rejected for Modern.
 
 ## Storage and interaction
 
@@ -25,3 +25,14 @@ Commander retains partial checks: 100 cards in main plus command zone, singleton
 Companion designation and starting-deck predicates remain in [follow-up #14](https://github.com/RuneBrix/magic-the-deckbuilder/issues/14). Companion cards can be stored, but do not receive a false automatic approval. Other format presets use shared constructed checks with a visible format-specific manual-review notice; Modern is the rule family verified by this issue.
 
 Tests include complete 60+15 constructed and 99+1 legacy Commander examples, across-zone name/copy and restriction cases, missing data, companions, old/new JSON backup behavior, atomic moves and text zone round trips. UI checks and platform limits are recorded in the implementation PR.
+
+
+## Automatic legality freshness (#28) and presentation (#27)
+
+The initially tracked deck refreshes at startup/reload. With no tracked deck there is no startup request. Opening a full deck or selecting a tracker refreshes that deck on first access in the session; the library does not refresh all stored decks. Adding/removing a distinct card identity/name triggers another automatic refresh. Quantity, role and zone edits do not. Hidden trackers still identify the relevant deck.
+
+Names are deduplicated and sorted, split into batches of at most 75, and processed sequentially; deck refreshes share one client queue and the server's existing global rate queue/cache. Repeated actions join the in-flight deck request. Reload resets session freshness but does not bypass the server's five-minute response cache. Fresh means a successful lookup this session, possibly cached; after five minutes it is labeled stale, with a secondary retry. Reopening/reloading the app starts a new session refresh. Failed refreshes retain all last usable legality values and expose recovery rather than retrying endlessly.
+
+Only `legalities` are patched into surviving entries. Stored printing/artwork, Oracle facts, quantities, roles, zones and deck timestamps are preserved. Missing or mismatched cards fail the refresh atomically. Deleted decks and removed/replaced entries cannot be revived; newly added identities are picked up by a subsequent refresh. Editing remains available while requests run. Session status is not exported as durable proof of current legality, and no backup schema changes.
+
+Checks remain in the dedicated workspace. Red failure sections, amber data/freshness notices, neutral informational/manual sections and green supported-pass states include authored SVG symbols and explicit labels. Existing messages retain card/zone names; unsupported rules remain manual and missing/stale data cannot produce a green overall pass. Commander/companion automation remains #13/#14.

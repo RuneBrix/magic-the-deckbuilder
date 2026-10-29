@@ -6,6 +6,10 @@ Record completed user-facing changes here. Future work belongs in [GitHub issues
 
 ### Changed
 
+- Distinguish supported passes, failures, stale/unavailable legality and manual review with labeled icons and semantic colors in deck Checks ([#27](https://github.com/RuneBrix/magic-the-deckbuilder/issues/27)).
+- Refresh legality automatically for the tracked/open deck each app session and after card-set changes; retain stored printing and live edits, surface cache/freshness limits and offer retry on failure ([#28](https://github.com/RuneBrix/magic-the-deckbuilder/issues/28)).
+- Add persisted dark green, dark blue, black/white and black/orange palette choices alongside Light/Dark/device appearance ([#30](https://github.com/RuneBrix/magic-the-deckbuilder/issues/30)).
+
 - Make exploration deck tracking optional and separate from the full editor, with persisted hide/show and desktop drag/keyboard width, compact zone quantity tracking and explicit alternate add destinations. Preserve search state when changing the tracker ([#19](https://github.com/RuneBrix/magic-the-deckbuilder/issues/19); [workflow](docs/EXPLORATION.md)).
 - Simplify the initial exploration area to optional starting searches, ordinary result headings and result-associated sorting. Distinguish loading/no-match/error/results feedback and clear the last staged guided clause back to initial without accepting obsolete responses. Keep the existing comparison tools secondary after results ([#20](https://github.com/RuneBrix/magic-the-deckbuilder/issues/20)); candidate lists remain separate.
 
