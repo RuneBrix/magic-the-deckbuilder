@@ -1,23 +1,19 @@
-# Effect comparison
+# Candidate overview and effect comparison
 
-[D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) uses the manual comparison workflow chosen by the user: keep the original query, explicitly relax one guided condition, and compare two cards with the change explained. There is no recommendation or synergy ranking algorithm.
+[D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) established manual two-card comparison and reversible search broadening without ranking. [#24](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24) puts that optional comparison inside a separate candidate workflow. [Chosen scope and acceptance](CANDIDATES.md) were recorded before implementation.
 
 ## Workflow
 
-1. Search for an effect with function tags, Oracle text or other filters. Choose **Compare** below a result, or **Compare this card** in card details. Select up to two distinct Oracle identities; remove a selection before choosing a third.
-2. Open **Compare alternatives** to review mana value/cost, colors, color identity, type, full Oracle text, role context, why the card was shown and its source query. Cards stay selected across searches and result batches until removed or the page reloads. Comparison does not write deck storage.
-3. Use **Ignore …** to remove one active guided condition. Supported conditions are name, Oracle phrase, type, mana value, mana cost, color identity, the function-tag group, and format legality. The complete tag group is removed as one condition: removing just one OR operand would narrow the search.
-4. The original and alternative queries and the ignored condition are shown explicitly. Further Ignore choices start from the same original filters, rather than accumulating relaxations. **Return to original search** restores those filters and searches again, including after an upstream error. Sorting alternatives retains the relaxation; applying other search controls starts a new search. Comparisons remain selected.
+Save candidate on a result or in details collects a card without leaving exploration. Candidates opens a separate overview for up to 20 distinct rules identities, showing full portrait artwork, mana/type/color/identity/Oracle text, release and recorded role/search context. Inspect opens complete details; Add names its tracked destination or requires a chooser with no tracker. Remove candidate also removes its comparison selection. Clear candidates is explicit. Return to exploration restores the current query/results/sort/pagination state.
 
-## Explanations and limits
+The shortlist is session-only and independent of deck storage/backups. It survives searches and navigation but clears on reload. A second printing of an existing identity is the same candidate; remove and save again to choose a different snapshot. Stored candidate data and roles are snapshots, not live synchronized claims.
 
-- Alternative results match the query with the named condition removed. Every other original condition is retained. This is a reason to inspect a candidate, not proof that it has the same effect or is better for the deck. Removing color or legality filters may produce unsuitable cards.
-- The unified query projects supported independent clauses into guided controls, including conditions typed as syntax. Broadening can remove those represented conditions. Unsupported or complex expressions remain query-only and preserve their source text; a restriction repeated there still applies. The UI offers no relaxation for a condition locked by a mixed/unsupported group. See [Unified search](UNIFIED_SEARCH.md) for the parsing boundary.
-- Results retain the selected Scryfall sort and ordinary pagination. Loaded batches are not exhaustive. The app does not compute similarity, synergy, equivalence, upgrades or a best-card score.
-- A selected result records the actual completed result query and its relaxation reason, even if controls have since been edited. Deck cards selected through details are labeled as manual selections with no query-membership claim. Comparisons retain their selected card data and context; they are not live synchronized snapshots.
-- Functional roles show personal deck role tags recorded at selection plus the guided tags searched with all/any semantics. Individual Scryfall tag membership is not available in ordinary card responses and is **not** inferred from the query, especially an OR group. Oracle text remains the basis for manual effect comparison.
-- Card addition and inspection reuse the existing deck controls. An earlier selected card remains available even after a new search replaces its result batch. No deck is replaced or edited by broadening or comparing.
+Compare candidate optionally selects at most two cards for an attribute table. Comparison stays secondary inside the overview. A saved result records the completed result query and broadening explanation even if the primary query has since been edited. Selected guided tags are search context; individual membership is never inferred, particularly for OR groups. Manually saved cards carry no query-membership claim. There is no inferred equivalence, upgrade recommendation, synergy or best-card score.
 
-## Verification
+## Broadening and restoration
 
-Native Node checks cover single-condition changes, preservation of raw syntax and original filters, all/any tag-group handling, unsupported choices, source-query provenance, selection limits, restoration after failure and stale-response protection. Desktop/mobile browser checks validate the interaction and layout; platform-specific limits are recorded in the implementation PR.
+Broaden this search is a separate secondary disclosure after results. Ignore removes one supported independent condition while retaining every other source expression. The complete all/any function-tag group is removed together, because removing one OR operand could narrow results. Original/current queries and the ignored condition remain visible; Return to original search restores the exact source query, including after an upstream error. Further choices always start from the same original. Sorting retains broadening; applying other search controls begins a new search.
+
+Advanced/complex source expressions remain intact and locked conditions are not offered for relaxation. Removing color or legality criteria may expose unsuitable cards, and loaded result pages are not exhaustive. See [Unified search](UNIFIED_SEARCH.md) for projection boundaries.
+
+Native Node checks cover candidate limits/deduplication, immutable recorded provenance, pair limits/removal, independent tracker context, unchanged deck storage/query state, broadening/restoration and stale search responses. Browser checks cover the separate overview, optional table, required destination, keyboard focus and desktop/mobile light/dark layout; platform limits are recorded in the PR.

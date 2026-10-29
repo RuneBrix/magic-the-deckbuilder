@@ -58,4 +58,4 @@ Native Node regression checks cover Boolean projection, exact source preservatio
 
 On 2026-10-28, all seven required color/minimum-symbol query examples returned successful live responses through the existing Scryfall proxy. The returned batches (up to 175 cards per query, all 28 for `{C}`) matched the expected property on the card or at least one face; this is sampling, not whole-dataset certification. Windows desktop and 390px light/dark browser checks cover query/control synchronization, numeric editing, cursor insertion, tag removal/matching, relationship browsing and responsive layouts. The Impeccable engine/detector is unavailable; no detector pass is claimed. macOS/Safari remain untested.
 
-This group does not complete the remaining exploration-layout decisions in #20, candidate-list design in #24, or the optional tracker in #19.
+Exploration hierarchy and optional tracking (#19/#20) are documented in [Exploration](EXPLORATION.md); the separate candidate workflow (#24) is documented in [Candidates](CANDIDATES.md).

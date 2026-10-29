@@ -19,7 +19,7 @@ Search leads the explorer. Filters and function browsing retain their existing c
 
 Initial, loading, no-match, request-error and populated states have separate feedback. No-match reports zero results and suggests changing the query; request failures offer retry. Clear search and filters, raw clearing and removal of the last guided clause restore the initial state and invalidate pending responses. Explicit blank submission still becomes `game:paper`, allowing an intentional broad search. Clearing is not a broad-search request.
 
-Tracker changes preserve the query, guided controls, completed results, pagination, sort, comparison selections and query provenance. Search remains session-local; reload restores tracker preferences and stored decks, not previous search results. The existing two-card comparison disclosure follows results and keeps its selection/broadening behavior. Candidate-list discovery remains [#24](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24); card-details autosave and printing selection are implemented in [#25/#26](CARD_DETAILS.md).
+Tracker changes preserve the query, guided controls, completed results, pagination, sort, comparison selections and query provenance. Search remains session-local; reload restores tracker preferences and stored decks, not previous search results. A secondary Candidates button opens a separate session-only shortlist with optional two-card comparison. Broaden this search stays a separate secondary disclosure after results. [#24 workflow](CANDIDATES.md) records limits and persistence; card-details autosave and printing selection are implemented in [#25/#26](CARD_DETAILS.md).
 
 ## Verification
 
