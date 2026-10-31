@@ -2,6 +2,7 @@
 
 ## Deck library and editor presentation — 2026-10-31
 
+- Centered letters within the larger color-identity circles in listings and editor headers; tightened title-to-identity spacing and reduced empty listing space.
 - Deck listings open through artwork or titles, show commander art crops and compact color/bracket information, and put management in accessible ⋮ disclosures ([#38](https://github.com/RuneBrix/magic-the-deckbuilder/issues/38)).
 - The editor uses a compact full-width header with a shared management disclosure, visible Find cards to add, capitalized format and smaller Commander bracket selector. Bracket discussion guidance opens and focuses Checks ([#39](https://github.com/RuneBrix/magic-the-deckbuilder/issues/39)). Deck data and existing management confirmations remain intact.
 
