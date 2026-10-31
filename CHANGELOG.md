@@ -1,5 +1,9 @@
 # Changelog
 
+## Deck view review refinements — 2026-11-01
+
+- Unified full-width visual toolbars with outlined, tinted surfaces attached to artwork; options borders appear on hover, and options/quantity symbols are centered. Vertical stacks join at straight edges, spacing between groups/zones is tighter, and vertical text keeps three desktop group slots even for a single commander ([PR #51](https://github.com/RuneBrix/magic-the-deckbuilder/pull/51)).
+
 ## Deck views, card actions and Maybeboard — 2026-10-31
 
 - Refined PR #51 after review: visual quantity/actions sit above artwork with reserved vertical-stack spacing; Command zone comes first in every view. Text rows are slimmer, align quantity/name sizing, put mana costs beside ellipsized names with full-name hover titles, and wrap vertical text groups into new rows.
