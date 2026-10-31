@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck library and editor presentation — 2026-10-31
+
+- Deck listings open through artwork or titles, show commander art crops and compact color/bracket information, and put management in accessible ⋮ disclosures ([#38](https://github.com/RuneBrix/magic-the-deckbuilder/issues/38)).
+- The editor uses a compact full-width header with a shared management disclosure, visible Find cards to add, capitalized format and smaller Commander bracket selector. Bracket discussion guidance opens and focuses Checks ([#39](https://github.com/RuneBrix/magic-the-deckbuilder/issues/39)). Deck data and existing management confirmations remain intact.
+
 ## Home and exploration simplification — 2026-10-31
 
 - My decks is first in the top navigation, followed by Explore cards and Settings. It opens on startup/reload and from the Arcana logo; Explore cards retains its search state during session navigation ([#37](https://github.com/RuneBrix/magic-the-deckbuilder/issues/37)).
