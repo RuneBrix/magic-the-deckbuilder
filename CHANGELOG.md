@@ -2,6 +2,8 @@
 
 ## Deck views, card actions and Maybeboard — 2026-10-31
 
+- Refined PR #51 after review: visual quantity/actions sit above artwork with reserved vertical-stack spacing; Command zone comes first in every view. Text rows are slimmer, align quantity/name sizing, put mana costs beside ellipsized names with full-name hover titles, and wrap vertical text groups into new rows.
+
 - Added four visual/text deck views with horizontal visual stacks as default, shared grouping/filtering/sorting and responsive quantity/menu controls ([#41](https://github.com/RuneBrix/magic-the-deckbuilder/issues/41)).
 - Added compact card menus for details, private function assignment/creation, zone moves, name copying, explicit copying to another deck and confirmed removal across all zones ([#43](https://github.com/RuneBrix/magic-the-deckbuilder/issues/43)).
 - Added persistent Maybeboard, excluded from playing totals, statistics, construction checks and brackets by user decision. Moves, duplication, JSON backups and sectioned text preserve it; text still omits roles/printing/bracket metadata ([#44](https://github.com/RuneBrix/magic-the-deckbuilder/issues/44)).

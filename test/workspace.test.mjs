@@ -919,6 +919,10 @@ test('all four deck views share filters, grouping, quantities, printing and menu
   for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']){
     w.node('#editor-layout').change({target:{value:layout}});
     assert.match(w.node('#app').innerHTML,new RegExp('deck-zones '+layout));
+    const headings=[...w.node('#app').innerHTML.matchAll(/<h3>(Command zone|Main deck|Sideboard|Maybeboard) ·/g)].map(m=>m[1]);
+    assert.deepEqual(headings,['Command zone','Main deck','Sideboard','Maybeboard']);
+    if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="deck-card-name" title="Leader"/);
+    else assert.match(w.node('#app').innerHTML,/<div class="card-toolbar">[\s\S]*?<\/div><button class="card-art"/);
     assert.equal((w.node('#app').innerHTML.match(/data-card-menu=/g)||[]).length,3);
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
