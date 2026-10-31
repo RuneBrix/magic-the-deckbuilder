@@ -49,3 +49,33 @@ test('backup links only allow Scryfall HTTPS destinations',()=>{
   assert.equal(safeUrl('https://cards.scryfall.io/normal/a.jpg',true), 'https://cards.scryfall.io/normal/a.jpg');
   assert.equal(safeUrl('https://scryfall.com/card/a'), 'https://scryfall.com/card/a');
 });
+
+
+test('deck text matching requires every case-insensitive term across names, types, categories and all personal functions', () => {
+  const d={cards:[entry(card('Elvish Mystic','Creature — Elf Druid',1),1,{tags:['Mana','Ramp']}),entry(card('Beast Within','Instant',3),2,{tags:['Removal']}),entry(card('Unknown','Artifact',2))]};
+  const before=JSON.stringify(d);
+  assert.deepEqual(deckEntries(d,{search:'  ELF  ramp '}).map(e=>e.card.name),['Elvish Mystic']);
+  assert.deepEqual(deckEntries(d,{search:'beast removal'}).map(e=>e.card.name),['Beast Within']);
+  assert.deepEqual(deckEntries(d,{search:'unassigned'}).map(e=>e.card.name),['Unknown']);
+  assert.deepEqual(deckEntries(d,{search:'elf removal'}),[]);
+  assert.equal(JSON.stringify(d),before);
+});
+
+test('deck numeric sorting uses stored USD printings and numeric front-face characteristics; missing values stay last in either direction', () => {
+  const d={cards:[
+    entry(card('Missing','Creature',0,[],{prices:{usd:null,usd_foil:'0.01'},power:'*',toughness:'1+*'})),
+    entry(card('Higher','Creature',3,[],{prices:{usd:'5.00'},power:'4',toughness:'-1'})),
+    entry(card('Lower','Creature',1,[],{prices:{usd:'0.50'},power:'-2',toughness:'5'})),
+    entry(card('Face','Creature',2,[],{prices:{usd:'0.50'},card_faces:[{power:'2',toughness:'3'}]})),
+    entry(card('Invalid','Creature',2,[],{prices:{usd:''},power:'1d4',toughness:'∞'})),
+  ]};
+  const before=JSON.stringify(d),names=order=>deckEntries(d,{order}).map(e=>e.card.name);
+  assert.deepEqual(names('price'),['Face','Lower','Higher','Invalid','Missing']);
+  assert.deepEqual(names('price-desc'),['Higher','Face','Lower','Invalid','Missing']);
+  assert.deepEqual(names('power'),['Lower','Face','Higher','Invalid','Missing']);
+  assert.deepEqual(names('power-desc'),['Higher','Face','Lower','Invalid','Missing']);
+  assert.deepEqual(names('toughness'),['Higher','Face','Lower','Invalid','Missing']);
+  assert.deepEqual(names('toughness-desc'),['Lower','Face','Higher','Invalid','Missing']);
+  assert.deepEqual(deckEntries(d,{search:'creature',order:'price-desc'}).map(e=>e.card.name),names('price-desc'));
+  assert.equal(JSON.stringify(d),before);
+});

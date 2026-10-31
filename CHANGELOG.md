@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck controls and left preview — 2026-10-31
+
+- Added live deck text filtering, Type/Function/No grouping labels and Sort by modes for stored-printing USD price, power and toughness. Missing/nonnumeric values sort last; existing name, mana value and quantity sorts remain ([#40](https://github.com/RuneBrix/magic-the-deckbuilder/issues/40)).
+- Moved desktop card previews into a sticky left rail beside the card area with matching row highlighting. Keyboard focus updates previews; narrow screens retain full-details access without overlays ([#42](https://github.com/RuneBrix/magic-the-deckbuilder/issues/42)). Filtering, sorting and previews preserve deck data.
+
 ## Deck library and editor presentation — 2026-10-31
 
 - Centered letters within the larger color-identity circles in listings and editor headers; tightened title-to-identity spacing and reduced empty listing space.
