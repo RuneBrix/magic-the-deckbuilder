@@ -54,8 +54,8 @@ Selected functions and their all/any choice remain outside the browser disclosur
 
 ## Verification
 
-Native Node regression checks cover Boolean projection, exact source preservation, unknown/negated expressions, repeated edits, all seven color/mana examples, literal symbol counts, typed-tag removal, partial syntax, cursor/input preservation, pending-response cancellation, independent format filtering and existing comparison/deck/appearance/server behavior.
+Native Node regression checks cover Boolean projection, exact source preservation, unknown/negated expressions, repeated edits, all seven color/mana examples, literal symbol counts, typed-tag removal, partial syntax, cursor/input preservation, pending-response cancellation, independent format filtering and existing broadening/deck/appearance/server behavior.
 
 On 2026-10-28, all seven required color/minimum-symbol query examples returned successful live responses through the existing Scryfall proxy. The returned batches (up to 175 cards per query, all 28 for `{C}`) matched the expected property on the card or at least one face; this is sampling, not whole-dataset certification. Windows desktop and 390px light/dark browser checks cover query/control synchronization, numeric editing, cursor insertion, tag removal/matching, relationship browsing and responsive layouts. The Impeccable engine/detector is unavailable; no detector pass is claimed. macOS/Safari remain untested.
 
-Exploration hierarchy and optional tracking (#19/#20) are documented in [Exploration](EXPLORATION.md); the separate candidate workflow (#24) is documented in [Candidates](CANDIDATES.md).
+Exploration hierarchy and optional tracking (#19/#20) are documented in [Exploration](EXPLORATION.md); candidate removal (#47) is recorded in [Candidates](CANDIDATES.md), and retained broadening in [Search broadening](EFFECT_COMPARISON.md).

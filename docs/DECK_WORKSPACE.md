@@ -28,6 +28,6 @@ The library can import a new text decklist or add text cards to a named deck. Ex
 
 ## Verification and limits
 
-Native Node tests cover non-primary role filtering, ordering without mutation, identity summaries, full-editor navigation, legacy backups, independent duplication, confirmed deletion, commander designation, atomic imports and cancelled import responses. Existing zone, comparison, appearance and server checks remain in the full suite.
+Native Node tests cover non-primary role filtering, ordering without mutation, identity summaries, full-editor navigation, legacy backups, independent duplication, confirmed deletion, commander designation, atomic imports and cancelled import responses. Existing zone, broadening, appearance and server checks remain in the full suite.
 
 Manual checks use a separate local origin on Windows: live commander lookup, zone-heading import, role grouping/filtering, quantity edits, zone moves, library duplication/rename and deletion cancellation, reload persistence, keyboard focus/Escape and desktop/390px layouts in light/dark appearance. macOS and Safari remain untested. The Impeccable engine/detector was unavailable; no automated visual-detector result is claimed. Checks retain partial rules coverage; [#27/#28 freshness and presentation](DECK_ZONES.md) are implemented.

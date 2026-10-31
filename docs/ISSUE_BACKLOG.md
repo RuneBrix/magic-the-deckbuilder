@@ -27,7 +27,8 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 - [#25: Card details, explicit deck context and role/zone autosave](https://github.com/RuneBrix/magic-the-deckbuilder/issues/25)
 - [#26: Set and printing preview/selection](https://github.com/RuneBrix/magic-the-deckbuilder/issues/26)
 
-- [#24: Session-only candidate overview with optional comparison](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24)
+- [#24: Candidate workflow](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24) — superseded by [#47 removal](https://github.com/RuneBrix/magic-the-deckbuilder/issues/47); independent search broadening retained.
+- [#37: My decks home page](https://github.com/RuneBrix/magic-the-deckbuilder/issues/37) — implemented; startup/reload and logo open the library, session navigation retains search.
 - [#29: Manual Commander brackets and explainable discussion guidance](https://github.com/RuneBrix/magic-the-deckbuilder/issues/29)
 
 See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the development workflow](DEVELOPMENT.md).
