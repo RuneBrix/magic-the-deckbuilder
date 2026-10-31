@@ -935,17 +935,16 @@ test('all four deck views share filters, grouping, quantities, printing and menu
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 
-test('horizontal stack tracks follow visible group entries without changing quantities or saved data', () => {
+test('horizontal stack slots follow visible group entries without changing quantities or saved data', () => {
   const d=editorDeck();
   for(let i=0;i<20;i++)d.cards.push({card:{...structuredClone(d.cards[1].card),id:'stack-'+i,oracle_id:'stack-'+i,name:'Stack card '+i},qty:1,tags:[],zone:'main'});
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor');editorOptions.group='none';render()",w.context);
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
-  assert.match(w.node('#app').innerHTML,/--stack-columns:repeat\(20,minmax\(0,190px\)\) 190px/);
+  assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,22);
   w.node('#editor-search').input({target:{value:'Stack card'}});
-  assert.match(w.node('#editor-card-area').outerHTML,/--stack-columns:repeat\(19,minmax\(0,190px\)\) 190px/);
+  assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,20);
   w.node('#editor-search').input({target:{value:'Stack card 19'}});
-  assert.match(w.node('#editor-card-area').outerHTML,/--stack-columns:190px/);
-  assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/repeat\(0,/);
+  assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,1);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 

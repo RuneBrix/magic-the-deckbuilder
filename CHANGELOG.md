@@ -2,6 +2,8 @@
 
 ## Deck view review refinements — 2026-11-01
 
+- Align horizontal text entries to the same page-width three-column grid as vertical text. Add 8px gaps to sparse horizontal visual groups and an immediate hover/focus fan that pushes following cards right, redistributes overlap and uses reserved opening space without a sideways scroller.
+
 - Horizontal visual cards remain separate until they fill the group, then overlap progressively with card count and available width without sideways scrolling. Hover/focus reveals covered controls. Every vertical toolbar keeps rounded upper corners, vertical visual groups wrap, and text +/− buttons gain the same hover outline.
 
 - Unified full-width visual toolbars with outlined, tinted surfaces attached to artwork; options borders appear on hover, and options/quantity symbols are centered. Vertical stacks join at straight edges, spacing between groups/zones is tighter, and vertical text keeps three desktop group slots even for a single commander ([PR #51](https://github.com/RuneBrix/magic-the-deckbuilder/pull/51)).
