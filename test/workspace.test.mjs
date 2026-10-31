@@ -13,7 +13,8 @@ function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, 
   const node = selector => {
     if (!nodes.has(selector)) nodes.set(selector, {
       innerHTML: '', content: '', addEventListener(type, fn) { this[type] = fn; },
-      contains() { return false; }, querySelector: node, scrollIntoView() {},
+      contains() { return false; }, querySelector: node, querySelectorAll:()=>[], scrollIntoView() {}, dataset:{}, isConnected:true,
+      matches(){return Boolean(this.popoverOpen);}, showPopover(){this.popoverOpen=true;}, hidePopover(){this.popoverOpen=false;}, getBoundingClientRect(){return {right:300,bottom:100,height:400,width:250};},
       setAttribute() {}, showModal() {}, focus() {}, close() {},
       classList: { add() {}, remove() {}, toggle() {} }, style: { setProperty() {} },
     });
@@ -26,6 +27,7 @@ function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, 
       getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.palette.v1' ? savedPalette : key === 'arcana.theme.v1' ? savedTheme : key === 'arcana.explorer.v1' ? savedTracker : savedDecks; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },
     },
+    innerWidth:1280,innerHeight:900,
     setTimeout: (fn,ms) => {timers.push({fn,ms});return timers.length;}, clearTimeout() {}, URLSearchParams, structuredClone, crypto: { randomUUID },
   });
   vm.runInContext(source, context);
@@ -897,7 +899,7 @@ test('left preview follows pointer and focus by zone, survives rerender and clea
   w.node('#app').pointerover({pointerType:'touch',target:{closest:()=>row}});assert.equal(vm.runInContext('previewKey',w.context),'');
   w.node('#app').pointerover({pointerType:'mouse',target:{closest:()=>row}});
   assert.match(w.node('#deck-card-preview').innerHTML,/normal\/ramp.jpg/);assert.match(w.node('#deck-card-preview').innerHTML,/Ramp spell · Sideboard/);
-  vm.runInContext('render()',w.context);assert.match(w.node('#app').innerHTML,/deck-row is-previewed/);
+  vm.runInContext('render()',w.context);assert.match(w.node('#app').innerHTML,/deck-entry visual-card is-previewed/);
   const leader={dataset:{previewEntry:core.entryKey(d.cards[0])}};
   w.node('#app').focusin({target:{closest:()=>leader}});assert.match(w.node('#deck-card-preview').innerHTML,/Artwork unavailable/);assert.match(w.node('#deck-card-preview').innerHTML,/Leader · Command zone/);
   w.node('#editor-search').input({target:{value:'Ramp'}});assert.equal(vm.runInContext('previewKey',w.context),'');
@@ -906,4 +908,76 @@ test('left preview follows pointer and focus by zone, survives rerender and clea
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
   vm.runInContext("editorOptions.search='';previewEntry(entryKey(decks[0].cards[1]));decks.push({...structuredClone(decks[0]),id:'restored'});active='restored';render()",w.context);
   assert.equal(vm.runInContext('previewKey',w.context),''); // Same card identity in a different deck must not inherit the old selection.
+});
+
+
+test('all four deck views share filters, grouping, quantities, printing and menus; horizontal visual stacks are the default', () => {
+  const d=editorDeck();d.cards.push({...structuredClone(d.cards[1]),zone:'maybeboard',qty:3});
+  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor')",w.context);
+  assert.equal(vm.runInContext('editorOptions.layout',w.context),'visual-horizontal');
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']){
+    w.node('#editor-layout').change({target:{value:layout}});
+    assert.match(w.node('#app').innerHTML,new RegExp('deck-zones '+layout));
+    assert.equal((w.node('#app').innerHTML.match(/data-card-menu=/g)||[]).length,3);
+    assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
+    if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
+    else assert.match(w.node('#app').innerHTML,/class="entry-quantity"/);
+    w.node('#editor-group').change({target:{value:'role'}});assert.match(w.node('#app').innerHTML,/<h4>Removal<\/h4>/);
+    w.node('#editor-search').input({target:{value:'sorcery ramp'}});assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
+    assert.match(w.node('#editor-card-area').outerHTML,/Maybeboard · 3 · 3 shown/);
+    vm.runInContext("editorOptions.search='';editorOptions.group='none';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/<h4>/);
+  }
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+});
+
+test('card action menu scopes moves and details to the chosen entry and supports keyboard dismissal', async () => {
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
+  const key=core.entryKey(editorDeck().cards[1]);w.context.key=key;let returned=false;
+  const trigger={isConnected:true,setAttribute(){},focus(){returned=true;},getBoundingClientRect(){return {right:500,bottom:600};}};w.context.trigger=trigger;
+  vm.runInContext('openCardActions(key,trigger)',w.context);
+  assert.match(w.node('#card-actions').innerHTML,/Move to Maybeboard/);assert.match(w.node('#card-actions').innerHTML,/Remove all copies · all zones/);
+  w.node('#card-actions').keydown({key:'Escape',preventDefault(){}});assert.equal(returned,true);assert.equal(w.node('#card-actions').popoverOpen,false);
+  vm.runInContext('openCardActions(key,trigger)',w.context);
+  await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'move:maybeboard'}})}});
+  assert.equal(vm.runInContext('decks[0].cards[1].zone',w.context),'maybeboard');assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[1].tags)',w.context)),['Removal','Ramp']);
+  assert.match(w.node('#app').innerHTML,/Maybeboard · 2/);
+});
+
+test('card function creation is deck scoped, cross-deck copying requires a target, and all-zone removal can be cancelled', () => {
+  const d=editorDeck(),other={...editorDeck(),id:'other',name:'Other',cards:[]};
+  const w=workspace({savedDecks:JSON.stringify([d,other])});w.context.key=core.entryKey(d.cards[1]);
+  vm.runInContext('assignFunctionDialog(decks[0],key)',w.context);formValues(w,{'function':'','new-function':'Graveyard setup'});w.node('#function-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('decks[0].cards[1].tags[0]',w.context),'Graveyard setup');assert.equal(vm.runInContext('decks[1].cards.length',w.context),0);
+  vm.runInContext('copyEntryDialog(decks[0],key)',w.context);formValues(w,{deck:'',quantity:'2',zone:'maybeboard'});w.node('#copy-entry-form').onsubmit({preventDefault(){}});assert.match(w.node('#copy-entry-error').textContent,/destination/);
+  formValues(w,{deck:'other',quantity:'2',zone:'maybeboard'});w.node('#copy-entry-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('decks[1].cards[0].zone',w.context),'maybeboard');assert.equal(vm.runInContext('decks[1].cards[0].tags[0]',w.context),'Graveyard setup');
+  vm.runInContext('removeCopiesDialog(decks[0],key)',w.context);assert.match(w.node('#dialog').innerHTML,/across all zones, including Maybeboard/);
+  w.node('#keep-copies').onclick();assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
+});
+
+test('Maybeboard-only decks do not request legality and Maybeboard failures cannot poison active-deck refresh', async () => {
+  const d=editorDeck();d.cards=d.cards.map(e=>({...e,zone:'maybeboard'}));
+  const w=workspace({savedDecks:JSON.stringify([d])});assert.equal(w.timers.length,0);
+  const active=editorDeck();active.cards.push({...structuredClone(active.cards[1]),zone:'maybeboard',card:{...structuredClone(active.cards[1].card),id:'maybe',oracle_id:'maybe',name:'Maybe missing'}});
+  const v=workspace({savedDecks:JSON.stringify([active])});let requested=[];
+  v.context.fetch=async(url,options)=>{requested=JSON.parse(options.body).names;return {ok:true,json:async()=>({data:active.cards.filter(e=>e.zone!=='maybeboard').map(e=>e.card),not_found:[]})};};
+  await vm.runInContext('refresh()',v.context);assert.deepEqual(requested,['Leader','Ramp spell']);assert.equal(vm.runInContext("legalityStates.get('editor').status",v.context),'fresh');
+});
+
+
+test('exploration destination chooser adds directly to Maybeboard without changing tracking or playing totals', () => {
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()]),savedTracker:JSON.stringify({id:''})});w.context.card=editorCard('Bench idea');
+  vm.runInContext("results=[card];chooseDestination(card.id)",w.context);assert.match(w.node('#dialog').innerHTML,/id="add-zone"/);assert.match(w.node('#dialog').innerHTML,/Maybeboard/);
+  w.node('#add-destination').value='editor';w.node('#add-zone').value='maybeboard';w.node('#add-destination-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('decks[0].cards.at(-1).zone',w.context),'maybeboard');assert.equal(vm.runInContext('tracker.id',w.context),'');assert.equal(vm.runInContext('stats(decks[0]).total',w.context),3);
+  assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
+});
+
+test('card-name copying uses only the selected card name, without editing deck data', async () => {
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);let copied='';
+  w.context.navigator={clipboard:{writeText:async text=>{copied=text;}}};w.node('#card-actions').dataset={deck:'editor',entry:core.entryKey(editorDeck().cards[1])};
+  await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'copy-name'}})}});
+  assert.equal(copied,'Ramp spell');assert.equal(w.writes.length,0);
 });

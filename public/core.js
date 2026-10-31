@@ -33,7 +33,7 @@ export function resolveTag(value) {
   return tagById.get(value.trim().toLowerCase()) || TAG_CATALOG.tags.find(t => t.aliases.some(a => normalizeTag(a) === q));
 }
 export const count = deck => deck.cards.reduce((sum, e) => sum + e.qty, 0);
-export const ZONES = { main: 'Main deck', sideboard: 'Sideboard', command: 'Command zone' };
+export const ZONES = { main: 'Main deck', sideboard: 'Sideboard', command: 'Command zone', maybeboard: 'Maybeboard' };
 export const zoneFor = entry => entry.zone ?? (entry.commander ? 'command' : 'main');
 export const entryKey = entry => JSON.stringify([entry.card.oracle_id || entry.card.id, zoneFor(entry)]);
 export const zoneCount = (deck, zone) => count({ cards: deck.cards.filter(e => zoneFor(e) === zone) });
@@ -59,6 +59,34 @@ export function editEntry(deck, key, roles, zone) {
   moved.tags=other?[...new Set([...otherTags,...tags])]:tags;
   return moved;
 }
+export function assignEntryFunction(deck, key, name) {
+  if(typeof name!=='string' || !name.trim() || name.trim().length>80 || name.includes(','))throw Error('Use one function name of 1–80 characters, without commas.');
+  const entry=deck.cards.find(e=>entryKey(e)===key);
+  if(!entry)throw Error('This card entry no longer exists.');
+  name=name.trim();
+  return editEntry(deck,key,[name,...entry.tags.filter(t=>t!==name)].join(', '),zoneFor(entry));
+}
+export function copyEntryToDeck(source, key, target, qty, zone) {
+  if(source===target || source.id===target.id)throw Error('Choose another deck.');
+  if(!Number.isInteger(qty) || qty<1 || qty>500)throw Error('Choose 1–500 copies.');
+  if(typeof zone!=='string' || !Object.hasOwn(ZONES,zone))throw Error('Choose a destination zone.');
+  const entry=source.cards.find(e=>entryKey(e)===key);
+  if(!entry)throw Error('This card entry no longer exists.');
+  const found=target.cards.find(e=>entryKey(e)===entryKey({card:entry.card,zone}));
+  if(found && found.qty+qty>500)throw Error('Maximum 500 copies per card and zone. Nothing added.');
+  if(!found && target.cards.length>=1000)throw Error('Maximum 1000 card entries per deck. Nothing added.');
+  if(found){found.qty+=qty;found.tags=[...new Set([...found.tags,...entry.tags])];}
+  else target.cards.push({card:structuredClone(entry.card),qty,tags:[...entry.tags],zone});
+}
+export function removeCardCopies(deck, key) {
+  const entry=deck.cards.find(e=>entryKey(e)===key);
+  if(!entry)throw Error('This card entry no longer exists.');
+  const identity=entry.card.oracle_id || entry.card.id;
+  const matches=e=>(e.card.oracle_id || e.card.id)===identity;
+  const removed=count({cards:deck.cards.filter(matches)});
+  deck.cards=deck.cards.filter(e=>!matches(e));
+  return removed;
+}
 export function validatePrinting(original, printing) {
   if (printing?.layout==='reversible_card' && !printing.oracle_id && printing.card_faces?.length && printing.card_faces.every(f=>f.oracle_id===original.oracle_id)) {
     const face=printing.card_faces[0];
@@ -82,14 +110,14 @@ export function bracketReport(deck, snapshot=COMMANDER_BRACKETS, now=Date.now())
   const stale=available && age>snapshot.reviewAfterDays;
   const normalize=name=>name.trim().replaceAll('’',"'").toLowerCase();
   const names=new Map(available?snapshot.names.map(name=>[normalize(name),name]):[]), matches=new Map();
-  for(const entry of deck.cards.filter(e=>zoneFor(e)!=='sideboard')) {
+  for(const entry of deck.cards.filter(e=>zoneFor(e)!=='sideboard' && zoneFor(e)!=='maybeboard')) {
     if(typeof entry.card?.name!=='string' || !Number.isInteger(entry.qty) || entry.qty<1)continue;
     const name=names.get(normalize(entry.card.name.split(' // ')[0]));
     if(name){const item=matches.get(name)||{name,qty:0,zones:[]};item.qty+=entry.qty;if(!item.zones.includes(zoneFor(entry)))item.zones.push(zoneFor(entry));matches.set(name,item);}
   }
   const count=[...matches.values()].reduce((sum,m)=>sum+m.qty,0);
-  const missing=deck.cards.some(e=>zoneFor(e)!=='sideboard' && (typeof e.card?.name!=='string' || !e.card.name.trim() || !Number.isInteger(e.qty) || e.qty<1));
-  const canSuggest=available && !stale && !missing && deck.format==='commander' && deck.cards.some(e=>zoneFor(e)!=='sideboard');
+  const missing=deck.cards.some(e=>zoneFor(e)!=='sideboard' && zoneFor(e)!=='maybeboard' && (typeof e.card?.name!=='string' || !e.card.name.trim() || !Number.isInteger(e.qty) || e.qty<1));
+  const canSuggest=available && !stale && !missing && deck.format==='commander' && deck.cards.some(e=>zoneFor(e)!=='sideboard' && zoneFor(e)!=='maybeboard');
   return {available,stale,missing,count,matches:[...matches.values()],range:canSuggest&&count>0?(count<=3?[3,5]:[4,5]):null,canSuggest};
 }
 export const isLand = card => /\bLand\b/.test(card.type_line);
@@ -164,7 +192,7 @@ export function relaxSearch(f, deck, key) {
 export function stats(deck) {
   const result = { total: count(deck), lands: 0, spells: 0, average: 0, curve: Array(8).fill(0), types: {}, tags: Object.create(null), colors: Object.fromEntries('WUBRGC'.split('').map(c => [c, 0])) };
   let value = 0;
-  for (const { card, qty, tags = [] } of deck.cards.filter(e => zoneFor(e) !== 'sideboard' && (deck.format === 'commander' || zoneFor(e) === 'main'))) {
+  for (const { card, qty, tags = [] } of deck.cards.filter(e => zoneFor(e) !== 'sideboard' && zoneFor(e) !== 'maybeboard' && (deck.format === 'commander' || zoneFor(e) === 'main'))) {
     const type = category(card);
     result.types[type] = (result.types[type] || 0) + qty;
     for (const tag of tags) result.tags[tag] = (result.tags[tag] || 0) + qty;
@@ -196,7 +224,7 @@ export function legalityReport(deck) {
     if (deck.format !== 'modern') manual.push('D03 validates Modern construction; this format uses shared constructed checks with remaining format-specific rules requiring manual review.');
   }
   const groups = new Map();
-  const checked = deck.cards.filter(e => zoneFor(e) !== (deck.format === 'commander' ? 'sideboard' : 'command'));
+  const checked = deck.cards.filter(e => zoneFor(e) !== 'maybeboard' && zoneFor(e) !== (deck.format === 'commander' ? 'sideboard' : 'command'));
   for (const entry of checked) {
     const { card } = entry, name = card.name.toLowerCase();
     if (!groups.has(name)) groups.set(name, []);
@@ -229,17 +257,17 @@ export function exportDeckText(deck) {
 }
 export function parseImport(text) {
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l&&!l.startsWith('//')&&!l.startsWith('#'));
-  const heading = /^(Main deck|Sideboard|Command zone|Commander):?$/i;
+  const heading = /^(Main deck|Sideboard|Command zone|Commander|Maybeboard):?$/i;
   const zoned = lines.some(l=>heading.test(l));
   if (!lines.length || lines.length > 310) throw Error('Import 1–300 card lines.');
   let zone = 'main', lineCount = 0;
   const entries = new Map();
   for (const line of lines) {
     const section = line.match(heading);
-    if (section) { zone = /sideboard/i.test(section[1]) ? 'sideboard' : /command/i.test(section[1]) ? 'command' : 'main'; continue; }
+    if (section) { zone = /maybeboard/i.test(section[1]) ? 'maybeboard' : /sideboard/i.test(section[1]) ? 'sideboard' : /command/i.test(section[1]) ? 'command' : 'main'; continue; }
     if (++lineCount > 300) throw Error('Import 1–300 card lines.');
     const match = line.match(/^(\d+)x?\s+(.+?)(?:\s+\([A-Za-z0-9]+\)\s+\S+)?$/);
-    if (!match || +match[1] < 1 || +match[1] > 500) throw Error(`Cannot read “${line}”. Use “1 Card Name” per line, with optional Main deck, Sideboard or Command zone headings.`);
+    if (!match || +match[1] < 1 || +match[1] > 500) throw Error(`Cannot read “${line}”. Use “1 Card Name” per line, with optional Main deck, Sideboard, Command zone or Maybeboard headings.`);
     const name=match[2], key=zone+'|'+name.toLowerCase(), previous=entries.get(key);
     entries.set(key,{name,qty:(previous?.qty||0)+Number(match[1]),...(zoned?{zone}:{})});
     if(entries.get(key).qty>500)throw Error('Maximum 500 copies per card in a zone.');

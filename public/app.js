@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, validateBackup, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, validateBackup, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -39,8 +39,8 @@ let filtersOpen = false, tagsOpen = false;
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
 let browsedTag = '', tagLimit = 30, allTags = false;
 let broadeningOpen = false, broadening = null, resultContext = null;
-let editorOptions = { group: 'type', search: '', order: 'name' };
-let previewKey = '', previewDeck = '';
+let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
+let previewKey = '', previewDeck = '', cardActionTrigger = null;
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
 let detail = null;
@@ -64,9 +64,11 @@ let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 4500); }
 function mana(cost = '') { return [...cost.matchAll(/\{([^}]+)\}/g)].map(m => `<span class="mana mana-${/^[WUBRG]$/.test(m[1]) ? m[1] : 'C'}" title="${esc(m[1])}">${esc(m[1])}</span>`).join(''); }
 function download(name, content, type) { const url = URL.createObjectURL(new Blob([content], { type })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-function changeDeck(fn) { const d = current(); if (!d) return; fn(d); d.updated = new Date().toISOString(); save(); render(); }
+function changeNamedDeck(d,fn){if(!decks.includes(d))throw Error('That deck is no longer available.');const result=fn(d);d.updated=new Date().toISOString();save();render();return result;}
+function changeDeck(fn) { const d=current();if(d)return changeNamedDeck(d,fn); }
 
 function render() {
+  closeCardActions(false);
   const focused=document.activeElement;
   let focusSelector='';
   if(focused && $('#app').contains(focused)) {
@@ -153,7 +155,7 @@ function identitySummary(d, compact=false) {
 function openDeck(id) {
   if(!decks.some(d=>d.id===id))return;
   const changed=active!==id;active=id;view='deck';deckTab='cards';
-  if(changed){editorOptions={group:'type',search:'',order:'name'};previewKey='';}
+  if(changed){editorOptions={layout:'visual-horizontal',group:'type',search:'',order:'name'};previewKey='';}
   render();$('#deck-title')?.focus();
 
 }
@@ -161,7 +163,7 @@ function deckWorkspace(d) {
   if(!d)return `<div class="library"><h1>No deck selected</h1><button class="secondary" data-view="decks">Back to My decks</button></div>`;
   const s=stats(d), report=legalityReport(d);
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
 }
 function bracketControl(d) {
   if(d.format!=='commander')return '';
@@ -197,13 +199,81 @@ function previewEntry(key) {
   previewDeck=d.id;previewKey=key;$('#deck-card-preview').innerHTML=previewMarkup(d);
   for(const row of document.querySelectorAll('[data-preview-entry]'))row.classList.toggle('is-previewed',row.dataset.previewEntry===key);
 }
-function deckList(d, full=false) {
-  return `<div class="zone-counts" aria-label="Deck zone counts">${Object.entries(ZONES).map(([z,label])=>`<span>${label}: ${zoneCount(d,z)}</span>`).join('')}</div>` + Object.entries(ZONES).map(([zone,label]) => {
-    const entries = (full?deckEntries(d,editorOptions):d.cards).filter(e=>zoneFor(e)===zone), groups=new Map();
-    for(const e of entries){const group=full?(editorOptions.group==='role'?primaryRole(e):editorOptions.group==='type'?category(e.card):''):'';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(e);}
-    return `<section class="deck-zone"><h3>${label} · ${zoneCount(d,zone)}${full&& editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3>${[...groups].map(([group,items])=>`${group?`<h4>${esc(group)}</h4>`:''}${items.map(e=>`<div class="deck-row${full&&entryKey(e)===previewKey?' is-previewed':''}" ${full?`data-preview-entry="${esc(entryKey(e))}"`: ''}><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span>${full?`<span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span><label class="row-zone"><span class="sr-only">Zone for ${esc(e.card.name)} in ${label}</span><select data-move-entry="${esc(entryKey(e))}">${Object.entries(ZONES).map(([z,l])=>`<option value="${z}" ${zone===z?'selected':''}>${l}</option>`).join('')}</select></label>`:''}<div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}`).join('') || `<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</section>`;
-  }).join('');
+function deckEntry(e) {
+  const key=entryKey(e),visual=editorOptions.layout.startsWith('visual'),image=safeUrl(imageFor(e.card),true),zone=ZONES[zoneFor(e)];
+  const quantity=`<div class="card-quantity"><button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">−</button><button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${e.qty>=500?'disabled':''}>+</button></div>`;
+  const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-preview-entry="${esc(key)}"><span class="entry-quantity" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>${visual?`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`:`<button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>`}${menu}${quantity}</article>`;
 }
+function deckList(d, full=false) {
+  const filtered=full?deckEntries(d,editorOptions):d.cards;
+  return `<div class="zone-counts" aria-label="Deck zone counts">${Object.entries(ZONES).map(([z,label])=>`<span>${label}: ${zoneCount(d,z)}</span>`).join('')}</div><div class="deck-zones ${full?esc(editorOptions.layout):'tracker-zones'}">`+Object.entries(ZONES).map(([zone,label])=>{
+    const entries=filtered.filter(e=>zoneFor(e)===zone),groups=new Map();
+    for(const e of entries){const group=full?(editorOptions.group==='role'?primaryRole(e):editorOptions.group==='type'?category(e.card):''):'';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(e);}
+    return `<section class="deck-zone"><h3>${label} · ${zoneCount(d,zone)}${full&&editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3><div class="deck-group-list">${[...groups].map(([group,items])=>`<section class="deck-group">${group?`<h4>${esc(group)}</h4>`:''}<div class="deck-group-items">${items.map(e=>full?deckEntry(e):`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span><div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}</div></section>`).join('')||`<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</div></section>`;
+  }).join('')+'</div>';
+}
+function closeCardActions(restore=true) {
+  const menu=$('#card-actions');
+  if(menu.matches?.(':popover-open'))menu.hidePopover();
+  cardActionTrigger?.setAttribute('aria-expanded','false');
+  if(restore && cardActionTrigger?.isConnected)cardActionTrigger.focus();
+}
+function openCardActions(key,trigger) {
+  closeCardActions(false);
+  const d=current(),entry=d?.cards.find(e=>entryKey(e)===key);if(!entry)return;
+  const menu=$('#card-actions');cardActionTrigger=trigger;menu.dataset.deck=d.id;menu.dataset.entry=key;
+  const action=(value,label,disabled=false)=>`<button role="menuitem" data-card-action="${esc(value)}" ${disabled?'disabled':''}>${label}</button>`;
+  menu.innerHTML=`<h3>${esc(entry.card.name)}<small>${esc(d.name)} · ${ZONES[zoneFor(entry)]}</small></h3>${action('details','Open details')}${action('function','Assign function…')}${Object.entries(ZONES).map(([z,label])=>action('move:'+z,'Move to '+label,z===zoneFor(entry))).join('')}${action('copy-name','Copy card name')}${action('copy-deck','Add to another deck…',decks.length<2)}${action('remove','Remove all copies · all zones…')}`;
+  menu.style.width=Math.min(250,innerWidth-32)+'px';menu.showPopover();trigger.setAttribute('aria-expanded','true');
+  const anchor=trigger.getBoundingClientRect(),height=menu.getBoundingClientRect().height,width=menu.getBoundingClientRect().width;
+  menu.style.left=Math.max(16,Math.min(anchor.right-width,innerWidth-width-16))+'px';
+  menu.style.top=Math.max(16,Math.min(anchor.bottom+6,innerHeight-height-16))+'px';
+  menu.querySelector('button:not(:disabled)')?.focus();
+}
+function focusCardEntry(d,key) {
+  if(current()!==d || typeof CSS==='undefined')return;
+  document.querySelector('[data-card-menu="'+CSS.escape(key)+'"]')?.focus();
+}
+function assignFunctionDialog(d,key) {
+  const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
+  const functions=[...new Set(d.cards.flatMap(e=>e.tags))].sort();
+  showDialog(`<h2>Function for ${esc(entry.card.name)}</h2><p>${esc(d.name)} · ${ZONES[zoneFor(entry)]}. The chosen function becomes primary; other functions stay assigned.</p><form id="function-form"><label>Existing function<select name="function"><option value="">Choose a function…</option>${functions.map(f=>`<option ${f===primaryRole(entry)?'selected':''}>${esc(f)}</option>`).join('')}</select></label><label>Or create a function for this deck<input name="new-function" maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Assign function</button></form>`);
+  $('#function-form').onsubmit=e=>{e.preventDefault();try{const data=new FormData(e.target),name=String(data.get('new-function')||'').trim()||String(data.get('function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast('Function assigned in '+d.name);}catch(error){$('#function-error').textContent=error.message;}};
+}
+function copyEntryDialog(d,key) {
+  const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
+  showDialog(`<h2>Add ${esc(entry.card.name)} to another deck</h2><p>Adds copies without changing ${esc(d.name)}. Existing destination entries keep their printing and merge functions.</p><form id="copy-entry-form"><label>Destination deck<select name="deck"><option value="">Choose a deck…</option>${decks.filter(x=>x!==d).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label><label>Destination zone<select name="zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}">${label}</option>`).join('')}</select></label><label>Copies<input type="number" name="quantity" min="1" max="500" value="1" required></label><p id="copy-entry-error" role="alert"></p><button class="primary">Add copies</button></form>`);
+  $('#copy-entry-form').onsubmit=e=>{e.preventDefault();try{const data=new FormData(e.target),target=decks.find(x=>x.id===data.get('deck'));if(!decks.includes(d)||!target)throw Error('Choose an available destination deck.');changeNamedDeck(target,deck=>copyEntryToDeck(d,key,deck,Number(data.get('quantity')),String(data.get('zone'))));$('#dialog').close();focusCardEntry(d,key);toast('Copies added to '+target.name);}catch(error){$('#copy-entry-error').textContent=error.message;}};
+}
+function removeCopiesDialog(d,key) {
+  const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
+  const matches=d.cards.filter(e=>cardKey(e.card)===cardKey(entry.card)),total=matches.reduce((n,e)=>n+e.qty,0);
+  showDialog(`<h2>Remove all ${esc(entry.card.name)}?</h2><p>Remove ${total} ${total===1?'copy':'copies'} from ${esc(d.name)} across all zones, including Maybeboard.</p><p>${matches.map(e=>`${ZONES[zoneFor(e)]}: ${e.qty}`).join(' · ')}</p><div class="workspace-actions"><button id="keep-copies" class="secondary">Keep cards</button><button id="remove-copies" class="danger">Remove ${total} ${total===1?'copy':'copies'}</button></div><p id="remove-copies-error" role="alert"></p>`);
+  $('#keep-copies').onclick=()=>$('#dialog').close();$('#keep-copies').focus();
+  $('#remove-copies').onclick=()=>{try{changeNamedDeck(d,deck=>removeCardCopies(deck,key));$('#dialog').close();$('#deck-title')?.focus();toast('All copies removed from '+d.name);}catch(error){$('#remove-copies-error').textContent=error.message;}};
+}
+$('#card-actions').addEventListener('click',async e=>{
+  const button=e.target.closest('[data-card-action]');if(!button)return;
+  const menu=$('#card-actions'),d=decks.find(x=>x.id===menu.dataset.deck),key=menu.dataset.entry,entry=d?.cards.find(e=>entryKey(e)===key);closeCardActions();
+  if(!d||!entry||current()!==d){toast('This card entry is no longer available in this view.');return;}
+  const action=button.dataset.cardAction;
+  try{
+    if(action==='details')inspect(entry.card.id,key);
+    if(action==='function')assignFunctionDialog(d,key);
+    if(action==='copy-deck')copyEntryDialog(d,key);
+    if(action==='remove')removeCopiesDialog(d,key);
+    if(action==='copy-name'){await navigator.clipboard.writeText(entry.card.name);toast('Card name copied');}
+    if(action.startsWith('move:')){const zone=action.slice(5),nextKey=entryKey({card:entry.card,zone});changeNamedDeck(d,deck=>moveEntry(deck,key,zone));focusCardEntry(d,nextKey);toast('All entry copies moved to '+ZONES[zone]);}
+  }catch(error){toast(error.message);}
+});
+$('#card-actions').addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();closeCardActions();return;}
+  if(e.key==='Tab'){closeCardActions();return;}
+  if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const buttons=[...$('#card-actions').querySelectorAll('button:not(:disabled)')],i=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();}
+});
+$('#card-actions').addEventListener('toggle',e=>{if(e.newState==='closed')cardActionTrigger?.setAttribute('aria-expanded','false');});
+addEventListener('scroll',e=>{if(!$('#card-actions').contains(e.target))closeCardActions(false);},true);
 function curve(s) { const max=Math.max(1,...s.curve); return `<div class="curve" role="img" aria-label="Mana curve: ${s.curve.map((n,i)=>`${i===7?'7+':i} mana: ${n}`).join(', ')}">${s.curve.map((n,i)=>`<div class="curve-column"><span>${n || ''}</span><div style="height:${n ? Math.max(4,n/max*54) : 2}px" class="${n?'filled':''}"></div><small>${i===7?'7+':i}</small></div>`).join('')}</div>`; }
 function statPanel(s) { return `<div class="stats-view"><h3>Mana curve</h3>${curve(s)}<div class="stat-pair"><span>Average mana value</span><b>${s.average.toFixed(2)}</b></div><h3>Card types</h3>${Object.entries(s.types).map(([t,n])=>`<div class="stat-pair"><span>${t}</span><b>${n}</b></div>`).join('') || '<p class="hint">Add cards to see the breakdown.</p>'}<h3>Colors on cards</h3><div class="color-stats">${Object.entries(s.colors).map(([c,n])=>`<div><span class="mana mana-${c}">${c}</span><b>${n}</b></div>`).join('')}</div><p class="hint">Multicolor cards count in each of their colors.</p><h3>Your role tags</h3>${Object.entries(s.tags).map(([t,n])=>`<div class="stat-pair"><span>${esc(t)}</span><b>${n}</b></div>`).join('') || '<p class="hint">Inspect a deck card to assign roles such as ramp or removal.</p>'}</div>`; }
 const formatLabel = format => format.charAt(0).toUpperCase()+format.slice(1);
@@ -307,7 +377,7 @@ function bind() {
   $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
   bindTrackerResize();
   $('#assigned-bracket')?.addEventListener('change',e=>{const d=current();if(!d || d.format!=='commander')return;const value=Number(e.target.value);if(e.target.value && !Object.hasOwn(BRACKETS,value))return;if(e.target.value)d.bracket=value;else delete d.bracket;d.updated=new Date().toISOString();save();render();$('#assigned-bracket')?.focus();});
-  for(const key of ['group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
+  for(const key of ['layout','group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
   $('#editor-search')?.addEventListener('input',e=>{editorOptions.search=e.target.value;const d=current();if(view==='deck' && d)$('#editor-card-area').outerHTML=deckCards(d);});
   $('#broadening-tools')?.addEventListener('toggle',e=>{broadeningOpen=e.target.open;});
   $('#search-filters')?.addEventListener('toggle',e=>{filtersOpen=e.target.open;});
@@ -339,6 +409,7 @@ $('#app').addEventListener('change',e=>{
 $('#app').addEventListener('click',async e=>{
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;readFilters();
   if(button.dataset.view){e.preventDefault?.();view=button.dataset.view;render();if(view==='decks')$('#library-title')?.focus();else $('#raw')?.focus();return;}
+  if(button.dataset.cardMenu){openCardActions(button.dataset.cardMenu,button);return;}
   if(button.dataset.deck){openDeck(button.dataset.deck);return;}
   if(button.dataset.manage){const menu=button.closest?.('.deck-menu');if(menu){menu.open=false;menu.querySelector('summary').focus();}const d=decks.find(d=>d.id===button.dataset.target);if(!d)return;const action=button.dataset.manage;if(action==='rename')deckForm(d);if(action==='duplicate')duplicateDeck(d);if(action==='delete')deleteDeck(d);if(action==='import')importDialog(d);if(action==='export')exportDialog(d);return;}
   if(button.dataset.tab){deckTab=button.dataset.tab;render();return;}
@@ -395,6 +466,7 @@ function addLabel(c) {
   return d?`Add ${c.name} to ${d.name} · Main deck (${qty} currently in Main deck)`:`Add ${c.name} to a chosen deck`;
 }
 function addToDeck(c,d,zone='main') {
+  if(typeof zone!=='string' || !Object.hasOwn(ZONES,zone))throw Error('Choose a valid destination zone.');
   if(!decks.includes(d))throw new Error('That deck is no longer available. Choose another deck.');
   const found=d.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone);
   if(!found && d.cards.length>=1000)throw new Error('Maximum 1000 card entries per deck. No cards were added.');
@@ -410,11 +482,11 @@ function addCard(id,zone='main') {
 }
 function chooseDestination(id,zone='main',preview) {
   const c=preview || findCard(id);if(!c)return;
-  showDialog(`<h2>Add ${esc(c.name)}</h2><p>Choose the destination for one copy. Your tracked deck will stay selected.</p>${decks.length?`<form id="add-destination-form"><label>Destination deck<select name="deck" id="add-destination"><option value="">Choose a deck…</option>${decks.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label><p>Destination zone: <strong>${ZONES[zone]}</strong></p><p id="add-destination-error" role="alert"></p><button class="primary" type="submit">Add 1 to ${ZONES[zone]}</button></form>`:'<p>Create a deck to keep this card.</p><button class="primary" id="create-destination">Create deck…</button>'}`);
+  showDialog(`<h2>Add ${esc(c.name)}</h2><p>Choose the destination for one copy. Your tracked deck will stay selected.</p>${decks.length?`<form id="add-destination-form"><label>Destination deck<select name="deck" id="add-destination"><option value="">Choose a deck…</option>${decks.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label><label>Destination zone<select id="add-zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zone===z?'selected':''}>${label}</option>`).join('')}</select></label><p id="add-destination-error" role="alert"></p><button class="primary" type="submit">Add 1 copy</button></form>`:'<p>Create a deck to keep this card.</p><button class="primary" id="create-destination">Create deck…</button>'}`);
   if(decks.length)$('#add-destination-form').onsubmit=e=>{
     e.preventDefault();const d=decks.find(d=>d.id===$('#add-destination').value);
     if(!d){$('#add-destination-error').textContent='Choose a destination deck first.';return;}
-    try{addToDeck(c,d,zone);$('#dialog').close();}catch(error){$('#add-destination-error').textContent=error.message;}
+    try{addToDeck(c,d,$('#add-zone').value||zone);$('#dialog').close();}catch(error){$('#add-destination-error').textContent=error.message;}
   };
   else $('#create-destination').onclick=()=>deckForm(undefined,d=>{view='explore';try{addToDeck(c,d,zone);}catch(error){toast(error.message);}});
 }
@@ -537,7 +609,7 @@ function inspect(id,entryId) {
 
 async function fetchNames(names) {const cards=[],missing=[];for(let i=0;i<names.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x.name));}return {cards,missing};}
 function importDialog(target=current()){
-  showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste quantity/name lines with optional Main deck, Sideboard and Command zone headings. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><button class="primary">Import cards</button></form>`);
+  showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste quantity/name lines with optional Main deck, Sideboard, Command zone and Maybeboard headings. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><button class="primary">Import cards</button></form>`);
   $('#import-form').onsubmit=async e=>{e.preventDefault();const form=e.target,button=form.querySelector('button'),data=new FormData(form);button.disabled=true;button.textContent='Finding cards…';try{
     const name=target?.name||String(data.get('name')).trim(),format=target?.format||String(data.get('format'));
     if(!name||name.length>100||!FORMATS.includes(format))throw new Error('Enter a deck name and supported format.');
@@ -554,36 +626,37 @@ function importDialog(target=current()){
   }catch(error){form.querySelector('#import-error').textContent=error.message;}finally{button.disabled=false;button.textContent='Import cards';}};
 }
 function restore(){showDialog('<h2>Restore your workspace</h2><p>Choose an Arcana JSON backup. Restored decks are added alongside existing decks.</p><input id="backup-file" type="file" accept="application/json,.json" aria-label="Deck backup file"><p id="restore-error" role="alert"></p>');$('#backup-file').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>15_000_000)throw new Error('Backup is too large (maximum 15 MB).');const imported=validateBackup(JSON.parse(await file.text()));if(decks.length+imported.length>200)throw new Error('Maximum 200 decks per workspace.');for(const d of imported){for(const e of d.cards)e.zone=zoneFor(e);d.id=crypto.randomUUID();decks.push(d);}storageError='';active=imported[0]?.id||active;save();$('#dialog').close();render();toast('Backup restored');}catch(error){$('#restore-error').textContent=error.message;}};}
-function legalitySignature(d) { return [...new Set(d.cards.map(e=>cardKey(e.card)+':'+e.card.name))].sort().join('|'); }
+function legalitySignature(d) { return [...new Set(d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>cardKey(e.card)+':'+e.card.name))].sort().join('|'); }
 function ensureLegality(d) {
-  if (!d.cards.length) return;
+  if (!d.cards.some(e=>zoneFor(e)!=='maybeboard')) return;
   const signature=legalitySignature(d), state=legalityStates.get(d.id);
   if (state?.pending || state?.signature===signature) return;
   legalityStates.set(d.id,{status:'refreshing',signature,pending:true});
   setTimeout(()=>refresh(d),0);
 }
 function freshnessNotice(d) {
-  if (!d.cards.length) return '<p class="hint">No stored cards to refresh.</p>';
+  if (!d.cards.some(e=>zoneFor(e)!=='maybeboard')) return '<p class="hint">No playing-deck or sideboard cards to refresh.</p>';
   const state=legalityStates.get(d.id), status=state?.status;
   const stale=status==='fresh' && Date.now()-state.time>=300_000;
   const message=status==='refreshing'?'Refreshing legality… Editing stays available.':status==='failed'?'Legality refresh unavailable. Last usable data retained.':status==='fresh'&&!stale?'Legality refreshed this session (server cache up to five minutes).':'Legality data is stale; current rules have not been verified.';
   return `<div class="freshness check-${status==='fresh'&&!stale?'success':'warning'}" role="status"><p>${icon(status==='fresh'&&!stale?'check':'book',16)} ${message}</p>${status==='failed'?`<p>${esc(state.error)}</p>`:''}${status==='failed'||stale?'<button class="text-button" data-action="refresh">Retry legality refresh</button>':''}</div>`;
 }
 function refresh(d=current()) {
-  if (!d?.cards.length) return Promise.resolve();
+  if (!d?.cards.some(e=>zoneFor(e)!=='maybeboard')) return Promise.resolve();
   const previous=legalityStates.get(d.id);
   if (previous?.promise) return previous.promise;
-  const entries=d.cards.map(e=>({entry:e,card:e.card})), signature=legalitySignature(d);
+  const entries=d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>({entry:e,card:e.card})), signature=legalitySignature(d);
   const state={status:'refreshing',signature,pending:true};
   legalityStates.set(d.id,state);
   const task=legalityQueue.then(async()=>{
     try {
       const {cards,missing}=await fetchNames([...new Set(entries.map(({card})=>card.name))].sort());
       const byName=new Map(cards.map(c=>[c.name,c]));
-      if(missing.length || entries.some(({card})=>{const c=byName.get(card.name);return !c || !c.legalities || typeof c.legalities!=='object' || Array.isArray(c.legalities) || (c.oracle_id && card.oracle_id && c.oracle_id!==card.oracle_id);})) throw new Error('Some card legality data is missing or mismatched. Retry when available.');
+      const relevant=entries.filter(({entry})=>zoneFor(entry)!=='maybeboard');
+      if(missing.some(name=>relevant.some(({card})=>card.name===name)) || relevant.some(({card})=>{const c=byName.get(card.name);return !c || !c.legalities || typeof c.legalities!=='object' || Array.isArray(c.legalities) || (c.oracle_id && card.oracle_id && c.oracle_id!==card.oracle_id);})) throw new Error('Some card legality data is missing or mismatched. Retry when available.');
       if (!decks.includes(d)) return;
-      if (d.cards.some(e=>!entries.some(({entry,card})=>entry===e && card===e.card))) state.signature='';
-      for (const {entry,card} of entries) {
+      if (d.cards.filter(e=>zoneFor(e)!=='maybeboard').some(e=>!entries.some(({entry,card})=>entry===e && card===e.card))) state.signature='';
+      for (const {entry,card} of relevant) {
         // Only patch the surviving original card; quantities, roles, zones and printing stay live.
         if (d.cards.includes(entry) && entry.card===card) entry.card={...card,legalities:byName.get(card.name).legalities};
       }

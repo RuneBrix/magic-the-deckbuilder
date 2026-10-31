@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { zoneFor, zoneCount, entryKey, moveEntry, editEntry, setEntryPrinting, stats, legalityReport, validateBackup, exportDeckText, parseImport } from '../public/core.js';
+import { assignEntryFunction, copyEntryToDeck, removeCardCopies, bracketReport, zoneFor, zoneCount, entryKey, moveEntry, editEntry, setEntryPrinting, stats, legalityReport, validateBackup, exportDeckText, parseImport } from '../public/core.js';
 
 const card = (name, extra={}) => ({id:name,oracle_id:name,name,type_line:'Creature',cmc:1,colors:['G'],color_identity:['G'],oracle_text:'',legalities:{modern:'legal',commander:'legal',vintage:'legal'},...extra});
 const entry = (name,qty,zone='main',extra={}) => ({card:card(name),qty,zone,tags:[],...extra});
@@ -108,4 +108,47 @@ test('same-identity reversible printings normalize face rules while retaining bo
   assert.equal(d.cards[0].card.oracle_id,original.oracle_id);assert.equal(d.cards[0].card.type_line,'Artifact');assert.equal(d.cards[0].card.card_faces.length,2);
   assert.doesNotThrow(()=>validateBackup([d]));
   assert.throws(()=>setEntryPrinting(d,entryKey(d.cards[0]),{...printing,card_faces:[face,{...face,oracle_id:'other'}]}));
+});
+
+
+test('Maybeboard is preserved by backups/text but excluded from statistics, checks, identity and brackets', () => {
+  const d=modern(),baseline=legalityReport(d),statistics=stats(d);
+  d.cards.push(entry('MaybeChanger',50,'maybeboard',{tags:['Private function'],card:card('MaybeChanger',{cmc:10,color_identity:['U'],legalities:{modern:'banned'}})}));
+  assert.equal(zoneCount(d,'maybeboard'),50);assert.deepEqual(stats(d),statistics);assert.deepEqual(legalityReport(d),baseline);
+  const restored=validateBackup(JSON.parse(JSON.stringify([d])))[0];assert.equal(restored.cards.at(-1).zone,'maybeboard');assert.deepEqual(restored.cards.at(-1).tags,['Private function']);
+  const text=exportDeckText(d);assert.match(text,/Maybeboard\n50 MaybeChanger/);
+  assert.equal(parseImport(text).find(e=>e.name==='MaybeChanger').zone,'maybeboard');
+  assert.deepEqual(parseImport('Maybeboard:\n2 Forest\nMain deck\n1 Forest'),[{name:'Forest',qty:2,zone:'maybeboard'},{name:'Forest',qty:1,zone:'main'}]);
+  const commander={...d,format:'commander'},snapshot={names:['MaybeChanger'],verifiedAt:'2026-10-31',reviewAfterDays:90};
+  const report=bracketReport(commander,snapshot,Date.parse('2026-10-31T12:00:00Z'));assert.equal(report.count,0);assert.equal(report.range,null);
+});
+
+test('Maybeboard moves merge every copy and function, retain destination printing and fail atomically on overflow', () => {
+  const d=modern(),source=d.cards[1],target={...structuredClone(source),zone:'maybeboard',qty:2,tags:['Ideas'],card:{...structuredClone(source.card),id:'chosen-print'}};source.tags=['Ramp'];d.cards.push(target);
+  moveEntry(d,entryKey(source),'maybeboard');assert.equal(target.qty,6);assert.deepEqual(target.tags,['Ideas','Ramp']);assert.equal(target.card.id,'chosen-print');
+  moveEntry(d,entryKey(target),'main');assert.equal(target.zone,'main');assert.equal(target.qty,6);
+  d.cards.push({...structuredClone(target),zone:'maybeboard',qty:500});const before=JSON.stringify(d);
+  assert.throws(()=>moveEntry(d,entryKey(target),'maybeboard'),/500/);assert.equal(JSON.stringify(d),before);
+});
+
+test('copying to another deck validates atomically and preserves source metadata plus destination printing', () => {
+  const source={id:'source',cards:[entry('Example',4,'maybeboard',{tags:['Ramp','Draw']})]},target={id:'target',cards:[]};
+  const before=JSON.stringify(source);copyEntryToDeck(source,entryKey(source.cards[0]),target,2,'main');
+  assert.equal(JSON.stringify(source),before);assert.equal(target.cards[0].qty,2);assert.deepEqual(target.cards[0].tags,['Ramp','Draw']);
+  target.cards[0].card.id='selected-print';target.cards[0].tags=['Removal'];
+  copyEntryToDeck(source,entryKey(source.cards[0]),target,3,'main');assert.equal(target.cards[0].qty,5);assert.equal(target.cards[0].card.id,'selected-print');assert.deepEqual(target.cards[0].tags,['Removal','Ramp','Draw']);
+  const targetBefore=JSON.stringify(target);
+  for(const qty of [0,501,1.5])assert.throws(()=>copyEntryToDeck(source,entryKey(source.cards[0]),target,qty,'main'),/copies/);
+  assert.throws(()=>copyEntryToDeck(source,entryKey(source.cards[0]),source,1,'main'),/another deck/);
+  assert.throws(()=>copyEntryToDeck(source,entryKey(source.cards[0]),target,1,'invalid'),/zone/);
+  assert.equal(JSON.stringify(target),targetBefore);assert.equal(JSON.stringify(source),before);
+  target.cards[0].qty=500;const full=JSON.stringify(target);assert.throws(()=>copyEntryToDeck(source,entryKey(source.cards[0]),target,1,'main'),/500/);assert.equal(JSON.stringify(target),full);
+});
+
+test('private function assignment promotes one label without changing other decks; remove all spans all four zones', () => {
+  const d={id:'a',cards:[entry('Example',1,'main',{tags:['Ramp','Draw']}),entry('Example',2,'sideboard'),entry('Example',3,'command'),entry('Example',4,'maybeboard'),entry('Other',1)]},other=structuredClone(d);
+  assignEntryFunction(d,entryKey(d.cards[0]),'New function');assert.deepEqual(d.cards[0].tags,['New function','Ramp','Draw']);assert.deepEqual(other.cards[0].tags,['Ramp','Draw']);
+  assignEntryFunction(d,entryKey(d.cards[0]),'Draw');assert.deepEqual(d.cards[0].tags,['Draw','New function','Ramp']);
+  const before=JSON.stringify(d);assert.throws(()=>assignEntryFunction(d,entryKey(d.cards[0]),'x'.repeat(81)),/function/);assert.equal(JSON.stringify(d),before);
+  assert.equal(removeCardCopies(d,entryKey(d.cards[0])),10);assert.deepEqual(d.cards.map(e=>e.card.name),['Other']);assert.equal(other.cards.length,5);
 });

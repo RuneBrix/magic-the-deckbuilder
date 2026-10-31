@@ -19,7 +19,7 @@ npm test
 - Create, rename, delete, and switch decks; seven format presets.
 - Search Scryfall using its full syntax plus guided name, Oracle text, type, mana value, mana cost, color identity, and format filters.
 - Curated function tags, related narrower tags, custom tag entry, all/any matching, and a visible composed query. Filter edits update the query; Search applies text, color, and mana changes. Tag, type, sort, and legal-only changes search immediately.
-- Full card images and details, adding/removing copies, explicit main/sideboard/command zones, and personal role tags.
+- Full card images and details, adding/removing copies, four visual/text deck views, compact card menus, explicit main/sideboard/command/Maybeboard zones, and personal role tags.
 - Quantity-weighted mana curve, average nonland mana value, types, colors, and custom role counts.
 - Zone-aware Modern construction checks for main/sideboard size, combined copy limits, exceptions and stored legality. Checks distinguishes failed rules, missing data and manual review. Commander remains partial; refresh card data before use. See [coverage and sources](docs/DECK_ZONES.md).
 - Plain-text decklist import/export and JSON workspace backup/restore. Imports are atomic: unresolved cards leave the deck unchanged.

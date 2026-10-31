@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck views, card actions and Maybeboard — 2026-10-31
+
+- Added four visual/text deck views with horizontal visual stacks as default, shared grouping/filtering/sorting and responsive quantity/menu controls ([#41](https://github.com/RuneBrix/magic-the-deckbuilder/issues/41)).
+- Added compact card menus for details, private function assignment/creation, zone moves, name copying, explicit copying to another deck and confirmed removal across all zones ([#43](https://github.com/RuneBrix/magic-the-deckbuilder/issues/43)).
+- Added persistent Maybeboard, excluded from playing totals, statistics, construction checks and brackets by user decision. Moves, duplication, JSON backups and sectioned text preserve it; text still omits roles/printing/bracket metadata ([#44](https://github.com/RuneBrix/magic-the-deckbuilder/issues/44)).
+
 ## Deck controls and left preview — 2026-10-31
 
 - Added live deck text filtering, Type/Function/No grouping labels and Sort by modes for stored-printing USD price, power and toughness. Missing/nonnumeric values sort last; existing name, mana value and quantity sorts remain ([#40](https://github.com/RuneBrix/magic-the-deckbuilder/issues/40)).
