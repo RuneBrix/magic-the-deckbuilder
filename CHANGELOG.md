@@ -2,7 +2,7 @@
 
 ## Home and exploration simplification — 2026-10-31
 
-- My decks opens on startup/reload and from the Arcana logo; Explore cards retains its search state during session navigation ([#37](https://github.com/RuneBrix/magic-the-deckbuilder/issues/37)).
+- My decks is first in the top navigation, followed by Explore cards and Settings. It opens on startup/reload and from the Arcana logo; Explore cards retains its search state during session navigation ([#37](https://github.com/RuneBrix/magic-the-deckbuilder/issues/37)).
 - Removed candidate saving, overview/navigation and optional pair comparison at user request. Reversible search broadening, details, printing selection and deck additions remain ([#47](https://github.com/RuneBrix/magic-the-deckbuilder/issues/47)). No deck-storage migration.
 
 Record completed user-facing changes here. Future work belongs in [GitHub issues and the roadmap](docs/ROADMAP.md).
