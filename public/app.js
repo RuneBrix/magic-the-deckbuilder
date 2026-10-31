@@ -39,7 +39,8 @@ let filtersOpen = false, tagsOpen = false;
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
 let browsedTag = '', tagLimit = 30, allTags = false;
 let broadeningOpen = false, broadening = null, resultContext = null;
-let editorOptions = { group: 'type', type: '', role: '', order: 'name' };
+let editorOptions = { group: 'type', search: '', order: 'name' };
+let previewKey = '', previewDeck = '';
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
 let detail = null;
@@ -152,16 +153,15 @@ function identitySummary(d, compact=false) {
 function openDeck(id) {
   if(!decks.some(d=>d.id===id))return;
   const changed=active!==id;active=id;view='deck';deckTab='cards';
-  if(changed)editorOptions={group:'type',type:'',role:'',order:'name'};
+  if(changed){editorOptions={group:'type',search:'',order:'name'};previewKey='';}
   render();$('#deck-title')?.focus();
 
 }
 function deckWorkspace(d) {
   if(!d)return `<div class="library"><h1>No deck selected</h1><button class="secondary" data-view="decks">Back to My decks</button></div>`;
-  const s=stats(d), report=legalityReport(d), roles=[...new Set(d.cards.flatMap(e=>e.tags))].sort();
-  const types=[...new Set(d.cards.flatMap(e=>e.card.type_line.split(' — ')[0].split(' ')))].sort();
+  const s=stats(d), report=legalityReport(d);
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('group','Group by',[['type','Card type'],['role','Primary function'],['none','No grouping']])}${select('order','Order by',[['name','Name'],['mana','Mana value'],['quantity','Quantity (most first)']])}${select('type','Filter card type',[['','All types'],...types.map(t=>[t,t])])}${select('role','Filter any assigned role',[['','All roles'],...roles.map(t=>[t,t])])}<button class="text-button" data-action="clear-deck-filters">Clear filters</button></div><p class="hint role-help">Primary function is the first personal role tag. Filtering matches every assigned role. Inspect a card to edit its ordered role tags.</p>${deckList(d,true)}`}</div></div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
 }
 function bracketControl(d) {
   if(d.format!=='commander')return '';
@@ -181,11 +181,27 @@ function checksPanel(d, report) {
   return `<div class="checks"><h3 class="check-summary check-${status}">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3><p>${d.format === 'modern' ? 'Modern: main deck 60+, sideboard up to 15, combined copy limits and stored card legality.' : 'Partial format coverage; review the notices below.'}</p>${freshnessNotice(d)}${bracketPanel(d)}${section('Failed checks',report.failed,'failure','close')}${section('Data unavailable',report.unavailable,'warning','book')}${section('Manual review',report.manual,'info','book')}<p class="hint">Passing supported checks is not tournament certification. Companions, special construction text and formats outside the selected Modern rule family may require manual review. Details name affected cards and zones where available.</p></div>`;
 }
 
+function previewMarkup(d) {
+  const entry=deckEntries(d,editorOptions).find(e=>entryKey(e)===previewKey);
+  if(!entry)return '<p class="hint">Point to a card or focus its name to preview.</p>';
+  const image=safeUrl(imageFor(entry.card),true);
+  return `<figure>${image?`<img src="${esc(image)}" alt="${esc(entry.card.name)}">`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}</figcaption></figure>`;
+}
+function deckCards(d) {
+  if(previewDeck!==d.id || !deckEntries(d,editorOptions).some(e=>entryKey(e)===previewKey)){previewKey='';previewDeck=d.id;}
+  return `<div class="deck-card-area" id="editor-card-area"><aside class="deck-hover-preview" aria-label="Card preview"><div id="deck-card-preview">${previewMarkup(d)}</div></aside><div class="deck-rows">${deckList(d,true)}</div></div>`;
+}
+function previewEntry(key) {
+  const d=current();if(view!=='deck' || deckTab!=='cards' || !d || previewKey===key)return;
+  if(!deckEntries(d,editorOptions).some(e=>entryKey(e)===key))return;
+  previewDeck=d.id;previewKey=key;$('#deck-card-preview').innerHTML=previewMarkup(d);
+  for(const row of document.querySelectorAll('[data-preview-entry]'))row.classList.toggle('is-previewed',row.dataset.previewEntry===key);
+}
 function deckList(d, full=false) {
   return `<div class="zone-counts" aria-label="Deck zone counts">${Object.entries(ZONES).map(([z,label])=>`<span>${label}: ${zoneCount(d,z)}</span>`).join('')}</div>` + Object.entries(ZONES).map(([zone,label]) => {
     const entries = (full?deckEntries(d,editorOptions):d.cards).filter(e=>zoneFor(e)===zone), groups=new Map();
     for(const e of entries){const group=full?(editorOptions.group==='role'?primaryRole(e):editorOptions.group==='type'?category(e.card):''):'';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(e);}
-    return `<section class="deck-zone"><h3>${label} · ${zoneCount(d,zone)}${full&& (editorOptions.type||editorOptions.role)?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3>${[...groups].map(([group,items])=>`${group?`<h4>${esc(group)}</h4>`:''}${items.map(e=>`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button>${full&&safeUrl(imageFor(e.card),true)?`<span class="row-preview" aria-hidden="true"><img src="${esc(safeUrl(imageFor(e.card),true))}" alt="" loading="lazy"></span>`:''}</span>${full?`<span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span><label class="row-zone"><span class="sr-only">Zone for ${esc(e.card.name)} in ${label}</span><select data-move-entry="${esc(entryKey(e))}">${Object.entries(ZONES).map(([z,l])=>`<option value="${z}" ${zone===z?'selected':''}>${l}</option>`).join('')}</select></label>`:''}<div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}`).join('') || `<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</section>`;
+    return `<section class="deck-zone"><h3>${label} · ${zoneCount(d,zone)}${full&& editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3>${[...groups].map(([group,items])=>`${group?`<h4>${esc(group)}</h4>`:''}${items.map(e=>`<div class="deck-row${full&&entryKey(e)===previewKey?' is-previewed':''}" ${full?`data-preview-entry="${esc(entryKey(e))}"`: ''}><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span>${full?`<span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span><label class="row-zone"><span class="sr-only">Zone for ${esc(e.card.name)} in ${label}</span><select data-move-entry="${esc(entryKey(e))}">${Object.entries(ZONES).map(([z,l])=>`<option value="${z}" ${zone===z?'selected':''}>${l}</option>`).join('')}</select></label>`:''}<div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}`).join('') || `<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</section>`;
   }).join('');
 }
 function curve(s) { const max=Math.max(1,...s.curve); return `<div class="curve" role="img" aria-label="Mana curve: ${s.curve.map((n,i)=>`${i===7?'7+':i} mana: ${n}`).join(', ')}">${s.curve.map((n,i)=>`<div class="curve-column"><span>${n || ''}</span><div style="height:${n ? Math.max(4,n/max*54) : 2}px" class="${n?'filled':''}"></div><small>${i===7?'7+':i}</small></div>`).join('')}</div>`; }
@@ -291,7 +307,8 @@ function bind() {
   $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
   bindTrackerResize();
   $('#assigned-bracket')?.addEventListener('change',e=>{const d=current();if(!d || d.format!=='commander')return;const value=Number(e.target.value);if(e.target.value && !Object.hasOwn(BRACKETS,value))return;if(e.target.value)d.bracket=value;else delete d.bracket;d.updated=new Date().toISOString();save();render();$('#assigned-bracket')?.focus();});
-  for(const key of ['group','order','type','role'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
+  for(const key of ['group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
+  $('#editor-search')?.addEventListener('input',e=>{editorOptions.search=e.target.value;const d=current();if(view==='deck' && d)$('#editor-card-area').outerHTML=deckCards(d);});
   $('#broadening-tools')?.addEventListener('toggle',e=>{broadeningOpen=e.target.open;});
   $('#search-filters')?.addEventListener('toggle',e=>{filtersOpen=e.target.open;});
   $('#function-tags')?.addEventListener('toggle',e=>{tagsOpen=e.target.open;});
@@ -313,6 +330,8 @@ $('#app').addEventListener('keydown',e=>{
     buttons[next]?.focus();
   }
 });
+$('#app').addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
+$('#app').addEventListener('focusin',e=>{const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
 $('#app').addEventListener('change',e=>{
   const key=e.target.dataset?.moveEntry;if(!key)return;
   try{changeDeck(d=>moveEntry(d,key,e.target.value));toast('All copies moved; roles preserved');}catch(error){toast(error.message);render();}
@@ -334,7 +353,7 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.zoneMinus || button.dataset.zonePlus){const key=button.dataset.zoneMinus || button.dataset.zonePlus;changeDeck(d=>{const e=d.cards.find(x=>entryKey(x)===key);if(!e)return;if(button.dataset.zonePlus){if(e.qty<500)e.qty++;}else if(--e.qty===0)d.cards=d.cards.filter(x=>x!==e);});return;}
   const action=button.dataset.action;
   if(action==='bracket-guidance'){e.preventDefault();deckTab='checks';render();const section=$('#bracket-discussion');section?.scrollIntoView({block:'start'});section?.focus({preventScroll:true});return;}
-  if(action==='clear-deck-filters'){editorOptions.type='';editorOptions.role='';render();}
+  if(action==='clear-deck-filters'){editorOptions.search='';render();}
   if(action==='toggle-tracker'){tracker.visible=!tracker.visible;saveTracker();render();$('#toggle-tracker')?.focus();}
   if(action==='find-cards'){view='explore';trackDeck(active);$('#raw')?.focus();}
   if(action==='jump-deck'){$('.deck-panel')?.scrollIntoView({behavior:'auto'});$('#tracker-heading')?.focus();}

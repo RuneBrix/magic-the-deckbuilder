@@ -35,3 +35,6 @@ See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the de
 
 - [#38: Compact deck listings and commander artwork](https://github.com/RuneBrix/magic-the-deckbuilder/issues/38) — implemented; artwork/title opening, compact identity/bracket display and management disclosure.
 - [#39: Compact full-width editor header](https://github.com/RuneBrix/magic-the-deckbuilder/issues/39) — implemented; shared management disclosure and focused bracket-guidance destination.
+
+- [#40: Deck grouping, sorting and text filtering](https://github.com/RuneBrix/magic-the-deckbuilder/issues/40) — implemented for the current editor; new layouts remain #41.
+- [#42: Left, card-aligned hover/focus previews](https://github.com/RuneBrix/magic-the-deckbuilder/issues/42) — implemented with a sticky desktop rail and narrow-screen details access.

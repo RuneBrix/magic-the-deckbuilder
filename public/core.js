@@ -96,9 +96,25 @@ export const isLand = card => /\bLand\b/.test(card.type_line);
 export const category = card => ['Land', 'Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Battle'].find(t => card.type_line?.includes(t)) || 'Other';
 // The first personal role is primary; keeping the ordered tags preserves legacy backups.
 export const primaryRole = entry => entry.tags[0] || 'Unassigned';
-export function deckEntries(deck, { type = '', role = '', order = 'name' } = {}) {
-  return deck.cards.filter(e => (!type || e.card.type_line.includes(type)) && (!role || e.tags.includes(role)))
-    .sort((a, b) => (order === 'mana' ? a.card.cmc - b.card.cmc : order === 'quantity' ? b.qty - a.qty : 0) || a.card.name.localeCompare(b.card.name));
+export function deckEntries(deck, { type = '', role = '', search = '', order = 'name' } = {}) {
+  const terms=search.trim().toLocaleLowerCase('en').split(/\s+/).filter(Boolean);
+  const mode=order.replace(/-desc$/,''), descending=order.endsWith('-desc') || mode==='quantity';
+  const numeric=value=>typeof value==='number' && Number.isFinite(value)?value:typeof value==='string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()) && Number.isFinite(Number(value))?Number(value):null;
+  const value=entry=>{
+    const c=entry.card;
+    if(mode==='price'){const price=numeric(c.prices?.usd);return price!==null && price>=0?price:null;}
+    if(mode==='power' || mode==='toughness')return numeric(c[mode] ?? c.card_faces?.[0]?.[mode]);
+    return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
+  };
+  return deck.cards.filter(e=>{
+    const text=[e.card.name,e.card.type_line,category(e.card),primaryRole(e),...e.tags].join(' ').toLocaleLowerCase('en');
+    return (!type || e.card.type_line.includes(type)) && (!role || e.tags.includes(role)) && terms.every(term=>text.includes(term));
+  }).sort((a,b)=>{
+    const av=value(a),bv=value(b);
+    // Missing values always sort last, including in descending order.
+    const compared=av===null?(bv===null?0:1):bv===null?-1:(av-bv)*(descending?-1:1);
+    return compared || a.card.name.localeCompare(b.card.name,'en') || entryKey(a).localeCompare(entryKey(b),'en') || a.card.id.localeCompare(b.card.id,'en');
+  });
 }
 export function deckIdentity(deck) {
   const entries = deck.cards.filter(e => zoneFor(e) === (deck.format === 'commander' ? 'command' : 'main'));

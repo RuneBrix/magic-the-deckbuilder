@@ -205,9 +205,9 @@ test('top navigation opens a full deck destination and retains the explorer sear
   assert.match(w.node('#app').innerHTML,/data-view="decks" class="nav-item selected" aria-current="location"/);
   assert.doesNotMatch(w.node('#app').innerHTML,/class="deck-panel"/);
   assert.match(w.node('#app').innerHTML,/Color identity: Green/);
-  w.node('#editor-role').change({target:{value:'Ramp'}});
-  assert.match(w.node('#app').innerHTML,/Ramp spell/);
-  assert.doesNotMatch(w.node('#app').innerHTML,/data-inspect="Leader"/);
+  w.node('#editor-search').input({target:{value:'Ramp'}});
+  assert.match(w.node('#editor-card-area').outerHTML,/Ramp spell/);
+  assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
   await click({tab:'checks'});assert.match(w.node('#app').innerHTML,/Manual review/);
   await click({tab:'stats'});assert.match(w.node('#app').innerHTML,/Mana curve/);
   await click({view:'explore'});assert.equal(vm.runInContext('filters.query',w.context),'draw');
@@ -867,4 +867,43 @@ test('menu actions target their named deck and close before a dialog; cancel del
   await click('duplicate');assert.equal(vm.runInContext('decks[2].name',w.context),'Other (copy)');
   assert.equal(vm.runInContext('decks[0].name',w.context),'Garden');
   assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
+});
+
+
+test('deck controls compose live text filtering, grouping and sorting without replacing the input or writing deck data', async () => {
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
+  const shell=w.node('#app').innerHTML,field=w.node('#editor-search'),before=vm.runInContext('JSON.stringify(decks)',w.context);
+  assert.match(shell,/Group by/);assert.match(shell,/>Type<\/option>/);assert.match(shell,/>Function<\/option>/);
+  assert.match(shell,/Sort by/);assert.match(shell,/Price USD \(high first\)/);assert.match(shell,/Power \(low first\)/);assert.match(shell,/Toughness \(high first\)/);
+  assert.doesNotMatch(shell,/Order by|editor-type|editor-role|role-help/);
+  field.input({target:{value:'SORCERY ramp'}});
+  assert.equal(w.node('#app').innerHTML,shell);assert.equal(w.node('#editor-search'),field);
+  assert.match(w.node('#editor-card-area').outerHTML,/Ramp spell/);assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
+  w.node('#editor-group').change({target:{value:'role'}});w.node('#editor-order').change({target:{value:'price-desc'}});
+  assert.match(w.node('#app').innerHTML,/<h4>Removal<\/h4>/);assert.match(w.node('#app').innerHTML,/2 shown/);
+  field.input({target:{value:'not in this deck'}});assert.match(w.node('#editor-card-area').outerHTML,/No cards match these filters/);
+  await w.node('#app').click({target:{closest:()=>({dataset:{action:'clear-deck-filters'}})}});
+  assert.equal(vm.runInContext('editorOptions.search',w.context),'');assert.equal(vm.runInContext('editorOptions.order',w.context),'price-desc');
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+});
+
+test('left preview follows pointer and focus by zone, survives rerender and clears when filtered out without mutating cards', () => {
+  const d=editorDeck();d.cards[1].card.image_uris={normal:'https://cards.scryfall.io/normal/ramp.jpg'};
+  d.cards.push({...structuredClone(d.cards[1]),zone:'sideboard',qty:1});
+  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor')",w.context);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context),key=core.entryKey(d.cards[2]);
+  assert.match(w.node('#app').innerHTML,/class="deck-hover-preview"/);assert.doesNotMatch(w.node('#app').innerHTML,/row-preview/);
+  const row={dataset:{previewEntry:key}};
+  w.node('#app').pointerover({pointerType:'touch',target:{closest:()=>row}});assert.equal(vm.runInContext('previewKey',w.context),'');
+  w.node('#app').pointerover({pointerType:'mouse',target:{closest:()=>row}});
+  assert.match(w.node('#deck-card-preview').innerHTML,/normal\/ramp.jpg/);assert.match(w.node('#deck-card-preview').innerHTML,/Ramp spell · Sideboard/);
+  vm.runInContext('render()',w.context);assert.match(w.node('#app').innerHTML,/deck-row is-previewed/);
+  const leader={dataset:{previewEntry:core.entryKey(d.cards[0])}};
+  w.node('#app').focusin({target:{closest:()=>leader}});assert.match(w.node('#deck-card-preview').innerHTML,/Artwork unavailable/);assert.match(w.node('#deck-card-preview').innerHTML,/Leader · Command zone/);
+  w.node('#editor-search').input({target:{value:'Ramp'}});assert.equal(vm.runInContext('previewKey',w.context),'');
+  assert.match(w.node('#editor-card-area').outerHTML,/Point to a card or focus its name/);
+  vm.runInContext("previewEntry('missing')",w.context);assert.equal(vm.runInContext('previewKey',w.context),'');
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+  vm.runInContext("editorOptions.search='';previewEntry(entryKey(decks[0].cards[1]));decks.push({...structuredClone(decks[0]),id:'restored'});active='restored';render()",w.context);
+  assert.equal(vm.runInContext('previewKey',w.context),''); // Same card identity in a different deck must not inherit the old selection.
 });

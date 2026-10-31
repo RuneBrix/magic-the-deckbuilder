@@ -613,7 +613,6 @@ dialog h2{font-size:28px}
 .editor-controls{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
 .editor-controls>label{flex:1;min-width:150px}
 .editor-controls>button{min-height:40px}
-.role-help{margin:16px 0 28px;max-width:75ch}
 .deck-workspace .deck-row{display:grid;grid-template-columns:32px minmax(0,1fr) 150px 155px 78px;gap:12px;min-height:52px;border-bottom:1px solid var(--line)}
 .deck-workspace .deck-card-name{font-size:14px;white-space:normal;overflow-wrap:anywhere;text-overflow:clip;line-height:1.5}
 .deck-workspace .row-mana{display:flex;flex-wrap:wrap}
@@ -623,9 +622,6 @@ dialog h2{font-size:28px}
 .deck-workspace .deck-zone>h3{font-size:16px}
 .deck-workspace h4{font-size:12px;font-weight:600;color:var(--muted);margin:24px 0 8px}
 .row-zone select{margin:0;font-size:12px;padding:8px;min-height:36px}
-.row-preview{display:none;position:fixed;right:24px;top:100px;width:min(290px,36vw);z-index:6;pointer-events:none;filter:drop-shadow(0 10px 20px #0005)}
-.row-preview img{display:block;width:100%;height:auto;max-height:75vh;object-fit:contain;border-radius:12px}
-@media(hover:hover) and (min-width:961px){.deck-name-wrap:hover .row-preview,.deck-name-wrap:focus-within .row-preview{display:block}}
 .identity-summary{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:12px;font-size:12px}
 .identity-summary>span:last-child:not(.mana){color:var(--muted);margin-left:4px}
 .search-label{display:block;margin-bottom:8px;color:var(--ink);font-weight:600}
@@ -783,3 +779,16 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .deck-menu-actions .danger{color:var(--danger);border-top:1px solid var(--line);margin-top:4px}
 .library-deck-body>.deck-menu{position:absolute;right:12px;top:12px}
 @media(max-width:600px){.deck-title-row{flex-wrap:wrap;gap:12px}.deck-title-row h1{flex-basis:100%;font-size:30px}.deck-title-row .workspace-actions{width:100%;justify-content:space-between}.deck-editor-meta{gap:8px 14px}.bracket-tools{width:100%;gap:4px 12px}.bracket-control{flex-wrap:wrap}.library{padding:24px 16px}.deck-editor-header{margin-bottom:12px}}
+
+/* Deck filtering/sorting and non-overlapping left preview (#40 / #42). */
+.editor-controls .deck-text-filter{flex:2;min-width:220px}
+.editor-controls select{text-transform:none}
+.deck-card-area{margin-top:16px;min-width:0}
+.deck-rows{min-width:0}
+.deck-hover-preview{display:none}
+.deck-hover-preview figure{margin:0}
+.deck-hover-preview img{display:block;width:100%;height:auto;max-height:calc(100dvh - 110px);object-fit:contain;border-radius:9px}
+.deck-hover-preview figcaption{margin-top:10px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;color:var(--muted)}
+.deck-row.is-previewed,.deck-workspace .deck-row:hover,.deck-workspace .deck-row:focus-within{background:var(--soft)}
+@media(min-width:1100px){.deck-card-area{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;align-items:start}.deck-hover-preview{display:block;position:sticky;top:20px;align-self:start;padding-top:12px}.deck-hover-preview .hint{line-height:1.6;max-width:24ch}.deck-hover-preview img{max-height:calc(100dvh - 122px)}}
+@media(max-width:600px){.editor-controls .deck-text-filter{min-width:100%;flex-basis:100%}.editor-controls>button{min-height:36px}}
