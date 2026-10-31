@@ -32,3 +32,6 @@ Acceptance criteria and current progress are maintained directly in GitHub. This
 - [#29: Manual Commander brackets and explainable discussion guidance](https://github.com/RuneBrix/magic-the-deckbuilder/issues/29)
 
 See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the development workflow](DEVELOPMENT.md).
+
+- [#38: Compact deck listings and commander artwork](https://github.com/RuneBrix/magic-the-deckbuilder/issues/38) — implemented; artwork/title opening, compact identity/bracket display and management disclosure.
+- [#39: Compact full-width editor header](https://github.com/RuneBrix/magic-the-deckbuilder/issues/39) — implemented; shared management disclosure and focused bracket-guidance destination.

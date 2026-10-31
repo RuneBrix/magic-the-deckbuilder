@@ -4,7 +4,7 @@
 
 The user requested a solution on 2026-10-29. This implementation supports manual assignment and bounded, explainable discussion guidance. It does not compute deck power, certify a bracket, automatically assess combos, or extend Commander construction-rule automation (#13/#14).
 
-A player assigns any of the five brackets, or leaves it unassigned, in the dedicated Commander workspace. The library and Checks display that choice explicitly as player-assigned. Recomputing guidance never replaces the choice. Changing to a non-Commander format hides the control but retains the metadata if the deck later returns to Commander.
+A player assigns any of the five brackets, or leaves it unassigned, in the dedicated Commander workspace. The compact library displays only the assigned bracket or No bracket assigned (#38). The editor selector is labeled Commander bracket; its Bracket discussion guidance link opens Checks and focuses the discussion (#39). Checks explicitly labels the choice as player-assigned and retains all source/data-quality caveats. Recomputing guidance never replaces the choice. Changing to a non-Commander format hides the control but retains the metadata if the deck later returns to Commander.
 
 Checks separately suggests a **discussion range under standard Game Changer limits**. Recognized copies in main plus command zone are counted; sideboard cards are excluded. Counts use actual quantities and report the named cards and zones, so duplicate construction errors are not silently collapsed. One to three recognized copies produces a 3–5 discussion range; four or more produces 4–5. Zero matches does not select Bracket 1 or 2, because intent and play patterns can place a deck elsewhere. Counts cannot distinguish Optimized from cEDH.
 

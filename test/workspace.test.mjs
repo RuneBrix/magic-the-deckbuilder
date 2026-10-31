@@ -13,14 +13,14 @@ function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, 
   const node = selector => {
     if (!nodes.has(selector)) nodes.set(selector, {
       innerHTML: '', content: '', addEventListener(type, fn) { this[type] = fn; },
-      contains() { return false; }, querySelector: node,
+      contains() { return false; }, querySelector: node, scrollIntoView() {},
       setAttribute() {}, showModal() {}, focus() {}, close() {},
       classList: { add() {}, remove() {}, toggle() {} }, style: { setProperty() {} },
     });
     return nodes.get(selector);
   };
   const media = { matches: dark, addEventListener(type, fn) { this[type] = fn; } };
-  const document = { querySelector: node, documentElement: { dataset: {} }, activeElement: null };
+  const document = { querySelector: node, querySelectorAll:()=>[], scrollIntoView() {}, documentElement: { dataset: {} }, activeElement: null };
   const context = vm.createContext({ ...core, document, addEventListener:(type,fn)=>{events[type]=fn;}, matchMedia: () => media,
     localStorage: {
       getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.palette.v1' ? savedPalette : key === 'arcana.theme.v1' ? savedTheme : key === 'arcana.explorer.v1' ? savedTracker : savedDecks; },
@@ -204,7 +204,7 @@ test('top navigation opens a full deck destination and retains the explorer sear
   assert.match(w.node('#app').innerHTML,/class="deck-workspace"/);
   assert.match(w.node('#app').innerHTML,/data-view="decks" class="nav-item selected" aria-current="location"/);
   assert.doesNotMatch(w.node('#app').innerHTML,/class="deck-panel"/);
-  assert.match(w.node('#app').innerHTML,/Command-zone identity/);
+  assert.match(w.node('#app').innerHTML,/Color identity: Green/);
   w.node('#editor-role').change({target:{value:'Ramp'}});
   assert.match(w.node('#app').innerHTML,/Ramp spell/);
   assert.doesNotMatch(w.node('#app').innerHTML,/data-inspect="Leader"/);
@@ -729,7 +729,7 @@ test('manual bracket assignment is explicit, preserved by duplication/backups an
   assert.match(w.node('#app').innerHTML,/Suggested discussion range: Brackets 3–5/);
   assert.match(w.node('#app').innerHTML,/below this standard count-based range/);
   assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
-  vm.runInContext("view='decks';render()",w.context);assert.match(w.node('#app').innerHTML,/Player assigned: Bracket 2/);
+  vm.runInContext("view='decks';render()",w.context);assert.match(w.node('#app').innerHTML,/Bracket 2 · Core/);assert.doesNotMatch(w.node('#app').innerHTML,/Player assigned:/);
   vm.runInContext("view='deck';render()",w.context);w.node('#assigned-bracket').change({target:{value:''}});
   assert.equal(vm.runInContext('decks[0].bracket',w.context),undefined);
 });
@@ -799,4 +799,72 @@ test('results, details and help expose ordinary card actions without candidate o
   await w.node('#app').click({target:{closest:()=>({dataset:{action:'help'}})}});
   assert.doesNotMatch(w.node('#dialog').innerHTML,/candidate|compare/i);
   assert.equal(w.writes.length,0);
+});
+
+
+test('library prioritizes designated commander art, keeps legacy fallback and opens by artwork/title without statistics', async () => {
+  const d=editorDeck();d.bracket=3;d.cards.reverse();
+  d.cards[0].card.image_uris={normal:'https://cards.scryfall.io/normal/main.jpg',art_crop:'https://cards.scryfall.io/art_crop/main.jpg'};
+  d.cards[1].card.image_uris={normal:'https://cards.scryfall.io/normal/leader.jpg',art_crop:'https://cards.scryfall.io/art_crop/leader.jpg'};
+  const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});
+  const before=vm.runInContext('JSON.stringify(decks)',w.context),html=w.node('#app').innerHTML;
+  assert.match(html,/src="https:\/\/cards.scryfall.io\/art_crop\/leader.jpg"/);
+  assert.doesNotMatch(html,/main.jpg|average MV|Player assigned|Command-zone identity|Open deck/);
+  assert.match(html,/Bracket 3 · Upgraded/);
+  assert.match(html,/Color identity: Green/);
+  assert.equal((html.match(/data-deck="editor"/g)||[]).length,2);
+  assert.match(html,/Deck actions for Garden/);
+  for(const action of ['rename','import','export','duplicate','delete'])assert.match(html,new RegExp('data-manage="'+action+'" data-target="editor"'));
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+  vm.runInContext('delete decks[0].cards[1].card.image_uris.art_crop;render()',w.context);
+  assert.match(w.node('#app').innerHTML,/deck-cover cover-portrait/);
+  assert.match(w.node('#app').innerHTML,/normal\/leader.jpg/);
+  vm.runInContext("decks[0].cards[1].card.image_uris.art_crop='https://untrusted.example/art.jpg';render()",w.context);
+  assert.doesNotMatch(w.node('#app').innerHTML,/untrusted.example/);
+  await w.node('#app').click({target:{closest:()=>({dataset:{deck:'editor'}})}});
+  assert.equal(vm.runInContext('view',w.context),'deck');
+});
+
+test('compact editor exposes named management, format and identity; guidance opens and focuses Checks without changing decks', async () => {
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
+  let html=w.node('#app').innerHTML;
+  assert.match(html,/class="deck-editor-header"/);assert.match(html,/Commander<\/span>/);
+  assert.match(html,/Color identity: Green/);
+  assert.doesNotMatch(html,/Command-zone identity|Your choice; never assigned|deck-management|data-action="rename"/);
+  assert.match(html,/Commander bracket<select/);assert.match(html,/href="#bracket-discussion" data-action="bracket-guidance"/);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);let scrolled=0,focused=0,prevented=false;
+  w.node('#bracket-discussion').scrollIntoView=()=>scrolled++;
+  w.node('#bracket-discussion').focus=()=>focused++;
+  await w.node('#app').click({preventDefault(){prevented=true;},target:{closest:()=>({dataset:{action:'bracket-guidance'}})}});
+  assert.equal(vm.runInContext('deckTab',w.context),'checks');assert.equal(scrolled,1);assert.equal(focused,1);assert.equal(prevented,true);
+  html=w.node('#app').innerHTML;assert.match(html,/id="bracket-discussion" tabindex="-1"/);
+  assert.match(html,/not a power rating or bracket certification/);assert.match(html,/Sources and update limits/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+});
+
+test('deck action menus support arrow navigation, Escape return and outside dismissal', () => {
+  const w=workspace();let focused=-1;
+  const buttons=[0,1,2,3,4].map(i=>({focus(){focused=i;w.document.activeElement=this;}}));
+  const summary={focus(){focused=-1;w.document.activeElement=this;}};
+  const menu={open:false,querySelectorAll:()=>buttons,querySelector:()=>summary,contains:()=>false};
+  const target={closest:()=>menu};
+  const press=key=>w.node('#app').keydown({key,target,preventDefault(){}});
+  press('ArrowDown');assert.equal(menu.open,true);assert.equal(focused,0);
+  press('ArrowUp');assert.equal(focused,4);
+  press('Home');assert.equal(focused,0);press('End');assert.equal(focused,4);
+  press('Escape');assert.equal(menu.open,false);assert.equal(focused,-1);
+  menu.open=true;w.document.querySelectorAll=()=>[menu];w.events.click({target:{}});assert.equal(menu.open,false);
+});
+
+test('menu actions target their named deck and close before a dialog; cancel deletion preserves every deck', async () => {
+  const a=editorDeck(),b={...editorDeck(),id:'other',name:'Other'};
+  const w=workspace({savedDecks:JSON.stringify([a,b]),initialView:null});
+  let returned=false;const menu={open:true,querySelector:()=>({focus(){returned=true;}})};
+  const click=action=>w.node('#app').click({target:{closest:()=>({dataset:{manage:action,target:'other'},closest:()=>menu})}});
+  await click('export');assert.match(w.node('#dialog').innerHTML,/Export Other/);assert.equal(menu.open,false);assert.equal(returned,true);assert.equal(w.writes.length,0);
+  await click('delete');assert.match(w.node('#dialog').innerHTML,/Delete Other/);w.node('#cancel-delete').onclick();
+  assert.equal(vm.runInContext('decks.length',w.context),2);assert.equal(w.writes.length,0);
+  await click('duplicate');assert.equal(vm.runInContext('decks[2].name',w.context),'Other (copy)');
+  assert.equal(vm.runInContext('decks[0].name',w.context),'Garden');
+  assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
 });
