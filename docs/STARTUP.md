@@ -31,3 +31,5 @@ Native wrapping would also require a stable storage origin, a complete backup mi
 ## Verification
 
 Windows Node v24.14.1: launcher --check and the Windows wrapper pass from a path with spaces and a different working directory; missing Node prints recovery guidance and fails. A headless launcher smoke check serves the real app over loopback; an occupied-port test leaves the existing listener intact and never changes origin. Full native suite results are recorded in the PR. Default-browser association and an actual Explorer double-click are not manually verified in this session. macOS Finder/Terminal/Safari and physical touch remain untested; CI's Node tests are not substitutes for those manual checks. This decision closes D08's choice/scoping work, not the separate macOS verification in #5.
+
+Implementation review: [PR #74](https://github.com/RuneBrix/magic-the-deckbuilder/pull/74), stacked on #73.
