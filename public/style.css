@@ -810,7 +810,8 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .entry-art-fallback small{font:12px/1.5 'Public Sans',sans-serif;margin-top:12px}
 .visual-card{--card-width:190px;flex:0 0 var(--card-width);width:var(--card-width);isolation:isolate;border-radius:7px;background:transparent}
 .card-toolbar{position:relative;z-index:1;display:grid;grid-template-columns:24px 1fr 36px;align-items:center;gap:4px;padding:4px 8px;min-height:46px;width:100%;border:1px solid var(--accent);border-bottom:0;border-radius:7px 7px 0 0;background:color-mix(in srgb,var(--accent) 22%,var(--surface));color:var(--ink)}
-.visual-card .card-art{margin-top:-7px;border-radius:0 0 7px 7px}
+.card-toolbar::after{content:'';position:absolute;top:100%;left:-1px;right:-1px;height:7px;box-sizing:border-box;background:inherit;border-inline:1px solid var(--accent);pointer-events:none}
+.visual-card .card-art{position:relative;z-index:2;margin-top:0;border-radius:7px}
 .visual-card .entry-quantity{font-size:13px;font-weight:600;text-align:center;font-variant-numeric:tabular-nums}
 .card-menu-trigger{display:grid;place-items:center;min-width:36px;min-height:36px;padding:0;line-height:1;border:1px solid transparent;border-radius:3px;background:transparent;color:var(--ink)}
 .card-menu-trigger svg,.card-quantity svg{display:block}
@@ -833,7 +834,7 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .visual-vertical .deck-group-list{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px 24px;padding:4px 4px 10px}
 .visual-vertical .deck-group{flex:0 0 190px}
 .visual-vertical .deck-group-items{--stack-open:calc(190px * 680 / 488 - 75px + 8px);display:flex;flex-direction:column}
-.visual-vertical .card-slot:not(:last-child){height:101px}
+.visual-vertical .card-slot:not(:last-child){height:108px}
 .visual-vertical .card-toolbar{min-height:33px;padding:2px 6px;grid-template-columns:24px 1fr 28px}
 .visual-vertical .card-menu-trigger,.visual-vertical .card-quantity button{min-width:28px;min-height:28px}
 .visual-vertical .deck-group-items:not(:has(>.card-slot :focus-visible))>.card-slot:hover~.card-slot,.visual-vertical .card-slot:has(:focus-visible)~.card-slot{transform:translateY(var(--stack-open))}
