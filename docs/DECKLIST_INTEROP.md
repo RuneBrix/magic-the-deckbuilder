@@ -29,3 +29,5 @@ The sample above is a small representative fixture derived from the supplied exp
 ## Verification
 
 1 November 2026: all 106 native Node tests pass on Windows/Node v24.14.1, including unresolved/ambiguous resolution, invalidated/in-flight reviews, overflow rollback and quantity/zone round trips. Live Windows in-app-browser checks cover missing-name feedback without mutation, corrected review, Enter application into all four zones, reload persistence, Escape cancellation/focus return, desktop light and 390px dark layout. Phone page/dialog widths were 390/358px with no horizontal page overflow. Browser version was not exposed/recorded; physical touch and macOS/Safari remain untested. A full real Archidekt list is still needed to verify the user's complete export; #6 remains open for that evidence.
+
+Implementation review: [PR #67](https://github.com/RuneBrix/magic-the-deckbuilder/pull/67).
