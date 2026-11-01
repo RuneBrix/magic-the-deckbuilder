@@ -633,7 +633,7 @@ function inspect(id,entryId) {
   $('#discard-roles').onclick=()=>closeDialog(true);
 }
 
-async function fetchNames(names) {const cards=[],missing=[];for(let i=0;i<names.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x.name));}return {cards,missing};}
+async function fetchCollection(values,key='names') {const cards=[],missing=[];for(let i=0;i<values.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[key]:values.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x[key==='ids'?'id':'name']));}return {cards,missing};}
 function importDialog(target=current()){
   showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste Archidekt text using “1 Card Name” and generic Commander, Mainboard, Sideboard or Maybeboard headings. Main deck and Command zone also work. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><div id="import-preview" aria-live="polite"></div><button class="primary">Review import</button></form>`);
   const form=$('#import-form'), button=form.querySelector('button');
@@ -646,7 +646,7 @@ function importDialog(target=current()){
     if(!review){
       const parsed=parseImport(data.get('list')), version=revision;
       button.textContent='Finding cards…';
-      const {cards}=await fetchNames([...new Set(parsed.map(x=>x.name))]);
+      const {cards}=await fetchCollection([...new Set(parsed.map(x=>x.name))]);
       if(form.isConnected===false||$('#dialog').open===false)return;
       if(version!==revision)throw new Error('The list changed during lookup. Review it again.');
       const result=resolveImport(parsed,cards);
@@ -701,7 +701,7 @@ function restore(){
     }
   };
 }
-function legalitySignature(d) { return [...new Set(d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>cardKey(e.card)+':'+e.card.name))].sort().join('|'); }
+function legalitySignature(d) { return d.format+'|'+[...new Set(d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>e.card.id))].sort().join('|'); }
 function ensureLegality(d) {
   if (!d.cards.some(e=>zoneFor(e)!=='maybeboard')) return;
   const signature=legalitySignature(d), state=legalityStates.get(d.id);
@@ -720,20 +720,28 @@ function refresh(d=current()) {
   if (!d?.cards.some(e=>zoneFor(e)!=='maybeboard')) return Promise.resolve();
   const previous=legalityStates.get(d.id);
   if (previous?.promise) return previous.promise;
-  const entries=d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>({entry:e,card:e.card})), signature=legalitySignature(d);
+  const entries=d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>({entry:e,card:e.card})), signature=legalitySignature(d), format=d.format;
   const state={status:'refreshing',signature,pending:true};
   legalityStates.set(d.id,state);
   const task=legalityQueue.then(async()=>{
     try {
-      const {cards,missing}=await fetchNames([...new Set(entries.map(({card})=>card.name))].sort());
-      const byName=new Map(cards.map(c=>[c.name,c]));
-      const relevant=entries.filter(({entry})=>zoneFor(entry)!=='maybeboard');
-      if(missing.some(name=>relevant.some(({card})=>card.name===name)) || relevant.some(({card})=>{const c=byName.get(card.name);return !c || !c.legalities || typeof c.legalities!=='object' || Array.isArray(c.legalities) || (c.oracle_id && card.oracle_id && c.oracle_id!==card.oracle_id);})) throw new Error('Some card legality data is missing or mismatched. Retry when available.');
+      const {cards}=await fetchCollection([...new Set(entries.map(({card})=>card.id))].sort(),'ids');
       if (!decks.includes(d)) return;
+      const byId=new Map(cards.filter(c=>typeof c?.id==='string').map(c=>[c.id,c]));
+      const relevant=entries.filter(({entry,card})=>d.cards.includes(entry) && entry.card===card && zoneFor(entry)!=='maybeboard');
+      const problems=[];
+      for(const {card} of relevant){
+        const c=byId.get(card.id), label=card.name;
+        if(!c){problems.push(label+': this printing was not returned.');continue;}
+        if((c.oracle_id && card.oracle_id && c.oracle_id!==card.oracle_id) || (c.layout==='reversible_card' && card.oracle_id && c.card_faces?.some(f=>f.oracle_id && f.oracle_id!==card.oracle_id))){problems.push(label+': returned rules identity did not match.');continue;}
+        const status=c.legalities?.[format];
+        if(!['legal','not_legal','banned','restricted'].includes(status) || (status==='restricted' && format!=='vintage'))problems.push(label+': '+format+' legality was unavailable.');
+      }
+      if(problems.length)throw Error(problems.slice(0,6).join(' ')+(problems.length>6?' Plus '+(problems.length-6)+' more.':'')+' Stored data kept. Retry legality refresh.');
       if (d.cards.filter(e=>zoneFor(e)!=='maybeboard').some(e=>!entries.some(({entry,card})=>entry===e && card===e.card))) state.signature='';
       for (const {entry,card} of relevant) {
         // Only patch the surviving original card; quantities, roles, zones and printing stay live.
-        if (d.cards.includes(entry) && entry.card===card) entry.card={...card,legalities:byName.get(card.name).legalities};
+        if (d.cards.includes(entry) && entry.card===card) entry.card={...card,legalities:byId.get(card.id).legalities};
       }
       state.status='fresh';state.time=Date.now();save();
       setTimeout(()=>{if(current()===d)render();},300_000);
@@ -745,5 +753,5 @@ function refresh(d=current()) {
   return task;
 }
 
-async function sample(){if(decks.length>=200){toast('Maximum 200 decks per workspace.');return;}toast('Loading a small example from Scryfall…');try{const names=['Tatyova, Benthic Druid','Sol Ring','Arcane Signet','Cultivate',"Kodama's Reach",'Llanowar Elves','Rampant Growth','Growth Spiral','Beast Within','Counterspell','Eternal Witness','Command Tower','Forest','Island'];const {cards,missing}=await fetchNames(names);if(missing.length)throw new Error('Example cards could not be loaded. Try again.');const d=blankDeck('The garden grows');d.cards=cards.map(card=>({card,qty:card.name==='Forest'?12:card.name==='Island'?10:1,tags:['Cultivate',"Kodama's Reach",'Rampant Growth','Sol Ring','Arcane Signet','Llanowar Elves'].includes(card.name)?['Ramp']:[],zone:card.name==='Tatyova, Benthic Druid'?'command':'main'}));decks.push(d);active=d.id;save();openDeck(d.id);toast('Example loaded — an unfinished Commander deck to build on');}catch(e){toast(e.message);}}
+async function sample(){if(decks.length>=200){toast('Maximum 200 decks per workspace.');return;}toast('Loading a small example from Scryfall…');try{const names=['Tatyova, Benthic Druid','Sol Ring','Arcane Signet','Cultivate',"Kodama's Reach",'Llanowar Elves','Rampant Growth','Growth Spiral','Beast Within','Counterspell','Eternal Witness','Command Tower','Forest','Island'];const {cards,missing}=await fetchCollection(names);if(missing.length)throw new Error('Example cards could not be loaded. Try again.');const d=blankDeck('The garden grows');d.cards=cards.map(card=>({card,qty:card.name==='Forest'?12:card.name==='Island'?10:1,tags:['Cultivate',"Kodama's Reach",'Rampant Growth','Sol Ring','Arcane Signet','Llanowar Elves'].includes(card.name)?['Ramp']:[],zone:card.name==='Tatyova, Benthic Druid'?'command':'main'}));decks.push(d);active=d.id;save();openDeck(d.id);toast('Example loaded — an unfinished Commander deck to build on');}catch(e){toast(e.message);}}
 render();

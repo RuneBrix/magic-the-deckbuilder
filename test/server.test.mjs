@@ -44,3 +44,20 @@ test('printing proxy fixes upstream identity/scope, supports pagination and shar
     const second=await (await fetch(base+'/api/printings?oracle='+oracle+'&page=2')).json();assert.equal(second.data[0].id,'printing-2');assert.equal(second.calls,2);
   }finally{child.kill();}
 });
+
+
+test('collection proxy forwards bounded exact printing ids without name substitution and shares caching',async()=>{
+  const id='00000000-0000-0000-0000-000000000001';
+  const stub=`let calls=0;globalThis.fetch=async(url,options)=>{
+    const body=JSON.parse(options.body);
+    if(new URL(url).pathname!=='/cards/collection'||JSON.stringify(body)!==JSON.stringify({identifiers:[{id:'${id}'}]}))throw Error('Wrong collection identity');
+    calls++;return {ok:true,json:async()=>({data:[{id:'${id}',legalities:{modern:'legal'}}],calls})};
+  };await import('./server.mjs');`;
+  const child=spawn(process.execPath,['--input-type=module','--eval',stub],{cwd:new URL('../',import.meta.url),env:{...process.env,PORT:'0'},stdio:['ignore','pipe','pipe']});
+  try{
+    const [output]=await once(child.stdout,'data',{signal:AbortSignal.timeout(5000)}),base='http://127.0.0.1:'+output.toString().match(/localhost:(\d+)/)[1];
+    const post=body=>fetch(base+'/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    for(const body of [{ids:[]},{ids:['not-a-uuid']},{ids:[id],names:['Forest']},{ids:Array(76).fill(id)},null])assert.equal((await post(body)).status,400);
+    for(let i=0;i<2;i++){const result=await post({ids:[id]});assert.equal(result.status,200);assert.equal((await result.json()).calls,1);}
+  }finally{child.kill();}
+});

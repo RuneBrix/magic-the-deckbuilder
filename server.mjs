@@ -48,9 +48,9 @@ export const server = createServer(async (req, res) => {
       } else if (url.pathname === '/api/collection' && req.method === 'POST') {
         let raw = '';
         for await (const chunk of req) { raw += chunk; if (raw.length > 32_000) throw Object.assign(new Error('Import is too large.'), { status: 413 }); }
-        const { names } = JSON.parse(raw);
-        if (!Array.isArray(names) || !names.length || names.length > 75 || names.some(n => typeof n !== 'string' || n.length > 200)) throw Object.assign(new Error('Send between 1 and 75 card names.'), { status: 400 });
-        data = await scryfall('/cards/collection', { identifiers: names.map(name => ({ name })) });
+        const payload=JSON.parse(raw), key=payload && Object.hasOwn(payload,'ids')?'ids':'names', values=payload?.[key];
+        if ((payload?.names!==undefined && payload?.ids!==undefined) || !Array.isArray(values) || !values.length || values.length>75 || values.some(value=>typeof value!=='string' || (key==='ids'?!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value):!value.trim() || value.length>200))) throw Object.assign(new Error('Send 1–75 card names or printing UUIDs, using exactly one list.'), {status:400});
+        data = await scryfall('/cards/collection', { identifiers: values.map(value => key==='ids'?{id:value}:{name:value}) });
       } else throw Object.assign(new Error('Endpoint not found.'), { status: 404 });
       res.end(JSON.stringify(data));
       return;
