@@ -2,6 +2,8 @@
 
 ## Deck view review refinements — 2026-11-01
 
+- Keep earlier cards fixed during hover reveals: horizontal stacks move only later cards right; vertical stacks move only later cards down. Compact vertical toolbars are 33px high on desktop, and full artwork continues behind the next rounded toolbar with consistent portrait joins. Narrow/touch views wrap full cards and retain larger controls.
+
 - Align horizontal text entries to the same page-width three-column grid as vertical text. Add 8px gaps to sparse horizontal visual groups and an immediate hover/focus fan that pushes following cards right, redistributes overlap and uses reserved opening space without a sideways scroller.
 
 - Horizontal visual cards remain separate until they fill the group, then overlap progressively with card count and available width without sideways scrolling. Hover/focus reveals covered controls. Every vertical toolbar keeps rounded upper corners, vertical visual groups wrap, and text +/− buttons gain the same hover outline.

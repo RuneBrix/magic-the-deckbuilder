@@ -923,6 +923,7 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     assert.deepEqual(headings,['Command zone','Main deck','Sideboard','Maybeboard']);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="deck-card-name" title="Leader"/);
     else assert.match(w.node('#app').innerHTML,/<div class="card-toolbar">[\s\S]*?<\/div><button class="card-art"/);
+    assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,layout.startsWith('visual')?3:0);
     assert.equal((w.node('#app').innerHTML.match(/data-card-menu=/g)||[]).length,3);
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
@@ -941,8 +942,10 @@ test('horizontal stack slots follow visible group entries without changing quant
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor');editorOptions.group='none';render()",w.context);
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,22);
+  assert.match(w.node('#app').innerHTML,/--stack-divisor:19/);
   w.node('#editor-search').input({target:{value:'Stack card'}});
   assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,20);
+  assert.match(w.node('#editor-card-area').outerHTML,/--stack-divisor:18/);
   w.node('#editor-search').input({target:{value:'Stack card 19'}});
   assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,1);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
