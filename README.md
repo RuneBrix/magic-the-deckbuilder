@@ -4,6 +4,8 @@ A dependency-free local web app for building Magic: The Gathering decks alongsid
 
 ## Run
 
+For double-click startup, use **Start Arcana.cmd** on Windows after installing Node 22+. A **Start Arcana.command** script is provided for macOS verification. Keep the terminal open; Ctrl+C stops the server. [Startup, prerequisites and verification limits](docs/STARTUP.md).
+
 ```sh
 npm start
 ```

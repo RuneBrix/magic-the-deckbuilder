@@ -1,5 +1,10 @@
 # Changelog
 
+## Double-click startup — 2026-11-01
+
+- Add Windows and macOS source launchers with a Node 22+ check, server readiness before browser opening, stable loopback origin and manual-opening fallback (#8). Keep the terminal open to own the server; occupied ports never trigger an automatic origin change. Windows wrapper/headless checks pass; macOS and native double-click/browser association remain unverified.
+
+
 ## Portable file status and recovery guidance — 2026-11-01
 
 - Distinguish browser autosave from requested workspace downloads in Settings (#64). Show edits since the last full-workspace file request this session, preserve initiation errors, and explain portable-device transfer, duplicate imports and recovery without claiming a file reached disk.
