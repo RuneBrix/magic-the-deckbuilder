@@ -1,5 +1,10 @@
 # Changelog
 
+## Portable workspace files — 2026-11-01
+
+- Download versioned JSON workspace files and continue opening legacy backups (#63). Preview independent deck copies before adding them; failed storage writes leave the current workspace intact and offer recovery downloads. New files require a compatible Arcana version.
+
+
 ## Archidekt text import review — 2026-11-01
 
 - Accept Mainboard alongside existing zone headings for Archidekt quantity/name text exports (#6). Review resolved names, quantities and zones before applying; unresolved/ambiguous matches block the whole import. Editing a list invalidates its review. Text printing/function limits are stated in the review.

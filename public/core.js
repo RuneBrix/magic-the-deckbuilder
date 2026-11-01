@@ -308,3 +308,15 @@ export function validateBackup(data) {
   }
   return data;
 }
+
+
+export function workspaceFile(decks) {
+  return {format:'arcana-workspace',version:1,exportedAt:new Date().toISOString(),decks:validateBackup(decks)};
+}
+export function readWorkspaceFile(data) {
+  if (Array.isArray(data)) return validateBackup(data);
+  if (!data || data.format!=='arcana-workspace') throw Error('Choose an Arcana workspace JSON file or legacy backup.');
+  if (data.version!==1) throw Error('Unsupported workspace file version. Keep this file and open it with a compatible Arcana version.');
+  if (typeof data.exportedAt!=='string' || !Number.isFinite(Date.parse(data.exportedAt))) throw Error('Invalid workspace export date.');
+  return validateBackup(data.decks);
+}

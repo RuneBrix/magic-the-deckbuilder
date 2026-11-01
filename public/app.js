@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, resolveImport, validateBackup, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, resolveImport, validateBackup, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -63,7 +63,16 @@ function save() {
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 4500); }
 function mana(cost = '') { return [...cost.matchAll(/\{([^}]+)\}/g)].map(m => `<span class="mana mana-${/^[WUBRG]$/.test(m[1]) ? m[1] : 'C'}" title="${esc(m[1])}">${esc(m[1])}</span>`).join(''); }
-function download(name, content, type) { const url = URL.createObjectURL(new Blob([content], { type })); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+function download(name, content, type) { const url = URL.createObjectURL(new Blob([content], { type })); try { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); } }
+function saveWorkspaceCopy(source=decks,name='arcana-workspace.json') {
+  try {
+    const content=JSON.stringify(workspaceFile(source),null,2);
+    if(new Blob([content]).size>15_000_000)throw Error('Workspace file exceeds the 15 MB import limit. Export individual decks instead.');
+    download(name,content,'application/json');
+    toast('JSON download requested. Check your browser downloads and keep a dated copy.');
+    return true;
+  } catch(error) { toast('Could not request a JSON download. '+error.message);return false; }
+}
 function changeNamedDeck(d,fn){if(!decks.includes(d))throw Error('That deck is no longer available.');const result=fn(d);d.updated=new Date().toISOString();save();render();return result;}
 function changeDeck(fn) { const d=current();if(d)return changeNamedDeck(d,fn); }
 
@@ -307,7 +316,7 @@ function deleteDeck(deck) {
 }
 function exportDialog(deck) {
   showDialog(`<h2>Export ${esc(deck.name)}</h2><p>JSON preserves every card, quantity, zone, ordered role tag and player-assigned bracket. Text includes names, quantities and zone headings, but loses roles, printing details and assigned brackets.</p><div class="workspace-actions"><button class="primary" id="export-json">Complete JSON backup</button><button class="secondary" id="export-text">Text decklist</button></div>`);
-  $('#export-json').onclick=()=>download(deck.name+'.json',JSON.stringify([deck],null,2),'application/json');
+  $('#export-json').onclick=()=>saveWorkspaceCopy([deck],deck.name+'.json');
   $('#export-text').onclick=()=>download(deck.name+'.txt',exportDeckText(deck),'text/plain');
 }
 
@@ -444,7 +453,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='import')importDialog();
   if(action==='import-new')importDialog(null);
   if(action==='export'&&current())exportDialog(current());
-  if(action==='backup')download('arcana-decks.json',JSON.stringify(decks,null,2),'application/json');
+  if(action==='backup')saveWorkspaceCopy();
   if(action==='restore')restore();
   if(action==='refresh')refresh();
   if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Match all” narrows your results; “Match any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Starting points and their descriptions are curated. Search names and aliases across the bundled Scryfall Oracle Tags snapshot; use the arrow beside a tag to browse its recorded broader and narrower relationships. The snapshot date is shown because live Tagger can change. Use Enter an existing Scryfall tag for newer or other known tags. This searches existing tags; it does not create tagging data.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Inspect a card to choose its deck zone or assign personal role tags. These role tags power deck statistics and are separate from Scryfall’s tags.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander coverage remains partial; review paired commanders and companions manually.</p>`);
@@ -521,7 +530,7 @@ function settings() {
   showDialog(`<h2>Workspace settings</h2><p>Appearance and backups for this browser.</p><label class="theme-setting">Appearance<select id="theme">${[['system','Use device setting'],['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${theme===v?'selected':''}>${l}</option>`).join('')}</select></label><label class="theme-setting">Dark palette<select id="dark-palette">${DARK_PALETTES.map(([v,l])=>`<option value="${v}" ${palette===v?'selected':''}>${l}</option>`).join('')}</select></label><p class="hint">Used in Dark mode and when the device uses dark appearance.</p><h3 class="settings-heading">Deck backups</h3><p>Decks are saved only in this browser. A JSON backup preserves cards, commanders, and role tags.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Export JSON backup</button><button class="secondary" id="settings-restore">${icon('upload',16)} Restore JSON backup</button></div>`);
   $('#dark-palette').onchange=e=>{palette=e.target.value;applyTheme();try{localStorage.setItem('arcana.palette.v1',palette);}catch{toast('Palette changed for this session. Browser storage is unavailable.');}};
   $('#theme').onchange=e=>{theme=e.target.value;applyTheme();try{localStorage.setItem('arcana.theme.v1',theme);}catch{toast('Appearance changed for this session. Browser storage is unavailable.');}};
-  $('#settings-backup').onclick=()=>download('arcana-decks.json',JSON.stringify(decks,null,2),'application/json');
+  $('#settings-backup').onclick=()=>saveWorkspaceCopy();
   $('#settings-restore').onclick=restore;
 }
 function customTag(){showDialog('<h2>Enter an existing Scryfall tag</h2><p>Search an existing Scryfall function tag, such as mana-rock or reanimate. This does not create public tags. Names and aliases in the snapshot resolve to their canonical tags. Tags outside the snapshot are allowed, but may be unsupported by Scryfall.</p><form id="custom-tag-form"><label>Function tag<input name="tag" required maxlength="80" placeholder="e.g. mana-rock"></label><p id="custom-tag-error" role="alert"></p><button class="primary">Add to search</button></form>');$('#custom-tag-form').onsubmit=e=>{e.preventDefault();readFilters();const value=String(new FormData(e.target).get('tag')).trim().toLowerCase();const t=resolveTag(value)?.id || value.replace(/\s+/g,'-');if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t)){$('#custom-tag-error').textContent='Use a tag name with letters, numbers and single hyphens.';return;}try{const model={...filters,tags:[...new Set([...filters.tags,t])]};const next=replaceCondition(filters,'tags',conditionQuery(model,'tags'));filters=next;$('#dialog').close();runGuidedSearch();}catch(error){$('#custom-tag-error').textContent=error.message;}};}
@@ -642,7 +651,41 @@ function importDialog(target=current()){
     destination.cards=merged;destination.updated=new Date().toISOString();if(!target)decks.push(destination);save();$('#dialog').close();openDeck(destination.id);toast(`${additions.reduce((n,e)=>n+e.qty,0)} cards imported`);
   }catch(error){form.querySelector('#import-error').textContent=error.message;}finally{pending=false;button.disabled=false;button.textContent=review?'Import reviewed cards':'Review import';if(review&&form.isConnected!==false)button.focus();}};
 }
-function restore(){showDialog('<h2>Restore your workspace</h2><p>Choose an Arcana JSON backup. Restored decks are added alongside existing decks.</p><input id="backup-file" type="file" accept="application/json,.json" aria-label="Deck backup file"><p id="restore-error" role="alert"></p>');$('#backup-file').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>15_000_000)throw new Error('Backup is too large (maximum 15 MB).');const imported=validateBackup(JSON.parse(await file.text()));if(decks.length+imported.length>200)throw new Error('Maximum 200 decks per workspace.');for(const d of imported){for(const e of d.cards)e.zone=zoneFor(e);d.id=crypto.randomUUID();decks.push(d);}storageError='';active=imported[0]?.id||active;save();$('#dialog').close();render();toast('Backup restored');}catch(error){$('#restore-error').textContent=error.message;}};}
+function restore(){
+  showDialog('<h2>Open a workspace file</h2><p>Choose an Arcana JSON file or legacy backup. Review before adding independent deck copies; existing decks are never replaced. Older files do not include your later edits.</p><input id="backup-file" type="file" accept="application/json,.json" aria-label="Workspace JSON file"><p id="restore-error" role="alert"></p><div id="restore-preview" aria-live="polite"></div><div class="settings-actions"><button id="restore-apply" class="primary" disabled>Add reviewed decks</button><button id="restore-current" class="secondary">Save current workspace copy</button><button id="restore-recovery" class="secondary" hidden>Save pending import copy</button></div>');
+  const input=$('#backup-file'),apply=$('#restore-apply'),preview=$('#restore-preview'),errorNode=$('#restore-error'),recovery=$('#restore-recovery');
+  let staged=null,revision=0;
+  $('#restore-current').onclick=()=>saveWorkspaceCopy();
+  recovery.onclick=()=>{if(staged)saveWorkspaceCopy([...decks,...staged],'arcana-pending-import.json');};
+  input.onchange=async e=>{
+    const version=++revision,file=e.target.files[0];staged=null;apply.disabled=true;recovery.hidden=true;preview.innerHTML='';errorNode.textContent='';
+    if(!file)return;
+    try {
+      if(file.size>15_000_000)throw Error('Backup is too large (maximum 15 MB).');
+      const imported=structuredClone(readWorkspaceFile(JSON.parse(await file.text())));
+      if(version!==revision||input.isConnected===false||$('#dialog').open===false)return;
+      if(!imported.length)throw Error('This file contains no decks. Nothing was changed.');
+      if(decks.length+imported.length>200)throw Error('Maximum 200 decks per workspace.');
+      for(const d of imported){d.id=crypto.randomUUID();for(const entry of d.cards)entry.zone=zoneFor(entry);}
+      staged=imported;
+      preview.innerHTML=`<h3>Add ${imported.length} independent deck ${imported.length===1?'copy':'copies'}?</h3><ul>${imported.map(d=>`<li>${esc(d.name)} · ${count(d)} playing cards</li>`).join('')}</ul><p>Names may repeat. These copies do not merge with existing decks, even when they came from the same file. Your current workspace stays intact.</p>`;
+      apply.disabled=false;apply.focus();
+    } catch(error){if(version===revision&&input.isConnected!==false)errorNode.textContent=error.message;}
+  };
+  apply.onclick=()=>{
+    if(!staged||apply.disabled||input.isConnected===false||$('#dialog').open===false)return;
+    try {
+      const next=validateBackup([...decks,...staged]);
+      // Persist the staged copy first: a failed write leaves the live workspace untouched.
+      localStorage.setItem('arcana.decks.v1',JSON.stringify(next));
+      const first=staged[0].id;decks=next;staged=null;apply.disabled=true;storageError='';active=first;
+      $('#dialog').close();render();toast('Independent deck copies added and saved in this browser.');
+    }catch(error){
+      errorNode.textContent='Nothing added. '+error.message+' Retry, save your current workspace, or save the pending import copy.';
+      recovery.hidden=false;
+    }
+  };
+}
 function legalitySignature(d) { return [...new Set(d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>cardKey(e.card)+':'+e.card.name))].sort().join('|'); }
 function ensureLegality(d) {
   if (!d.cards.some(e=>zoneFor(e)!=='maybeboard')) return;
