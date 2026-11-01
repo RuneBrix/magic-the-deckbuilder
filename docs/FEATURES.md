@@ -29,7 +29,7 @@ This inventory describes what the app does today. GitHub Issues track future wor
 | JSON backup/restore | Implemented | Preserve complete decks, roles, stored printings and assigned brackets; restore adds decks | Backup and URL-validation tests |
 | Responsive interface | Implemented | Shared top navigation, full editor/library and compact local-save status; optional discovery tracker and named mobile tracker shortcut | [#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16); Windows desktop/390px browser checks |
 | Focused workspace and appearance | Implemented | Expandable filters/function tags and secondary query-only help; effective query always editable above. Settings contains backups and persisted light/dark/device appearance; self-hosted typefaces and custom SVG navigation icons | [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9), [#22](https://github.com/RuneBrix/magic-the-deckbuilder/issues/22); workspace/browser checks |
-| macOS support | Partial | Cross-platform Node 22+ implementation; directly tested on Windows only | Roadmap D05 |
+| macOS support | Partial | Cross-platform Node 22+ implementation; CI matrix for Windows/macOS/Linux on Node 22/24; configured coverage is not a passing result. Directly tested on Windows only; macOS browser verification remains open | Roadmap D05 |
 | Collection ownership | Planned | No inventory of owned cards | Roadmap D07 |
 | Price and budget planning | Partial | Individual prices from Scryfall; no deck budget totals or alerts | Roadmap D07 |
 | Native desktop application | Planned | Runs in a browser today; packaging undecided | Roadmap D08 |
