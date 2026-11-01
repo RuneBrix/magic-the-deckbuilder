@@ -863,3 +863,6 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 
 
 @media(max-width:600px){.editor-controls>label:first-child{min-width:100%;flex-basis:100%}}
+
+#import-preview{overflow-wrap:anywhere}
+#import-preview ul{padding-left:24px;line-height:1.6}

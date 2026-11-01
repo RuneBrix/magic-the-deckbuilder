@@ -257,7 +257,7 @@ export function exportDeckText(deck) {
 }
 export function parseImport(text) {
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l&&!l.startsWith('//')&&!l.startsWith('#'));
-  const heading = /^(Main deck|Sideboard|Command zone|Commander|Maybeboard):?$/i;
+  const heading = /^(Main deck|Mainboard|Sideboard|Command zone|Commander|Maybeboard):?$/i;
   const zoned = lines.some(l=>heading.test(l));
   if (!lines.length || lines.length > 310) throw Error('Import 1–300 card lines.');
   let zone = 'main', lineCount = 0;
@@ -274,6 +274,17 @@ export function parseImport(text) {
   }
   if(!entries.size)throw Error('Import 1–300 card lines.');
   return [...entries.values()];
+}
+// Names and face names must identify one rules card; never choose the first ambiguous match.
+export function resolveImport(parsed, cards) {
+  const entries=[], problems=[];
+  for (const p of parsed) {
+    const name=p.name.toLowerCase(), matches=cards.filter(c=>c.name.toLowerCase()===name||c.card_faces?.some(f=>f.name.toLowerCase()===name));
+    const identities=new Set(matches.map(c=>c.oracle_id||c.id));
+    if (identities.size!==1) { problems.push({name:p.name,reason:identities.size?'Ambiguous name':'Not found'}); continue; }
+    entries.push({card:matches[0],qty:p.qty,tags:[],zone:p.zone||'main'});
+  }
+  return {entries,problems};
 }
 export function validateBackup(data) {
   if (!Array.isArray(data) || data.length > 200) throw new Error('Invalid deck backup.');
