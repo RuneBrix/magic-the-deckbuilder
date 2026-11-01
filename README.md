@@ -54,3 +54,5 @@ Future feedback: live tag updates, automatic synergy ranking, cloud sync, deeper
 Direct local automated check: Windows, Node v24.14.1, 1 November 2026. Browser checks recorded in DESIGN.md were on Windows; their browser versions were not recorded, so they do not establish a specific supported browser version. macOS/Safari manual checks remain outstanding and #5 remains open.
 
 To record a manual platform check, include OS version, Node version, browser/version and date, then check live search, adding cards, text import/export, JSON download/restore, reload persistence on the same origin, Tab/Enter/Escape and a narrow layout. Use a disposable browser profile, never clear a player's storage. Record failures and untested items separately from automated results.
+
+Initial hosted result: [run 41344997404](https://github.com/RuneBrix/magic-the-deckbuilder/actions/runs/41344997404) succeeded for PR #65 at commit a067f91. This is automated evidence, not macOS/Safari manual verification. [PR #65](https://github.com/RuneBrix/magic-the-deckbuilder/pull/65).
