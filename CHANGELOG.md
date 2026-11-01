@@ -1,5 +1,10 @@
 # Changelog
 
+## Portable file status and recovery guidance — 2026-11-01
+
+- Distinguish browser autosave from requested workspace downloads in Settings (#64). Show edits since the last full-workspace file request this session, preserve initiation errors, and explain portable-device transfer, duplicate imports and recovery without claiming a file reached disk.
+
+
 ## Portable workspace files — 2026-11-01
 
 - Download versioned JSON workspace files and continue opening legacy backups (#63). Preview independent deck copies before adding them; failed storage writes leave the current workspace intact and offer recovery downloads. New files require a compatible Arcana version.
