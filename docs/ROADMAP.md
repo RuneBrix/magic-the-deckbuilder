@@ -10,7 +10,7 @@
 | D04 | Decide durable storage and cross-device workflow | Decision recorded | Portable local files; [contract](PORTABLE_STORAGE.md), versioned files and safe open #63; session-only file reminders and recovery guidance #64 | [#4](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4) |
 | D05 | Verify macOS and automate cross-platform tests | In progress | Node 22/24 CI matrix; macOS browser checks remain open | [#5](https://github.com/RuneBrix/magic-the-deckbuilder/issues/5) |
 | D06 | Improve decklist interoperability | In progress | Archidekt generic sections, review and atomic apply; full user export verification remains open; [bounds](DECKLIST_INTEROP.md) | [#6](https://github.com/RuneBrix/magic-the-deckbuilder/issues/6) |
-| D07 | Collection ownership and deck budget planning | Later | Needs user feedback | [#7](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7) |
+| D07 | Collection ownership and deck budget planning | Decision scoped | Combined ownership/budgets; [contract](COLLECTION_BUDGETS.md), #70/#71; interchange #72 | [#7](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7) |
 | D08 | Decide whether native desktop packaging is useful | Decision implemented | Double-click source launchers; [rationale/limits](STARTUP.md); native wrapper deferred | [#8](https://github.com/RuneBrix/magic-the-deckbuilder/issues/8) |
 | D09 | Redesign typography, icons and focused workflows; add dark mode | Current | Typography, themes and progressive disclosure; see feature inventory | [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9) |
 

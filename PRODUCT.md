@@ -22,4 +22,6 @@ The compact full-width editor keeps Find cards to add visible beside its title; 
 
 ## Open decisions
 
-Portable local workspace files are the selected storage direction (#4): versioned downloads, legacy-compatible staged additive open (#63), and session-only file reminders/recovery guidance (#64) are implemented for review. Cloud sync/accounts are deferred. Other open decisions: live taxonomy synchronization, complete Commander/companion validation, and collection tracking. For easier startup, dependency-free double-click source launchers are selected (#8); native desktop packaging is deferred. See docs/STARTUP.md for prerequisites and verification limits.
+Portable local workspace files are the selected storage direction (#4): versioned downloads, legacy-compatible staged additive open (#63), and session-only file reminders/recovery guidance (#64) are implemented for review. Cloud sync/accounts are deferred. Other open decisions: live taxonomy synchronization, complete Commander/companion validation. Combined collection ownership and budget planning is selected for future implementation (#7, #70–#72); EUR valuation and matching defaults are documented for feedback in docs/COLLECTION_BUDGETS.md.
+
+Easier startup is addressed with dependency-free double-click source launchers (#8). Native desktop packaging is deferred; docs/STARTUP.md records prerequisites and platform verification limits.
