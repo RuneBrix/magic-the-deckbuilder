@@ -1,6 +1,6 @@
 # Arcana — Magic deckbuilder
 
-A dependency-free local web app for building Magic: The Gathering decks alongside Scryfall card discovery. Works on macOS, Windows, and Linux with **Node.js 22 or later**.
+A dependency-free local web app for building Magic: The Gathering decks alongside Scryfall card discovery. Requires **Node.js 22 or later**. Windows has been checked directly; macOS/Linux automated coverage and manual browser verification are tracked separately below.
 
 ## Run
 
@@ -46,3 +46,13 @@ Legality is **partial**, not tournament certification. Modern main/sideboard con
 Data and complete card images: [Scryfall](https://scryfall.com/docs/api). Function tag syntax: [Scryfall search reference](https://scryfall.com/docs/syntax). Magic: The Gathering and card artwork © Wizards of the Coast and their respective artists. This is an independent, unofficial project.
 
 Future feedback: live tag updates, automatic synergy ranking, cloud sync, deeper format rules, price tracking, collection tracking, native packaging.
+
+## Platform verification (D05 / #5)
+
+[Tests](https://github.com/RuneBrix/magic-the-deckbuilder/actions/workflows/test.yml) runs the native Node suite on Windows, macOS and Linux with Node 22 and 24 for every pull request and main-branch push. Logs record the exact Node version, platform and architecture. No install step or live Scryfall access is required by the suite. A configured matrix is not evidence of a passing run; inspect the run for the commit being reviewed.
+
+Direct local automated check: Windows, Node v24.14.1, 1 November 2026. Browser checks recorded in DESIGN.md were on Windows; their browser versions were not recorded, so they do not establish a specific supported browser version. macOS/Safari manual checks remain outstanding and #5 remains open.
+
+To record a manual platform check, include OS version, Node version, browser/version and date, then check live search, adding cards, text import/export, JSON download/restore, reload persistence on the same origin, Tab/Enter/Escape and a narrow layout. Use a disposable browser profile, never clear a player's storage. Record failures and untested items separately from automated results.
+
+Initial hosted result: [run 41344997404](https://github.com/RuneBrix/magic-the-deckbuilder/actions/runs/41344997404) succeeded for PR #65 at commit a067f91. This is automated evidence, not macOS/Safari manual verification. [PR #65](https://github.com/RuneBrix/magic-the-deckbuilder/pull/65).
