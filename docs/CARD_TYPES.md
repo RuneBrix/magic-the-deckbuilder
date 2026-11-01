@@ -24,3 +24,5 @@ Public fixtures in test/fixtures/card-types.json were fetched from Scryfall's ex
 Standalone type branch: 120 native tests passed on Windows Node v24.14.1. The integrated branch stacked on #76 passes all 127 native tests. Regressions first reproduced Invasion of Alara grouping as Sorcery, Backup Plan falling into Other, and reverse-face land contamination of filtering/statistics. Tests cover the fetched fixtures, primary count totals, exact type tokens, legacy aliases and every supported card type.
 
 Windows browser: all four visual/text layouts show matching Battle/Conspiracy groups; Sorcery text filtering shows only the front-face Sorcery in the sample, while Statistics reports Battle 1, Conspiracy 1 and Land 2. Desktop light and 390px dark views inspected; no horizontal page overflow. Existing controls/details remain accessible. Physical touch, macOS/Safari and exhaustive layout/card data remain untested.
+
+Implementation review: [PR #77](https://github.com/RuneBrix/magic-the-deckbuilder/pull/77), stacked on #76.
