@@ -34,3 +34,5 @@ Current behavior: explicit complete JSON download requests (15 MB limit), versio
 Verification: Windows Node v24.14.1, 111 automated checks pass. Live Windows in-app-browser download and native file selection produced the expected independent-copy preview. Keyboard confirmation added a second independent deck that persisted after reload. Cancellation/stale reads are covered automatically; macOS/Safari and physical touch are untested.
 
 Decision review: [PR #66](https://github.com/RuneBrix/magic-the-deckbuilder/pull/66).
+
+File implementation review: [PR #68](https://github.com/RuneBrix/magic-the-deckbuilder/pull/68).
