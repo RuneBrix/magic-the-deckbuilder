@@ -1161,3 +1161,15 @@ test('retry repairs missing format data and a format change requests its own cov
   assert.equal(w.timers.filter(t=>t.ms===0).length,timers+1);
   await vm.runInContext('refresh()',w.context);assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'fresh');
 });
+
+
+test('exact-id refresh retains rules-identity guards including normalized reversible printings',async()=>{
+  for(const mode of ['mismatched-root','mismatched-face','matching-faces']){
+    const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});
+    w.context.fetch=async()=>({ok:true,json:async()=>({data:d.cards.map(e=>mode==='mismatched-root'?{...e.card,oracle_id:'other',legalities:{commander:'banned'}}:{...e.card,oracle_id:undefined,layout:'reversible_card',card_faces:[{oracle_id:e.card.oracle_id},{oracle_id:mode==='mismatched-face'?'other':e.card.oracle_id}],legalities:{commander:'banned'}})})});
+    await vm.runInContext('refresh()',w.context);
+    assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),mode==='matching-faces'?'fresh':'failed');
+    assert.equal(vm.runInContext('decks[0].cards[0].card.legalities.commander',w.context),mode==='matching-faces'?'banned':'legal');
+    if(mode!=='matching-faces')assert.match(vm.runInContext("legalityStates.get('editor').error",w.context),/Leader: returned rules identity/);
+  }
+});
