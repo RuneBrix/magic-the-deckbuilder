@@ -32,7 +32,7 @@ This inventory describes what the app does today. GitHub Issues track future wor
 | macOS support | Partial | Cross-platform Node 22+ implementation; CI matrix for Windows/macOS/Linux on Node 22/24; configured coverage is not a passing result. Directly tested on Windows only; macOS browser verification remains open | Roadmap D05 |
 | Collection ownership | Planned | No inventory of owned cards; combined collection/budget workflow selected, [scope](COLLECTION_BUDGETS.md), implementation #70/#71 and interchange #72 | Roadmap D07 |
 | Price and budget planning | Partial | Individual prices from Scryfall; no deck budget totals or alerts. EUR planning defaults and ownership integration [scoped](COLLECTION_BUDGETS.md) for #70/#71 | Roadmap D07 |
-| Native desktop application | Planned | Runs in a browser today; packaging undecided | Roadmap D08 |
+| Startup and desktop packaging | Partial | Windows/macOS launch scripts start the existing local server and request the default browser; Windows wrapper/headless checks pass, macOS and actual double-click/browser association remain unverified. Native packaging deferred | [D08 / #8](https://github.com/RuneBrix/magic-the-deckbuilder/issues/8); [startup](STARTUP.md) |
 
 ## Validation baseline
 
