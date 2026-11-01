@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, validateBackup, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, resolveImport, validateBackup, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -611,13 +611,28 @@ function inspect(id,entryId) {
 
 async function fetchNames(names) {const cards=[],missing=[];for(let i=0;i<names.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x.name));}return {cards,missing};}
 function importDialog(target=current()){
-  showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste quantity/name lines with optional Main deck, Sideboard, Command zone and Maybeboard headings. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><button class="primary">Import cards</button></form>`);
-  $('#import-form').onsubmit=async e=>{e.preventDefault();const form=e.target,button=form.querySelector('button'),data=new FormData(form);button.disabled=true;button.textContent='Finding cards…';try{
-    const name=target?.name||String(data.get('name')).trim(),format=target?.format||String(data.get('format'));
+  showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste Archidekt text using “1 Card Name” and generic Commander, Mainboard, Sideboard or Maybeboard headings. Main deck and Command zone also work. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><div id="import-preview" aria-live="polite"></div><button class="primary">Review import</button></form>`);
+  const form=$('#import-form'), button=form.querySelector('button');
+  let review=null, revision=0, pending=false;
+  form.oninput=()=>{revision++;review=null;$('#import-preview').innerHTML='';button.textContent='Review import';};
+  form.onsubmit=async e=>{e.preventDefault();if(pending)return;pending=true;button.disabled=true;try{
+    const data=new FormData(form), name=target?.name||String(data.get('name')).trim(),format=target?.format||String(data.get('format'));
     if(!name||name.length>100||!FORMATS.includes(format))throw new Error('Enter a deck name and supported format.');
-    const parsed=parseImport(data.get('list'));const {cards,missing}=await fetchNames([...new Set(parsed.map(x=>x.name))]);
-    if(missing.length)throw new Error('Not imported. Could not find: '+missing.join(', ')+'. Correct these names and try again.');
-    const additions=parsed.map(p=>{const card=cards.find(c=>c.name.toLowerCase()===p.name.toLowerCase()||c.card_faces?.some(f=>f.name.toLowerCase()===p.name.toLowerCase()));if(!card)throw new Error('Could not resolve '+p.name);return {card,qty:p.qty,tags:[],zone:p.zone||'main'};});
+    form.querySelector('#import-error').textContent='';
+    if(!review){
+      const parsed=parseImport(data.get('list')), version=revision;
+      button.textContent='Finding cards…';
+      const {cards}=await fetchNames([...new Set(parsed.map(x=>x.name))]);
+      if(form.isConnected===false||$('#dialog').open===false)return;
+      if(version!==revision)throw new Error('The list changed during lookup. Review it again.');
+      const result=resolveImport(parsed,cards);
+      $('#import-preview').innerHTML=`<h3>Import review</h3><p>${result.entries.reduce((n,x)=>n+x.qty,0)} resolved copies for ${esc(name)}. Nothing has been imported.</p><ul>${result.entries.map(x=>`<li>${x.qty} ${esc(x.card.name)} — ${ZONES[x.zone]}</li>`).join('')}${result.problems.map(x=>`<li>${esc(x.name)} — ${x.reason}. Correct the name and review again.</li>`).join('')}</ul><p>Text imports use name-based printings; set and collector suffixes do not select a printing. Functions and bracket assignments require JSON.</p>`;
+      if(result.problems.length)throw new Error('Nothing imported. Correct the unresolved or ambiguous names above, then review again.');
+      review=result.entries;
+      button.textContent='Import reviewed cards';
+      return;
+    }
+    const additions=review;
     if(form.isConnected===false||$('#dialog').open===false)return;
     if(target&&!decks.includes(target))throw new Error('The destination deck no longer exists.');
     if(!target&&decks.length>=200)throw new Error('Maximum 200 decks per workspace.');
@@ -625,7 +640,7 @@ function importDialog(target=current()){
     for(const a of additions){const found=merged.find(x=>entryKey(x)===entryKey(a));if(found){found.qty+=a.qty;if(found.qty>500)throw new Error('Maximum 500 copies per card.');}else merged.push(a);}
     if(merged.length>1000)throw new Error('Maximum 1000 card entries per deck.');
     destination.cards=merged;destination.updated=new Date().toISOString();if(!target)decks.push(destination);save();$('#dialog').close();openDeck(destination.id);toast(`${additions.reduce((n,e)=>n+e.qty,0)} cards imported`);
-  }catch(error){form.querySelector('#import-error').textContent=error.message;}finally{button.disabled=false;button.textContent='Import cards';}};
+  }catch(error){form.querySelector('#import-error').textContent=error.message;}finally{pending=false;button.disabled=false;button.textContent=review?'Import reviewed cards':'Review import';if(review&&form.isConnected!==false)button.focus();}};
 }
 function restore(){showDialog('<h2>Restore your workspace</h2><p>Choose an Arcana JSON backup. Restored decks are added alongside existing decks.</p><input id="backup-file" type="file" accept="application/json,.json" aria-label="Deck backup file"><p id="restore-error" role="alert"></p>');$('#backup-file').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>15_000_000)throw new Error('Backup is too large (maximum 15 MB).');const imported=validateBackup(JSON.parse(await file.text()));if(decks.length+imported.length>200)throw new Error('Maximum 200 decks per workspace.');for(const d of imported){for(const e of d.cards)e.zone=zoneFor(e);d.id=crypto.randomUUID();decks.push(d);}storageError='';active=imported[0]?.id||active;save();$('#dialog').close();render();toast('Backup restored');}catch(error){$('#restore-error').textContent=error.message;}};}
 function legalitySignature(d) { return [...new Set(d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>cardKey(e.card)+':'+e.card.name))].sort().join('|'); }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Archidekt text import review — 2026-11-01
+
+- Accept Mainboard alongside existing zone headings for Archidekt quantity/name text exports (#6). Review resolved names, quantities and zones before applying; unresolved/ambiguous matches block the whole import. Editing a list invalidates its review. Text printing/function limits are stated in the review.
+
 ## Deck view review refinements — 2026-11-01
 
 - Preserve the full native top border on card portraits. Fit the toolbar backing behind rounded image corners instead of overlapping the image; retain anchored hover reveals and continuous vertical stacks.

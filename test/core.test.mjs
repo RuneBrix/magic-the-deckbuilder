@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { queryFor, stats, legality, parseImport, validateBackup, safeUrl, primaryRole, deckEntries, deckIdentity } from '../public/core.js';
+import { queryFor, stats, legality, parseImport, exportDeckText, resolveImport, validateBackup, safeUrl, primaryRole, deckEntries, deckIdentity } from '../public/core.js';
 const card=(name,type,cmc,identity=[],extra={})=>({id:name,oracle_id:name,name,type_line:type,cmc,color_identity:identity,colors:identity,oracle_text:'',legalities:{commander:'legal',modern:'legal',vintage:'legal'},...extra});
 const entry=(c,qty=1,extra={})=>({card:c,qty,tags:[],...extra});
 
@@ -78,4 +78,26 @@ test('deck numeric sorting uses stored USD printings and numeric front-face char
   assert.deepEqual(names('toughness-desc'),['Lower','Face','Higher','Invalid','Missing']);
   assert.deepEqual(deckEntries(d,{search:'creature',order:'price-desc'}).map(e=>e.card.name),names('price-desc'));
   assert.equal(JSON.stringify(d),before);
+});
+
+
+test('Archidekt generic headers preserve zones, and import resolution reports missing/ambiguous names',()=>{
+  const parsed=parseImport('Commander\n1 Leader\n\nMainboard\n2x Forest\n3 forest\nSideboard\n1 Shared\nMaybeboard\n1 Missing');
+  assert.deepEqual(parsed.map(x=>[x.qty,x.zone]),[[1,'command'],[5,'main'],[1,'sideboard'],[1,'maybeboard']]);
+  const leader=card('Leader','Creature',3),forest=card('Forest','Basic Land',0);
+  const a=card('A // Shared','Creature',2,[],{card_faces:[{name:'Shared'}]});
+  const b=card('B // Shared','Creature',2,[],{card_faces:[{name:'Shared'}]});
+  const result=resolveImport(parsed,[leader,forest,a,b]);
+  assert.deepEqual(result.problems,[{name:'Shared',reason:'Ambiguous name'},{name:'Missing',reason:'Not found'}]);
+  assert.equal(result.entries.length,2);
+  assert.equal(resolveImport([{name:'Shared',qty:1}],[a,{...a,id:'other-print'}]).problems.length,0);
+});
+
+
+test('Archidekt selected text mode round trips quantities and zones through Arcana export',()=>{
+  const source='Commander\n1 Leader\nMainboard\n4 Forest (M21) 274\nSideboard\n1 Spell\nMaybeboard\n2 Idea';
+  const parsed=parseImport(source), cards=parsed.map(x=>card(x.name,'Artifact',1));
+  const {entries,problems}=resolveImport(parsed,cards);assert.deepEqual(problems,[]);
+  const sorted=xs=>xs.toSorted((a,b)=>(a.zone+a.name).localeCompare(b.zone+b.name));
+  assert.deepEqual(sorted(parseImport(exportDeckText({cards:entries}))),sorted(parsed));
 });

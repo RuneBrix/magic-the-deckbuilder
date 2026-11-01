@@ -250,12 +250,15 @@ test('library imports create a deck only after successful resolution, and cancel
   vm.runInContext('importDialog(null)',w.context);
   const form=w.node('#import-form');
   await form.onsubmit({preventDefault(){},target:form});
-  assert.equal(vm.runInContext('decks.length',w.context),1);assert.match(w.node('#import-error').textContent,/Not imported/);
+  assert.equal(vm.runInContext('decks.length',w.context),1);assert.match(w.node('#import-error').textContent,/Nothing imported/);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});
   form.isConnected=false;await form.onsubmit({preventDefault(){},target:form});assert.equal(vm.runInContext('decks.length',w.context),1);
   form.isConnected=true;w.node('#dialog').open=false;await form.onsubmit({preventDefault(){},target:form});assert.equal(vm.runInContext('decks.length',w.context),1);
   w.node('#dialog').open=true;
   form.isConnected=true;await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(vm.runInContext('decks.length',w.context),1);
+  assert.match(w.node('#import-preview').innerHTML,/Nothing has been imported/);
+  await form.onsubmit({preventDefault(){},target:form});
   assert.equal(vm.runInContext('decks.length',w.context),2);assert.equal(vm.runInContext('current().cards[0].qty',w.context),2);
   assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
 });
@@ -267,11 +270,15 @@ test('targeted imports preserve edits made while resolving and roll back quantit
   const pending=form.onsubmit({preventDefault(){},target:form});
   vm.runInContext('decks[0].cards[1].qty=4; decks[0].cards[1].tags.push("Edited while loading")',w.context);
   finish({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});await pending;
+  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),4);
+  await form.onsubmit({preventDefault(){},target:form});
   assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),6);
   assert.equal(vm.runInContext('decks[0].cards[1].tags[2]',w.context),'Edited while loading');
   vm.runInContext('decks[0].cards[1].qty=499; importDialog(decks[0])',w.context);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
   await form.onsubmit({preventDefault(){},target:form});
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
   assert.match(w.node('#import-error').textContent,/Maximum 500/);
@@ -1000,4 +1007,20 @@ test('card-name copying uses only the selected card name, without editing deck d
   w.context.navigator={clipboard:{writeText:async text=>{copied=text;}}};w.node('#card-actions').dataset={deck:'editor',entry:core.entryKey(editorDeck().cards[1])};
   await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'copy-name'}})}});
   assert.equal(copied,'Ramp spell');assert.equal(w.writes.length,0);
+});
+
+
+test('editing an import invalidates review and in-flight lookup; ambiguity never applies a partial list',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])}), values={list:'Mainboard\n2 Ramp spell'};
+  formValues(w,values);vm.runInContext('importDialog(decks[0])',w.context);
+  const form=w.node('#import-form'),before=vm.runInContext('JSON.stringify(decks)',w.context);
+  let release;w.context.fetch=()=>new Promise(r=>release=r);
+  const task=form.onsubmit({preventDefault(){}});values.list='Mainboard\n3 Ramp spell';form.oninput();
+  release({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});await task;
+  assert.match(w.node('#import-error').textContent,/changed during lookup/);
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});
+  await form.onsubmit({preventDefault(){}});assert.match(w.node('#import-preview').innerHTML,/3 Ramp spell/);
+  values.list='Mainboard\n4 Ramp spell';form.oninput();assert.equal(w.node('#import-preview').innerHTML,'');
+  await form.onsubmit({preventDefault(){}});assert.match(w.node('#import-preview').innerHTML,/4 Ramp spell/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
 });
