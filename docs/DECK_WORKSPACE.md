@@ -59,3 +59,5 @@ Each entry has a named ⋮ menu using the browser's top-layer popover, constrain
 - Remove all copies explicitly spans every zone of the named deck, including Maybeboard, using the card's stored Oracle identity (printing ID fallback). A confirmation lists quantities by zone and initially focuses Keep cards. Quantity +/− stays inline.
 
 Maybeboard survives reload, duplication and complete JSON restore, with quantities, functions and stored printing. Sectioned text uses a `Maybeboard` heading and preserves names/quantities/zones; roles, printing, commander flags and brackets still require JSON. Existing saved decks and legacy backups remain compatible. Exploration's Add to… chooser also offers every zone without changing the tracked deck.
+
+Type groups, deck type/subtype filtering and primary type statistics use a shared deck-facing type policy, including Battle/Conspiracy and multitype priorities (#62). Complete card/face facts and printing choices remain stored unchanged. [Face/layout policy and verification](CARD_TYPES.md).

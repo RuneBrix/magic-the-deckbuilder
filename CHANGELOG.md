@@ -1,5 +1,10 @@
 # Changelog
 
+## Face-aware deck types — 2026-11-01
+
+- Group Invasion of Alara as Battle and recognize Conspiracy and other supported card types (#62). Share front-face type rules across grouping, filtering and statistics; preserve Artifact Creature/land priorities and full printing/face data. Split cards retain combined types.
+
+
 ## Double-click startup — 2026-11-01
 
 - Add Windows and macOS source launchers with a Node 22+ check, server readiness before browser opening, stable loopback origin and manual-opening fallback (#8). Keep the terminal open to own the server; occupied ports never trigger an automatic origin change. Windows wrapper/headless checks pass; macOS and native double-click/browser association remain unverified.
