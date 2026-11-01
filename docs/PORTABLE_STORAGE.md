@@ -30,3 +30,5 @@ Editing stored deck data and opening/exporting JSON must not need a network conn
 - [#64: backup and recovery workflow](https://github.com/RuneBrix/magic-the-deckbuilder/issues/64): browser-save versus file-save status, portability instructions and explicit replacement safeguards.
 
 Current behavior remains browser-local autosave with manual complete JSON export/additive restore. Neither follow-up is implemented by this decision PR.
+
+Decision review: [PR #66](https://github.com/RuneBrix/magic-the-deckbuilder/pull/66).
