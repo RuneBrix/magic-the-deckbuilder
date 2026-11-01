@@ -36,4 +36,6 @@ Future planning is moving away from Linear at the user's request. D01–D04 and 
 
 [#40](https://github.com/RuneBrix/magic-the-deckbuilder/issues/40) implements text filtering and deterministic numeric sorts, and [#42](https://github.com/RuneBrix/magic-the-deckbuilder/issues/42) implements the sticky left preview; [semantics and responsive bounds](DECK_WORKSPACE.md). Four visual/text layouts (#41), compact card menus (#43) and persistent Maybeboard (#44) are implemented for review in [PR #51](https://github.com/RuneBrix/magic-the-deckbuilder/pull/51). Maybeboard is outside the playing deck by user decision. Details simplification (#45) and automatic function classifications (#46) remain separate open work.
 
+[#59](https://github.com/RuneBrix/magic-the-deckbuilder/issues/59) fixes repeated legality-refresh mismatches using exact printing ids and selected-format validation; [reproduction and preservation policy](DECK_ZONES.md#exact-printing-legality-refresh-59).
+
 [#62](https://github.com/RuneBrix/magic-the-deckbuilder/issues/62) fixes Battle/Conspiracy and multiface card grouping, type filters and primary type statistics; [policy and public fixtures](CARD_TYPES.md).

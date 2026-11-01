@@ -512,13 +512,13 @@ test('all dark palettes persist independently and work with device/light appeara
   assert.equal(workspace({savedPalette:'invalid'}).document.documentElement.dataset.palette,'green');
 });
 
-test('automatic refresh schedules only the tracked/open deck, deduplicates names and preserves live edits and printing',async()=>{
+test('automatic refresh schedules only the tracked/open deck, deduplicates printing ids and preserves live edits and printing',async()=>{
   const d=editorDeck();d.cards.push({...structuredClone(d.cards[1]),zone:'sideboard'});
   const w=workspace({savedDecks:JSON.stringify([d,{...editorDeck(),id:'other'}])});
   assert.equal(vm.runInContext('legalityStates.size',w.context),1);
   assert.match(w.node('#app').innerHTML,/Refreshing legality/);
   let release;const request=new Promise(resolve=>release=resolve);let names;
-  w.context.fetch=async(url,opts)=>{names=JSON.parse(opts.body).names;await request;return {ok:true,json:async()=>({data:d.cards.map(e=>({...e.card,id:'another-print',legalities:{commander:'banned'}}))})};};
+  w.context.fetch=async(url,opts)=>{names=JSON.parse(opts.body).ids;await request;return {ok:true,json:async()=>({data:d.cards.map(e=>({...e.card,legalities:{commander:'banned'}}))})};};
   const task=vm.runInContext('refresh()',w.context);
   assert.equal(vm.runInContext('refresh()',w.context),task);
   await Promise.resolve();await Promise.resolve();
@@ -584,7 +584,7 @@ test('fresh supported Modern checks pass and aged data becomes stale without a f
 test('startup timer runs bounded collection batches and card-set edits schedule a follow-up',async()=>{
   const d=editorDeck();d.cards=Array.from({length:80},(_,i)=>({card:editorCard('Card '+i),qty:1,tags:[],zone:'main'}));
   const w=workspace({savedDecks:JSON.stringify([d])}), batches=[];
-  w.context.fetch=async(url,opts)=>{const names=JSON.parse(opts.body).names;batches.push(names);return {ok:true,json:async()=>({data:names.map(name=>editorCard(name))})};};
+  w.context.fetch=async(url,opts)=>{const names=JSON.parse(opts.body).ids;batches.push(names);return {ok:true,json:async()=>({data:names.map(name=>editorCard(name))})};};
   await w.timers.find(t=>t.ms===0).fn();
   assert.deepEqual(batches.map(b=>b.length),[75,5]);
   assert.equal(new Set(batches.flat()).size,80);
@@ -989,7 +989,7 @@ test('Maybeboard-only decks do not request legality and Maybeboard failures cann
   const w=workspace({savedDecks:JSON.stringify([d])});assert.equal(w.timers.length,0);
   const active=editorDeck();active.cards.push({...structuredClone(active.cards[1]),zone:'maybeboard',card:{...structuredClone(active.cards[1].card),id:'maybe',oracle_id:'maybe',name:'Maybe missing'}});
   const v=workspace({savedDecks:JSON.stringify([active])});let requested=[];
-  v.context.fetch=async(url,options)=>{requested=JSON.parse(options.body).names;return {ok:true,json:async()=>({data:active.cards.filter(e=>e.zone!=='maybeboard').map(e=>e.card),not_found:[]})};};
+  v.context.fetch=async(url,options)=>{requested=JSON.parse(options.body).ids;return {ok:true,json:async()=>({data:active.cards.filter(e=>e.zone!=='maybeboard').map(e=>e.card),not_found:[]})};};
   await vm.runInContext('refresh()',v.context);assert.deepEqual(requested,['Leader','Ramp spell']);assert.equal(vm.runInContext("legalityStates.get('editor').status",v.context),'fresh');
 });
 
@@ -1096,4 +1096,68 @@ test('failed browser saving retains in-memory edits and permits a portable recov
   assert.match(w.node('#backup-status').textContent,/No further workspace changes/);
   assert.equal(vm.runInContext('decks[0].name',w.context),'Recover me');
   assert.match(vm.runInContext('storageError',w.context),/full or unavailable/);
+});
+
+
+test('legacy stored printing without an Oracle id can refresh repeatedly without mismatched-data notices',async()=>{
+  const card={...editorCard('Forest','Basic Land — Forest'),id:'stored-print',cmc:0,legalities:{}};delete card.oracle_id;
+  const deck={id:'legacy',name:'Legacy',format:'modern',cards:[{card,qty:60,tags:[],zone:'main'}]};
+  const w=workspace({savedDecks:JSON.stringify([deck])});let calls=0;
+  w.context.fetch=async()=>{calls++;return {ok:true,json:async()=>({data:[{...card,name:'Forest // Forest',oracle_id:'forest-rules',legalities:{modern:'legal'}}]})};};
+  await vm.runInContext('refresh()',w.context);
+  assert.equal(vm.runInContext("legalityStates.get('legacy').status",w.context),'fresh');
+  assert.equal(vm.runInContext('decks[0].cards[0].card.legalities.modern',w.context),'legal');
+  assert.equal(vm.runInContext('decks[0].cards[0].card.id',w.context),'stored-print');
+  vm.runInContext("view='deck';deckTab='checks';render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Supported checks passed/);
+  await vm.runInContext('refresh()',w.context);
+  assert.equal(vm.runInContext("legalityStates.get('legacy').status",w.context),'fresh');assert.equal(calls,2);
+});
+
+
+test('same-name rules variants refresh without permanently returning mismatched legality data',async()=>{
+  const first={...editorCard('Shared name'),id:'printing-a',oracle_id:'rules-a',legalities:{}}, second={...editorCard('Shared name'),id:'printing-b',oracle_id:'rules-b',legalities:{}};
+  const d={id:'variants',name:'Variants',format:'commander',cards:[{card:first,qty:1,tags:[],zone:'main'},{card:second,qty:1,tags:[],zone:'sideboard'}]};
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[{...first,legalities:{commander:'not_legal'}},{...second,legalities:{commander:'not_legal'}}]})});
+  for(let i=0;i<2;i++){
+    await vm.runInContext('refresh()',w.context);
+    assert.equal(vm.runInContext("legalityStates.get('variants').status",w.context),'fresh');
+    assert.equal(vm.runInContext('decks[0].cards[0].card.legalities.commander',w.context),'not_legal');
+  }
+});
+
+
+test('empty selected-format legality is a named retryable failure instead of a fresh unavailable loop',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:editorDeck().cards.map(e=>({...e.card,legalities:{}}))})});
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);await vm.runInContext('refresh()',w.context);
+  assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'failed');
+  assert.match(vm.runInContext("legalityStates.get('editor').error",w.context),/Leader/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+});
+
+
+test('exact-printing refresh skips replaced and removed snapshots and recovers with the next request',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});let release;
+  w.context.fetch=()=>new Promise(r=>release=r);
+  const pending=vm.runInContext('refresh()',w.context);await Promise.resolve();await Promise.resolve();
+  vm.runInContext("decks[0].cards.shift();decks[0].cards[0].card={...decks[0].cards[0].card,id:'new-print',legalities:{commander:'legal'}}",w.context);
+  release({ok:true,json:async()=>({data:[]})});await pending;
+  assert.equal(vm.runInContext('decks[0].cards[0].card.legalities.commander',w.context),'legal');
+  w.context.fetch=async(url,opts)=>{assert.deepEqual(JSON.parse(opts.body),{ids:['new-print']});return {ok:true,json:async()=>({data:[{...editorCard('Ramp spell'),id:'new-print',legalities:{commander:'banned'}}]})};};
+  await vm.runInContext('refresh()',w.context);
+  assert.equal(vm.runInContext('decks[0].cards[0].card.legalities.commander',w.context),'banned');
+  assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'fresh');
+});
+test('retry repairs missing format data and a format change requests its own coverage',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[]})});await vm.runInContext('refresh()',w.context);
+  assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'failed');
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:editorDeck().cards.map(e=>({...e.card,legalities:{commander:'legal',modern:'legal'}}))})});
+  await vm.runInContext('refresh()',w.context);
+  const timers=w.timers.filter(t=>t.ms===0).length;
+  vm.runInContext("decks[0].format='modern';render()",w.context);
+  assert.equal(w.timers.filter(t=>t.ms===0).length,timers+1);
+  await vm.runInContext('refresh()',w.context);assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'fresh');
 });

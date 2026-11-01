@@ -1,5 +1,11 @@
 # Changelog
 
+## Reliable legality refresh — 2026-11-01
+
+- Refresh exact stored printing ids so same-name rules variants no longer collide (#59). Require usable selected-format data before marking coverage fresh; identify missing/mismatched cards and retain stored data on failure. Printing/format changes and in-flight edits retain safe follow-up coverage.
+
+
+
 ## Face-aware deck types — 2026-11-01
 
 - Group Invasion of Alara as Battle and recognize Conspiracy and other supported card types (#62). Share front-face type rules across grouping, filtering and statistics; preserve Artifact Creature/land priorities and full printing/face data. Split cards retain combined types.
