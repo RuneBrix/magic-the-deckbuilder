@@ -866,3 +866,7 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 
 #import-preview{overflow-wrap:anywhere}
 #import-preview ul{padding-left:24px;line-height:1.6}
+
+#restore-recovery[hidden]{display:none}
+#restore-preview{overflow-wrap:anywhere}
+#restore-preview ul{padding-left:24px;line-height:1.6}

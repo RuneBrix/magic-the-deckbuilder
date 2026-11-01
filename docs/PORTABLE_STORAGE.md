@@ -1,6 +1,6 @@
 # Portable workspace files
 
-Decision for [D04 / #4](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4), 1 November 2026: the user chose **portable local files**. Cloud synchronization and accounts are deferred. This document defines the next implementation contract; it does not claim new file behavior has shipped.
+Decision for [D04 / #4](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4), 1 November 2026: the user chose **portable local files**. Cloud synchronization and accounts are deferred. The versioned file reader/writer and staged additive open are implemented for review in #63; file-status workflow improvements remain tracked in #64.
 
 ## Ownership and working copy
 
@@ -8,7 +8,7 @@ The player owns the downloaded JSON file and chooses where to keep or transfer i
 
 ## Compatibility and migration
 
-Continue accepting the current array-of-decks JSON backups. Introduce a versioned envelope for future exports, validating its version and entire contents before changing any deck. Retain full stored card/face and printing records, quantities, all zones, ordered functions, bracket choices, names, formats and timestamps. Do not use text exports as a migration format. Unsupported newer versions and malformed/oversized files leave the existing workspace untouched and explain the recovery action. Never delete or rewrite an old backup as part of migration.
+Continue accepting the current array-of-decks JSON backups. New exports use `{format:"arcana-workspace", version:1, exportedAt, decks}`. The reader validates the version and entire contents before changing any deck. Browser autosave remains the legacy array format, so this adds no browser-storage migration. Older app versions cannot read the new envelope; use a compatible version to open it. Retain full stored card/face and printing records, quantities, all zones, ordered functions, bracket choices, names, formats and timestamps. Do not use text exports as a migration format. Unsupported newer versions and malformed/oversized files leave the existing workspace untouched and explain the recovery action. Never delete or rewrite an old backup as part of migration.
 
 ## Open, save and recovery
 
@@ -29,6 +29,8 @@ Editing stored deck data and opening/exporting JSON must not need a network conn
 - [#63: versioned files and safe recovery](https://github.com/RuneBrix/magic-the-deckbuilder/issues/63): reader/writer compatibility, staging, additive conflict behavior and failed-write recovery tests.
 - [#64: backup and recovery workflow](https://github.com/RuneBrix/magic-the-deckbuilder/issues/64): browser-save versus file-save status, portability instructions and explicit replacement safeguards.
 
-Current behavior remains browser-local autosave with manual complete JSON export/additive restore. Neither follow-up is implemented by this decision PR.
+Current behavior: explicit complete JSON download requests (15 MB limit), versioned/legacy file opening with a named-deck preview, and additive confirmation. A staged import receives fresh deck ids and is persisted before replacing the in-memory working copy. A failed write leaves every current deck intact; Retry, Save current workspace copy and Save pending import copy retain recovery options. No replace-workspace action exists. Browser download initiation is not a guarantee that the file reached disk.
+
+Verification: Windows Node v24.14.1, 111 automated checks pass. Live Windows in-app-browser download and native file selection produced the expected independent-copy preview. Keyboard confirmation added a second independent deck that persisted after reload. Cancellation/stale reads are covered automatically; macOS/Safari and physical touch are untested.
 
 Decision review: [PR #66](https://github.com/RuneBrix/magic-the-deckbuilder/pull/66).

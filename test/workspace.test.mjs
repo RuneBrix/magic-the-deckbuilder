@@ -1024,3 +1024,50 @@ test('editing an import invalidates review and in-flight lookup; ambiguity never
   await form.onsubmit({preventDefault(){}});assert.match(w.node('#import-preview').innerHTML,/4 Ramp spell/);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
 });
+
+
+async function chooseWorkspaceFile(w,data,{size=100}={}){
+  const input=w.node('#backup-file');
+  await input.onchange({target:{files:[{size,text:async()=>JSON.stringify(data)}]}});
+}
+test('portable open stages independent copies and failed writes preserve the complete live workspace',async()=>{
+  const original=editorDeck(),w=workspace({savedDecks:JSON.stringify([original])});
+  vm.runInContext('restore()',w.context);
+  await chooseWorkspaceFile(w,core.workspaceFile([original]));
+  assert.equal(vm.runInContext('decks.length',w.context),1);assert.equal(w.writes.length,0);
+  assert.match(w.node('#restore-preview').innerHTML,/independent deck copy/);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  const persist=w.context.localStorage.setItem;w.context.localStorage.setItem=()=>{throw Error('Quota exceeded');};
+  w.node('#restore-apply').onclick();
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.match(w.node('#restore-error').textContent,/Nothing added/);
+  assert.equal(w.node('#restore-recovery').hidden,false);
+  w.context.localStorage.setItem=persist;w.node('#restore-apply').onclick();
+  assert.equal(vm.runInContext('decks.length',w.context),2);
+  assert.notEqual(vm.runInContext('decks[0].id',w.context),vm.runInContext('decks[1].id',w.context));
+  assert.equal(vm.runInContext('JSON.stringify(decks[0].cards)===JSON.stringify(decks[1].cards)',w.context),true);
+  assert.equal(w.writes.filter(([key])=>key==='arcana.decks.v1').length,1);
+  w.node('#restore-apply').onclick();assert.equal(vm.runInContext('decks.length',w.context),2);
+});
+test('portable open rejects unsupported files, limits and stale selection without writes',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext('restore()',w.context);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  await chooseWorkspaceFile(w,{...core.workspaceFile([editorDeck()]),version:9});assert.match(w.node('#restore-error').textContent,/Unsupported/);
+  await chooseWorkspaceFile(w,[editorDeck()],{size:15_000_001});assert.match(w.node('#restore-error').textContent,/too large/);
+  let release;const input=w.node('#backup-file');
+  const pending=input.onchange({target:{files:[{size:10,text:()=>new Promise(r=>release=r)}]}});
+  await input.onchange({target:{files:[]}});release(JSON.stringify([editorDeck()]));await pending;
+  assert.equal(w.node('#restore-apply').disabled,true);
+  input.isConnected=false;await chooseWorkspaceFile(w,[editorDeck()]);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+});
+test('portable download writes a versioned complete file and reports initiation failures',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});let content;
+  w.context.Blob=class{constructor(parts){content=parts[0];this.size=content.length;}};
+  w.context.URL={createObjectURL:()=> 'blob:test',revokeObjectURL(){}};
+  w.document.createElement=()=>({click(){}});
+  assert.equal(vm.runInContext('saveWorkspaceCopy()',w.context),true);
+  assert.deepEqual(core.readWorkspaceFile(JSON.parse(content)),[editorDeck()]);
+  assert.match(w.node('#toast').textContent,/download requested/);
+  w.document.createElement=()=>({click(){throw Error('Download blocked');}});
+  assert.equal(vm.runInContext('saveWorkspaceCopy()',w.context),false);assert.match(w.node('#toast').textContent,/Could not request/);
+});
