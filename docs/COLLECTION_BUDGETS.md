@@ -41,3 +41,5 @@ External collection imports/updates are scoped separately from manual ownership 
 - [#72: collection interchange](https://github.com/RuneBrix/magic-the-deckbuilder/issues/72), dependent on real selected-format examples and explicit duplicate/update policies.
 
 No implementation or live-price validation is claimed here. Decision/document review and link/diff checks are the validation for this PR.
+
+Decision review: [PR #73](https://github.com/RuneBrix/magic-the-deckbuilder/pull/73).
