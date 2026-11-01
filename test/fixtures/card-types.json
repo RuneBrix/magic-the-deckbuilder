@@ -1,0 +1,380 @@
+{
+  "source": "https://api.scryfall.com/cards/named",
+  "retrievedAt": "2026-11-01T21:00:34.303Z",
+  "cards": [
+    {
+      "id": "318c363b-61cc-4e2f-8f86-a4287539ea07",
+      "oracle_id": "8faa4330-07bb-4b65-810a-bbce29d3cd42",
+      "name": "Invasion of Alara // Awaken the Maelstrom",
+      "layout": "transform",
+      "type_line": "Battle — Siege // Sorcery",
+      "cmc": 5,
+      "color_identity": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "legal",
+        "timeless": "legal",
+        "gladiator": "legal",
+        "pioneer": "legal",
+        "modern": "legal",
+        "legacy": "legal",
+        "pauper": "not_legal",
+        "vintage": "legal",
+        "penny": "legal",
+        "commander": "legal",
+        "oathbreaker": "legal",
+        "standardbrawl": "not_legal",
+        "brawl": "legal",
+        "competitivebrawl": "legal",
+        "alchemy": "not_legal",
+        "paupercommander": "not_legal",
+        "duel": "legal",
+        "oldschool": "not_legal",
+        "premodern": "not_legal",
+        "predh": "not_legal",
+        "tlr": "not_legal"
+      },
+      "card_faces": [
+        {
+          "name": "Invasion of Alara",
+          "type_line": "Battle — Siege",
+          "colors": [
+            "B",
+            "G",
+            "R",
+            "U",
+            "W"
+          ],
+          "oracle_text": "When this Siege enters, exile cards from the top of your library until you exile two nonland cards with mana value 4 or less. You may cast one of those two cards without paying its mana cost. Put one of them into your hand. Then put the other cards exiled this way on the bottom of your library in a random order."
+        },
+        {
+          "name": "Awaken the Maelstrom",
+          "type_line": "Sorcery",
+          "colors": [
+            "B",
+            "G",
+            "R",
+            "U",
+            "W"
+          ],
+          "oracle_text": "Awaken the Maelstrom is all colors.\nTarget player draws two cards. You may put an artifact card from your hand onto the battlefield. Create a token that's a copy of a permanent you control. Distribute three +1/+1 counters among one, two, or three creatures you control. Destroy target permanent an opponent controls."
+        }
+      ]
+    },
+    {
+      "id": "84c5a45a-adc2-41f9-893c-58a03bebbf0c",
+      "oracle_id": "6f14f61f-e533-4541-b861-4dbaf0d88833",
+      "name": "Backup Plan",
+      "layout": "normal",
+      "type_line": "Conspiracy",
+      "cmc": 0,
+      "color_identity": [],
+      "colors": [],
+      "oracle_text": "(Start the game with this conspiracy face up in the command zone.)\nDraw an additional hand of seven cards as the game begins. Before taking mulligans, shuffle all but one of your hands into your library.",
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "not_legal",
+        "timeless": "not_legal",
+        "gladiator": "not_legal",
+        "pioneer": "not_legal",
+        "modern": "not_legal",
+        "legacy": "banned",
+        "pauper": "not_legal",
+        "vintage": "banned",
+        "penny": "not_legal",
+        "commander": "banned",
+        "oathbreaker": "banned",
+        "standardbrawl": "not_legal",
+        "brawl": "not_legal",
+        "competitivebrawl": "not_legal",
+        "alchemy": "not_legal",
+        "paupercommander": "not_legal",
+        "duel": "banned",
+        "oldschool": "not_legal",
+        "premodern": "not_legal",
+        "predh": "not_legal",
+        "tlr": "not_legal"
+      }
+    },
+    {
+      "id": "e3ddbebf-72cd-4d1b-ba0d-d94934654ab7",
+      "oracle_id": "e996cd67-739c-40f4-b276-0042acf26c71",
+      "name": "Dryad Arbor",
+      "layout": "normal",
+      "type_line": "Land Creature — Forest Dryad",
+      "cmc": 0,
+      "color_identity": [
+        "G"
+      ],
+      "colors": [
+        "G"
+      ],
+      "oracle_text": "(This land isn't a spell, it's affected by summoning sickness, and it has \"{T}: Add {G}.\")",
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "not_legal",
+        "timeless": "not_legal",
+        "gladiator": "not_legal",
+        "pioneer": "not_legal",
+        "modern": "legal",
+        "legacy": "legal",
+        "pauper": "not_legal",
+        "vintage": "legal",
+        "penny": "not_legal",
+        "commander": "legal",
+        "oathbreaker": "legal",
+        "standardbrawl": "not_legal",
+        "brawl": "not_legal",
+        "competitivebrawl": "not_legal",
+        "alchemy": "not_legal",
+        "paupercommander": "not_legal",
+        "duel": "legal",
+        "oldschool": "not_legal",
+        "premodern": "not_legal",
+        "predh": "legal",
+        "tlr": "legal"
+      }
+    },
+    {
+      "id": "c1e0f201-42cb-46a1-901a-65bb4fc18f6c",
+      "oracle_id": "4c6a0c30-b547-4eff-8ff4-0ca25803c076",
+      "name": "Urza's Saga",
+      "layout": "saga",
+      "type_line": "Enchantment Land — Urza's Saga",
+      "cmc": 0,
+      "color_identity": [],
+      "colors": [],
+      "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — This Saga gains \"{T}: Add {C}.\"\nII — This Saga gains \"{2}, {T}: Create a 0/0 colorless Construct artifact creature token with 'This token gets +1/+1 for each artifact you control.'\"\nIII — Search your library for an artifact card with mana cost {0} or {1}, put it onto the battlefield, then shuffle.",
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "not_legal",
+        "timeless": "not_legal",
+        "gladiator": "not_legal",
+        "pioneer": "not_legal",
+        "modern": "legal",
+        "legacy": "legal",
+        "pauper": "not_legal",
+        "vintage": "restricted",
+        "penny": "not_legal",
+        "commander": "legal",
+        "oathbreaker": "legal",
+        "standardbrawl": "not_legal",
+        "brawl": "not_legal",
+        "competitivebrawl": "not_legal",
+        "alchemy": "not_legal",
+        "paupercommander": "not_legal",
+        "duel": "legal",
+        "oldschool": "not_legal",
+        "premodern": "not_legal",
+        "predh": "not_legal",
+        "tlr": "legal"
+      }
+    },
+    {
+      "id": "b5b71cd2-de35-451f-b16e-2e3936169407",
+      "oracle_id": "d6d72f5f-8f5d-4180-b514-f22ff5482902",
+      "name": "Bonecrusher Giant // Stomp",
+      "layout": "adventure",
+      "type_line": "Creature — Giant // Instant — Adventure",
+      "cmc": 3,
+      "color_identity": [
+        "R"
+      ],
+      "colors": [
+        "R"
+      ],
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "legal",
+        "timeless": "legal",
+        "gladiator": "legal",
+        "pioneer": "legal",
+        "modern": "legal",
+        "legacy": "legal",
+        "pauper": "not_legal",
+        "vintage": "legal",
+        "penny": "legal",
+        "commander": "legal",
+        "oathbreaker": "legal",
+        "standardbrawl": "not_legal",
+        "brawl": "legal",
+        "competitivebrawl": "legal",
+        "alchemy": "not_legal",
+        "paupercommander": "not_legal",
+        "duel": "legal",
+        "oldschool": "not_legal",
+        "premodern": "not_legal",
+        "predh": "not_legal",
+        "tlr": "legal"
+      },
+      "card_faces": [
+        {
+          "name": "Bonecrusher Giant",
+          "type_line": "Creature — Giant",
+          "oracle_text": "Whenever this creature becomes the target of a spell, this creature deals 2 damage to that spell's controller."
+        },
+        {
+          "name": "Stomp",
+          "type_line": "Instant — Adventure",
+          "oracle_text": "Damage can't be prevented this turn. Stomp deals 2 damage to any target."
+        }
+      ]
+    },
+    {
+      "id": "c5cb3052-358d-44a7-8cfd-cd31b236494a",
+      "oracle_id": "d2075f58-b0e9-4e85-b7e6-0523a27a1d5b",
+      "name": "Bala Ged Recovery // Bala Ged Sanctuary",
+      "layout": "modal_dfc",
+      "type_line": "Sorcery // Land",
+      "cmc": 3,
+      "color_identity": [
+        "G"
+      ],
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "legal",
+        "timeless": "legal",
+        "gladiator": "legal",
+        "pioneer": "legal",
+        "modern": "legal",
+        "legacy": "legal",
+        "pauper": "not_legal",
+        "vintage": "legal",
+        "penny": "not_legal",
+        "commander": "legal",
+        "oathbreaker": "legal",
+        "standardbrawl": "not_legal",
+        "brawl": "legal",
+        "competitivebrawl": "legal",
+        "alchemy": "not_legal",
+        "paupercommander": "not_legal",
+        "duel": "legal",
+        "oldschool": "not_legal",
+        "premodern": "not_legal",
+        "predh": "not_legal",
+        "tlr": "legal"
+      },
+      "card_faces": [
+        {
+          "name": "Bala Ged Recovery",
+          "type_line": "Sorcery",
+          "colors": [
+            "G"
+          ],
+          "oracle_text": "Return target card from your graveyard to your hand."
+        },
+        {
+          "name": "Bala Ged Sanctuary",
+          "type_line": "Land",
+          "colors": [],
+          "oracle_text": "This land enters tapped.\n{T}: Add {G}."
+        }
+      ]
+    },
+    {
+      "id": "18303862-4726-4136-814f-157aa7006579",
+      "oracle_id": "ae92942b-919c-4ea9-b693-85fcef765d5a",
+      "name": "Fire // Ice",
+      "layout": "split",
+      "type_line": "Instant // Instant",
+      "cmc": 4,
+      "color_identity": [
+        "R",
+        "U"
+      ],
+      "colors": [
+        "R",
+        "U"
+      ],
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "not_legal",
+        "timeless": "not_legal",
+        "gladiator": "not_legal",
+        "pioneer": "not_legal",
+        "modern": "legal",
+        "legacy": "legal",
+        "pauper": "legal",
+        "vintage": "legal",
+        "penny": "not_legal",
+        "commander": "legal",
+        "oathbreaker": "legal",
+        "standardbrawl": "not_legal",
+        "brawl": "not_legal",
+        "competitivebrawl": "not_legal",
+        "alchemy": "not_legal",
+        "paupercommander": "legal",
+        "duel": "legal",
+        "oldschool": "not_legal",
+        "premodern": "legal",
+        "predh": "legal",
+        "tlr": "legal"
+      },
+      "card_faces": [
+        {
+          "name": "Fire",
+          "type_line": "Instant",
+          "oracle_text": "Fire deals 2 damage divided as you choose among one or two targets."
+        },
+        {
+          "name": "Ice",
+          "type_line": "Instant",
+          "oracle_text": "Tap target permanent.\nDraw a card."
+        }
+      ]
+    },
+    {
+      "id": "d8e84dd2-01f9-4fad-8a24-cc86424d09a2",
+      "oracle_id": "a84f0b11-5c59-4bab-81ef-a84470fb2ade",
+      "name": "Very Cryptic Command",
+      "layout": "normal",
+      "type_line": "Instant",
+      "cmc": 4,
+      "color_identity": [
+        "U"
+      ],
+      "colors": [
+        "U"
+      ],
+      "oracle_text": "Choose two —\n• Counter target black-bordered spell.\n• Return target creature to its owner's hand.\n• Untap each permanent you control with a watermark.\n• Roll two six-sided dice. Target player mills X cards, where X is the total of those results.",
+      "legalities": {
+        "standard": "not_legal",
+        "future": "not_legal",
+        "historic": "not_legal",
+        "timeless": "not_legal",
+        "gladiator": "not_legal",
+        "pioneer": "not_legal",
+        "modern": "not_legal",
+        "legacy": "not_legal",
+        "pauper": "not_legal",
+        "vintage": "not_legal",
+        "penny": "not_legal",
+        "commander": "not_legal",
+        "oathbreaker": "not_legal",
+        "standardbrawl": "not_legal",
+        "brawl": "not_legal",
+        "competitivebrawl": "not_legal",
+        "alchemy": "not_legal",
+        "paupercommander": "not_legal",
+        "duel": "not_legal",
+        "oldschool": "not_legal",
+        "premodern": "not_legal",
+        "predh": "not_legal",
+        "tlr": "not_legal"
+      }
+    }
+  ]
+}

@@ -120,8 +120,18 @@ export function bracketReport(deck, snapshot=COMMANDER_BRACKETS, now=Date.now())
   const canSuggest=available && !stale && !missing && deck.format==='commander' && deck.cards.some(e=>zoneFor(e)!=='sideboard' && zoneFor(e)!=='maybeboard');
   return {available,stale,missing,count,matches:[...matches.values()],range:canSuggest&&count>0?(count<=3?[3,5]:[4,5]):null,canSuggest};
 }
-export const isLand = card => /\bLand\b/.test(card.type_line);
-export const category = card => ['Land', 'Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Battle'].find(t => card.type_line?.includes(t)) || 'Other';
+// One primary group per entry; multi-type filters still recognize every type on the deck-facing side.
+const TYPE_PRIORITY=['Land','Creature','Planeswalker','Instant','Sorcery','Artifact','Enchantment','Battle','Conspiracy','Dungeon','Phenomenon','Plane','Scheme','Vanguard','Kindred'];
+export function deckTypeLine(card) {
+  if(card.layout==='split')return card.type_line || card.card_faces?.map(f=>f.type_line || '').join(' // ') || '';
+  return card.card_faces?.[0]?.type_line || card.type_line?.split(' // ')[0] || '';
+}
+export function cardTypes(card) {
+  const tokens=deckTypeLine(card).split(' // ').flatMap(line=>line.split(' — ')[0].split(/\s+/)).map(t=>t==='Tribal'?'Kindred':t);
+  return TYPE_PRIORITY.filter(type=>tokens.includes(type));
+}
+export const isLand = card => cardTypes(card).includes('Land');
+export const category = card => cardTypes(card)[0] || 'Other';
 // The first personal role is primary; keeping the ordered tags preserves legacy backups.
 export const primaryRole = entry => entry.tags[0] || 'Unassigned';
 export function deckEntries(deck, { type = '', role = '', search = '', order = 'name' } = {}) {
@@ -135,8 +145,8 @@ export function deckEntries(deck, { type = '', role = '', search = '', order = '
     return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
   };
   return deck.cards.filter(e=>{
-    const text=[e.card.name,e.card.type_line,category(e.card),primaryRole(e),...e.tags].join(' ').toLocaleLowerCase('en');
-    return (!type || e.card.type_line.includes(type)) && (!role || e.tags.includes(role)) && terms.every(term=>text.includes(term));
+    const text=[e.card.name,deckTypeLine(e.card),category(e.card),primaryRole(e),...e.tags].join(' ').toLocaleLowerCase('en');
+    return (!type || (TYPE_PRIORITY.includes(type)?cardTypes(e.card).includes(type):deckTypeLine(e.card).includes(type))) && (!role || e.tags.includes(role)) && terms.every(term=>text.includes(term));
   }).sort((a,b)=>{
     const av=value(a),bv=value(b);
     // Missing values always sort last, including in descending order.
