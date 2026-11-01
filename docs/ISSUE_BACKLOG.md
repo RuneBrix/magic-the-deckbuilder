@@ -36,5 +36,9 @@ See [feature status](FEATURES.md), [proposed priorities](ROADMAP.md) and [the de
 - [#38: Compact deck listings and commander artwork](https://github.com/RuneBrix/magic-the-deckbuilder/issues/38) — implemented; artwork/title opening, compact identity/bracket display and management disclosure.
 - [#39: Compact full-width editor header](https://github.com/RuneBrix/magic-the-deckbuilder/issues/39) — implemented; shared management disclosure and focused bracket-guidance destination.
 
-- [#40: Deck grouping, sorting and text filtering](https://github.com/RuneBrix/magic-the-deckbuilder/issues/40) — implemented for the current editor; new layouts remain #41.
+- [#40: Deck grouping, sorting and text filtering](https://github.com/RuneBrix/magic-the-deckbuilder/issues/40) — implemented across the four editor layouts.
 - [#42: Left, card-aligned hover/focus previews](https://github.com/RuneBrix/magic-the-deckbuilder/issues/42) — implemented with a sticky desktop rail and narrow-screen details access.
+
+- [#41: Four visual/text deck views](https://github.com/RuneBrix/magic-the-deckbuilder/issues/41) — implemented for review; default horizontal visual stacks and shared controls.
+- [#43: Compact card menus](https://github.com/RuneBrix/magic-the-deckbuilder/issues/43) — implemented for review; explicit named-deck scope and private function creation.
+- [#44: Persistent Maybeboard](https://github.com/RuneBrix/magic-the-deckbuilder/issues/44) — implemented for review; outside playing totals/statistics/checks/brackets, preserved by JSON and sectioned text.

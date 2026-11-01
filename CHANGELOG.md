@@ -1,5 +1,25 @@
 # Changelog
 
+## Deck view review refinements — 2026-11-01
+
+- Preserve the full native top border on card portraits. Fit the toolbar backing behind rounded image corners instead of overlapping the image; retain anchored hover reveals and continuous vertical stacks.
+
+- Keep earlier cards fixed during hover reveals: horizontal stacks move only later cards right; vertical stacks move only later cards down. Compact vertical toolbars are 33px high on desktop, and full artwork continues behind the next rounded toolbar with consistent portrait joins. Narrow/touch views wrap full cards and retain larger controls.
+
+- Align horizontal text entries to the same page-width three-column grid as vertical text. Add 8px gaps to sparse horizontal visual groups and an immediate hover/focus fan that pushes following cards right, redistributes overlap and uses reserved opening space without a sideways scroller.
+
+- Horizontal visual cards remain separate until they fill the group, then overlap progressively with card count and available width without sideways scrolling. Hover/focus reveals covered controls. Every vertical toolbar keeps rounded upper corners, vertical visual groups wrap, and text +/− buttons gain the same hover outline.
+
+- Unified full-width visual toolbars with outlined, tinted surfaces attached to artwork; options borders appear on hover, and options/quantity symbols are centered. Vertical stacks join at straight edges, spacing between groups/zones is tighter, and vertical text keeps three desktop group slots even for a single commander ([PR #51](https://github.com/RuneBrix/magic-the-deckbuilder/pull/51)).
+
+## Deck views, card actions and Maybeboard — 2026-10-31
+
+- Refined PR #51 after review: visual quantity/actions sit above artwork with reserved vertical-stack spacing; Command zone comes first in every view. Text rows are slimmer, align quantity/name sizing, put mana costs beside ellipsized names with full-name hover titles, and wrap vertical text groups into new rows.
+
+- Added four visual/text deck views with horizontal visual stacks as default, shared grouping/filtering/sorting and responsive quantity/menu controls ([#41](https://github.com/RuneBrix/magic-the-deckbuilder/issues/41)).
+- Added compact card menus for details, private function assignment/creation, zone moves, name copying, explicit copying to another deck and confirmed removal across all zones ([#43](https://github.com/RuneBrix/magic-the-deckbuilder/issues/43)).
+- Added persistent Maybeboard, excluded from playing totals, statistics, construction checks and brackets by user decision. Moves, duplication, JSON backups and sectioned text preserve it; text still omits roles/printing/bracket metadata ([#44](https://github.com/RuneBrix/magic-the-deckbuilder/issues/44)).
+
 ## Deck controls and left preview — 2026-10-31
 
 - Added live deck text filtering, Type/Function/No grouping labels and Sort by modes for stored-printing USD price, power and toughness. Missing/nonnumeric values sort last; existing name, mana value and quantity sorts remain ([#40](https://github.com/RuneBrix/magic-the-deckbuilder/issues/40)).

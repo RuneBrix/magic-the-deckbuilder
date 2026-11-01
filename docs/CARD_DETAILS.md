@@ -4,7 +4,7 @@ Implemented for [#25](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2
 
 ## Facts and deck context
 
-Details separates full card artwork, mana/type/Oracle text, card facts, stored legality and release metadata from a named deck section. Multiple image faces remain complete. A full-editor row opens that row’s stored printing, even if search results contain another printing. Exploration targets only its explicitly tracked deck; with no tracker, general facts and printing previews remain available and Add to… requires a destination. A card absent from the target’s Main deck can be added there; a sideboard/command entry is edited by inspecting its row.
+Details separates full card artwork, mana/type/Oracle text, card facts, stored legality and release metadata from a named deck section. Multiple image faces remain complete. A full-editor row opens that row’s stored printing, even if search results contain another printing. Exploration targets only its explicitly tracked deck; with no tracker, general facts and printing previews remain available and Add to… requires a destination. A card absent from the target’s Main deck can be added there; a sideboard/command/Maybeboard entry is edited by inspecting its row.
 
 The deck section names the deck, zone, copy count and stored printing. Personal roles are the existing ordered `tags` array: first role controls primary-function grouping, every role remains filterable and counted in statistics. They are browser-local personal labels, distinct from public Scryfall function tags. Examples are placeholders, never saved default roles.
 
