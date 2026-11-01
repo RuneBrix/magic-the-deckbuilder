@@ -1,6 +1,6 @@
 # Portable workspace files
 
-Decision for [D04 / #4](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4), 1 November 2026: the user chose **portable local files**. Cloud synchronization and accounts are deferred. The versioned file reader/writer and staged additive open are implemented for review in #63; file-status workflow improvements remain tracked in #64.
+Decision for [D04 / #4](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4), 1 November 2026: the user chose **portable local files**. Cloud synchronization and accounts are deferred. The versioned file reader/writer and staged additive open are implemented for review in #63; file-status and recovery guidance are implemented for review in #64.
 
 ## Ownership and working copy
 
@@ -36,3 +36,11 @@ Verification: Windows Node v24.14.1, 111 automated checks pass. Live Windows in-
 Decision review: [PR #66](https://github.com/RuneBrix/magic-the-deckbuilder/pull/66).
 
 File implementation review: [PR #68](https://github.com/RuneBrix/magic-the-deckbuilder/pull/68).
+
+## File request status and recovery guidance (#64)
+
+Settings separates browser autosave from portable files. Save workspace copy starts a download request and records a session-only snapshot/time. The status says whether the working copy has changed since that request; it does not inspect disk contents or claim download completion. Reload starts a new session with no export request recorded. A single-deck or pending-import export does not reset the whole-workspace reminder. Download initiation errors remain visible in Settings without changing the previous snapshot. If the browser cancels after initiation, use the check-Downloads guidance and request another copy; the app cannot observe that cancellation reliably.
+
+Move files and recover decks explains manual device transfer, duplicate-copy behavior, dated snapshots, offline editing and online-data limits. Keep the current page open and export in-memory edits if browser saving fails. Existing browser-save failure feedback remains active even after a recovery file request. No workspace replacement action is introduced; the earlier backup/explicit-confirmation requirement still applies to any future replacement design.
+
+Verification: Windows Node v24.14.1, 113 tests pass. Live Windows in-app browser confirmed download-request status, changed-workspace status after creating a deck, keyboard Escape, native file selection and phone preview. Desktop light and 390px dark settings inspected; dialog width 358px with no horizontal page overflow. Browser version, physical touch and macOS/Safari remain unverified. Browser failure/download-initiation failure/cancelled reads are covered automatically, not reproduced by altering real browser storage.

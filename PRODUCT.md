@@ -22,4 +22,4 @@ The compact full-width editor keeps Find cards to add visible beside its title; 
 
 ## Open decisions
 
-Portable local workspace files are the selected next storage direction (#4); implementation remains open in #63/#64. Cloud sync/accounts are deferred. Other open decisions: live taxonomy synchronization, complete Commander/companion validation, collection tracking, and native desktop packaging.
+Portable local workspace files are the selected storage direction (#4): versioned downloads, legacy-compatible staged additive open (#63), and session-only file reminders/recovery guidance (#64) are implemented for review. Cloud sync/accounts are deferred. Other open decisions: live taxonomy synchronization, complete Commander/companion validation, collection tracking, and native desktop packaging.

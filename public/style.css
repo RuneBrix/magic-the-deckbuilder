@@ -870,3 +870,6 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 #restore-recovery[hidden]{display:none}
 #restore-preview{overflow-wrap:anywhere}
 #restore-preview ul{padding-left:24px;line-height:1.6}
+
+.backup-help{margin-top:20px;line-height:1.6;overflow-wrap:anywhere}
+#backup-status{font-weight:600}

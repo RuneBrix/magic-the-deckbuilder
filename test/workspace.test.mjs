@@ -1071,3 +1071,29 @@ test('portable download writes a versioned complete file and reports initiation 
   w.document.createElement=()=>({click(){throw Error('Download blocked');}});
   assert.equal(vm.runInContext('saveWorkspaceCopy()',w.context),false);assert.match(w.node('#toast').textContent,/Could not request/);
 });
+
+
+test('file status tracks full-workspace requests without confusing them with browser saves or per-deck exports',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  w.context.Blob=class{constructor(parts){this.size=parts[0].length;}};
+  vm.runInContext('download=()=>{};settings()',w.context);
+  assert.match(w.node('#backup-status').textContent,/No workspace file requested/);
+  vm.runInContext('saveWorkspaceCopy()',w.context);assert.match(w.node('#backup-status').textContent,/No further workspace changes/);
+  vm.runInContext("decks[0].name='Edited';save()",w.context);assert.match(w.node('#backup-status').textContent,/Workspace changed/);
+  vm.runInContext('saveWorkspaceCopy([decks[0]])',w.context);assert.match(w.node('#backup-status').textContent,/Workspace changed/);
+  vm.runInContext('saveWorkspaceCopy()',w.context);assert.match(w.node('#backup-status').textContent,/No further workspace changes/);
+  vm.runInContext("decks[0].name='Edited again';download=()=>{throw Error('Cancelled or blocked')};saveWorkspaceCopy()",w.context);
+  assert.match(w.node('#backup-status').textContent,/Workspace changed/);assert.match(w.node('#backup-download-error').textContent,/Could not request/);
+  assert.match(w.node('#app').innerHTML,/Saved in this browser/);
+});
+test('failed browser saving retains in-memory edits and permits a portable recovery request',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  w.context.Blob=class{constructor(parts){this.size=parts[0].length;}};
+  w.context.localStorage.setItem=()=>{throw Error('Storage full');};
+  vm.runInContext("download=()=>{};decks[0].name='Recover me';save();render();settings()",w.context);
+  assert.match(w.node('#app').innerHTML,/Unsaved changes/);
+  assert.equal(vm.runInContext('saveWorkspaceCopy()',w.context),true);
+  assert.match(w.node('#backup-status').textContent,/No further workspace changes/);
+  assert.equal(vm.runInContext('decks[0].name',w.context),'Recover me');
+  assert.match(vm.runInContext('storageError',w.context),/full or unavailable/);
+});

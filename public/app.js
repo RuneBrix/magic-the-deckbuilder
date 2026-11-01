@@ -19,6 +19,7 @@ function applyTheme() {
 systemTheme.addEventListener('change', applyTheme);
 applyTheme();
 let storageError = '';
+let requestedExportSnapshot=null, requestedExportAt='', downloadError='';
 let decks;
 try { const saved = localStorage.getItem('arcana.decks.v1'); decks = saved ? validateBackup(JSON.parse(saved)) : []; }
 catch { decks = []; storageError = 'Saved decks could not be read. Restore a JSON backup before making changes.'; }
@@ -56,6 +57,7 @@ function trackDeck(id) {
 }
 const cardKey = c => c.oracle_id || c.id;
 function save() {
+  updateBackupStatus();
   if (storageError) { toast(storageError); return; }
   try { localStorage.setItem('arcana.decks.v1', JSON.stringify(decks)); }
   catch { storageError = 'Browser storage is full or unavailable. Export a JSON backup now to keep your changes.'; toast(storageError); }
@@ -69,9 +71,11 @@ function saveWorkspaceCopy(source=decks,name='arcana-workspace.json') {
     const content=JSON.stringify(workspaceFile(source),null,2);
     if(new Blob([content]).size>15_000_000)throw Error('Workspace file exceeds the 15 MB import limit. Export individual decks instead.');
     download(name,content,'application/json');
+    if(source===decks){requestedExportSnapshot=JSON.stringify(decks);requestedExportAt=new Date().toLocaleString();}
+    downloadError='';updateBackupStatus();
     toast('JSON download requested. Check your browser downloads and keep a dated copy.');
     return true;
-  } catch(error) { toast('Could not request a JSON download. '+error.message);return false; }
+  } catch(error) { downloadError='Could not request a JSON download. '+error.message;updateBackupStatus();toast(downloadError);return false; }
 }
 function changeNamedDeck(d,fn){if(!decks.includes(d))throw Error('That deck is no longer available.');const result=fn(d);d.updated=new Date().toISOString();save();render();return result;}
 function changeDeck(fn) { const d=current();if(d)return changeNamedDeck(d,fn); }
@@ -526,8 +530,19 @@ function deckForm(deck,after) {
     after?.(deck || decks.at(-1));
   };
 }
+function backupStatus() {
+  if(requestedExportSnapshot===null)return 'No workspace file requested this session.';
+  return JSON.stringify(decks)===requestedExportSnapshot
+    ? 'No further workspace changes since the last file request ('+requestedExportAt+').'
+    : 'Workspace changed since the last file request ('+requestedExportAt+'). Save another copy to include these edits.';
+}
+function updateBackupStatus() {
+  const status=$('#backup-status');if(status)status.textContent=backupStatus();
+  const error=$('#backup-download-error');if(error)error.textContent=downloadError;
+}
 function settings() {
-  showDialog(`<h2>Workspace settings</h2><p>Appearance and backups for this browser.</p><label class="theme-setting">Appearance<select id="theme">${[['system','Use device setting'],['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${theme===v?'selected':''}>${l}</option>`).join('')}</select></label><label class="theme-setting">Dark palette<select id="dark-palette">${DARK_PALETTES.map(([v,l])=>`<option value="${v}" ${palette===v?'selected':''}>${l}</option>`).join('')}</select></label><p class="hint">Used in Dark mode and when the device uses dark appearance.</p><h3 class="settings-heading">Deck backups</h3><p>Decks are saved only in this browser. A JSON backup preserves cards, commanders, and role tags.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Export JSON backup</button><button class="secondary" id="settings-restore">${icon('upload',16)} Restore JSON backup</button></div>`);
+  showDialog(`<h2>Workspace settings</h2><p>Appearance and backups for this browser.</p><label class="theme-setting">Appearance<select id="theme">${[['system','Use device setting'],['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${theme===v?'selected':''}>${l}</option>`).join('')}</select></label><label class="theme-setting">Dark palette<select id="dark-palette">${DARK_PALETTES.map(([v,l])=>`<option value="${v}" ${palette===v?'selected':''}>${l}</option>`).join('')}</select></label><p class="hint">Used in Dark mode and when the device uses dark appearance.</p><h3 class="settings-heading">Portable workspace files</h3><p>Browser autosave keeps edits on this address and device. It does not update downloaded files.</p><p id="backup-status" role="status"></p><p id="backup-download-error" role="alert"></p><p>A file request starts a browser download; check Downloads to confirm it finished. If you cancel or cannot find it, request another copy.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Save workspace copy</button><button class="secondary" id="settings-restore">${icon('upload',16)} Open workspace file…</button></div><details class="backup-help"><summary>Move files and recover decks</summary><p>Save a complete JSON copy, then move it to your other device and use Open workspace file. Opening adds independent copies, even for decks already present; it never merges or replaces decks. Keep dated copies and rename duplicates to compare them.</p><p>An older file restores only its snapshot; later edits are absent. If browser saving fails, keep this page open and save a workspace copy before leaving.</p><p>Once Arcana is running, editing stored cards and opening or saving JSON work offline. Search, text imports, printing lookups, uncached images and legality refresh need internet. No account or cloud sync is used; external file-sync conflicts remain yours to resolve.</p></details>`);
+  updateBackupStatus();
   $('#dark-palette').onchange=e=>{palette=e.target.value;applyTheme();try{localStorage.setItem('arcana.palette.v1',palette);}catch{toast('Palette changed for this session. Browser storage is unavailable.');}};
   $('#theme').onchange=e=>{theme=e.target.value;applyTheme();try{localStorage.setItem('arcana.theme.v1',theme);}catch{toast('Appearance changed for this session. Browser storage is unavailable.');}};
   $('#settings-backup').onclick=()=>saveWorkspaceCopy();
@@ -678,7 +693,7 @@ function restore(){
       const next=validateBackup([...decks,...staged]);
       // Persist the staged copy first: a failed write leaves the live workspace untouched.
       localStorage.setItem('arcana.decks.v1',JSON.stringify(next));
-      const first=staged[0].id;decks=next;staged=null;apply.disabled=true;storageError='';active=first;
+      const first=staged[0].id;decks=next;staged=null;apply.disabled=true;storageError='';active=first;updateBackupStatus();
       $('#dialog').close();render();toast('Independent deck copies added and saved in this browser.');
     }catch(error){
       errorNode.textContent='Nothing added. '+error.message+' Retry, save your current workspace, or save the pending import copy.';
