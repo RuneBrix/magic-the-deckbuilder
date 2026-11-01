@@ -30,8 +30,8 @@ This inventory describes what the app does today. GitHub Issues track future wor
 | Responsive interface | Implemented | Shared top navigation, full editor/library and compact local-save status; optional discovery tracker and named mobile tracker shortcut | [#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16); Windows desktop/390px browser checks |
 | Focused workspace and appearance | Implemented | Expandable filters/function tags and secondary query-only help; effective query always editable above. Settings contains backups and persisted light/dark/device appearance; self-hosted typefaces and custom SVG navigation icons | [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9), [#22](https://github.com/RuneBrix/magic-the-deckbuilder/issues/22); workspace/browser checks |
 | macOS support | Partial | Cross-platform Node 22+ implementation; CI matrix for Windows/macOS/Linux on Node 22/24; configured coverage is not a passing result. Directly tested on Windows only; macOS browser verification remains open | Roadmap D05 |
-| Collection ownership | Planned | No inventory of owned cards | Roadmap D07 |
-| Price and budget planning | Partial | Individual prices from Scryfall; no deck budget totals or alerts | Roadmap D07 |
+| Collection ownership | Planned | No inventory of owned cards; combined collection/budget workflow selected, [scope](COLLECTION_BUDGETS.md), implementation #70/#71 and interchange #72 | Roadmap D07 |
+| Price and budget planning | Partial | Individual prices from Scryfall; no deck budget totals or alerts. EUR planning defaults and ownership integration [scoped](COLLECTION_BUDGETS.md) for #70/#71 | Roadmap D07 |
 | Native desktop application | Planned | Runs in a browser today; packaging undecided | Roadmap D08 |
 
 ## Validation baseline
