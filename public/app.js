@@ -221,11 +221,12 @@ function previewEntry(key) {
 }
 function deckEntry(e) {
   const key=entryKey(e),visual=editorOptions.layout.startsWith('visual'),image=safeUrl(imageFor(e.card),true),zone=ZONES[zoneFor(e)];
-  const quantity=`<div class="card-quantity"><button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">${icon('minus',14)}</button><button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${e.qty>=500?'disabled':''}>${icon('plus',14)}</button></div>`;
+  const minus=`<button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">${icon('minus',14)}</button>`,plus=`<button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${e.qty>=500?'disabled':''}>${icon('plus',14)}</button>`;
+  const quantity=`<div class="card-quantity">${visual?plus+minus:minus+plus}</div>`;
   const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
-  const badge=`<span class="entry-quantity" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>`;
+  const badge=`<span class="entry-quantity${visual&&e.qty>=100?' three-digits':''}" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>`;
   const art=`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
-  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`<div class="card-toolbar">${badge}${quantity}${menu}</div>${art}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}</div>${art}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckList(d, full=false) {
   const filtered=full?deckEntries(d,editorOptions):d.cards,zones=['command','main','sideboard','maybeboard'].map(z=>[z,ZONES[z]]);
