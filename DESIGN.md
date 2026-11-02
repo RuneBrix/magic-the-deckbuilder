@@ -1,6 +1,6 @@
 # Arcana interface
 
-Visual-card controls (#52) supersede the above-artwork toolbar described in historical review records below: small gray triangular quantities entirely inside rounded top-left corners, transparent right-side plus/minus/options and 48px vertical resting advances. Full portraits, text layouts, keyboard focus and 44px phone targets remain.
+Visual-card controls (#52) supersede the above-artwork toolbar described in historical review records below: small palette-colored triangular quantities entirely inside rounded top-left corners, transparent right-side plus/minus/options and 48px vertical resting advances. Full portraits, text layouts, keyboard focus and 44px phone targets remain.
 
 
 The workspace serves card discovery and deck editing. Issue [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9) established a collector’s index: warm paper, forest-green ink, crisp rules and restrained square controls. The shared header, dedicated deck editor and library in issues [#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16), [#17](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17) and [#18](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18) extend this visual world. Card imagery remains complete and uncropped in discovery, details and deck-row previews. Library covers use art-focused landscape crops (#38).

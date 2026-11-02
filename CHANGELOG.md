@@ -2,7 +2,7 @@
 
 ## Visual card corner controls - 2026-11-02
 
-- Replace above-artwork toolbars with small gray triangular quantities entirely inside rounded card corners and transparent right-side plus, minus and options controls in both visual views (#52). Preserve keyboard focus, menus, text layouts and complete artwork; tighten vertical resting advances to 48px and retain 44px touch targets. Center quantities away from the corner edges using larger Public Sans numerals and normal letter spacing.
+- Replace above-artwork toolbars with small palette-colored triangular quantities entirely inside rounded card corners and transparent right-side plus, minus and options controls in both visual views (#52). Preserve keyboard focus, menus, text layouts and complete artwork; tighten vertical resting advances to 48px and retain 44px touch targets. Center quantities away from the corner edges using larger Public Sans numerals and normal letter spacing. Counter colors follow the selected palette; plus, minus and options share equal square bounds.
 
 ## Quieter deck views and persistent navigation — 2026-11-02
 
