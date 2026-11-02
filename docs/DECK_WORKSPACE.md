@@ -2,7 +2,7 @@
 
 ## Viewing and scrolling follow-ups (#53 / #57 / #61)
 
-Sideboard and Maybeboard viewing sections appear only when the stored zone has entries, across all four editor layouts and the tracker. Filtering a populated zone to zero results retains its heading, underlying count and no-match explanation. Zone totals and add/move destinations remain available, including empty zones; drag-and-drop remains separate work in #55.
+Sideboard and Maybeboard viewing sections appear only when the stored zone has entries, across all four editor layouts and the tracker. Filtering a populated zone to zero results retains its heading, underlying count and no-match explanation. Zone totals and add/move destinations remain available, including empty zones; the fixed drag destination strip also retains every zone (#55).
 
 Statistics places the mana curve and average on the left, with independent card-type, personal-role and color tools on the right. Labels/counts stay adjacent; the board becomes one column at 600px. Existing quantity weighting, zone exclusions and multicolor counting are unchanged.
 
@@ -11,6 +11,14 @@ Shared navigation sticks to the viewport top. Its measured height follows wrappi
 Validation: 130 native Node tests pass on Windows / Node 24.14.1, including optional-zone transitions/filtering in all layouts, retained destinations, statistics rendering and header measurement. Browser checks are outstanding: the in-app browser could not reach the local server, and Windows Computer Use stopped because it could not confidently determine Chrome's URL for policy enforcement. No desktop/mobile, light/dark, keyboard/touch or macOS/Safari browser result is claimed for these changes. The Impeccable engine was unavailable.
 
 Issues [#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16), [#17](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17) and [#18](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18) establish shared navigation, a full editor, and library management. GitHub issues/PRs track review and merge status.
+
+## Direct card dragging (#55)
+
+Selected before implementation: a drag carries **all copies in one stored deck/zone entry**. Zone drops reuse the existing validated move; destination merges retain their printing and union Functions. Dropping onto an existing Function group makes that Function primary while retaining the card's other assignments and its source zone. Type groups are never Function targets. The Unassigned fallback is not a Function target.
+
+During a desktop mouse/trackpad drag, each visible Function group is covered within its existing bounds by Add to [function] guidance. A fixed destination strip exposes every zone, even empty hidden Sideboard/Maybeboard; a small red-outline trash target stays at the lower right. Trash opens the existing all-zones, all-copies confirmation with Keep cards focused, and does not delete on drop. Edge scrolling must use current hit testing as the viewport moves.
+
+Pointer-based dragging with capture is an optional desktop shortcut. Keyboard and touch use the existing card menus for the same Function, move and confirmed-delete operations; touch scrolling is not replaced with a custom drag gesture. The editor states quantity and alternatives before a drag. External payloads, stale entries, cancellation and invalid/overflow drops cannot mutate deck data. No reorder operation, automatic Function classification or new dependency is introduced.
 
 ## Navigation and adding cards
 

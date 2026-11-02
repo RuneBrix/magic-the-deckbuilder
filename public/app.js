@@ -42,6 +42,7 @@ let browsedTag = '', tagLimit = 30, allTags = false;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
 let previewKey = '', previewDeck = '', cardActionTrigger = null;
+let cardDrag = null, cardDragPress = null, suppressCardClick = false;
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
 let detail = null;
@@ -85,6 +86,7 @@ function updateNavigationHeight() {
 }
 const navigationObserver=typeof ResizeObserver==='undefined'?null:new ResizeObserver(updateNavigationHeight);
 function render() {
+  finishCardDrag();
   closeCardActions(false);
   const focused=document.activeElement;
   let focusSelector='';
@@ -214,7 +216,7 @@ function previewMarkup(d) {
 }
 function deckCards(d) {
   if(previewDeck!==d.id || !deckEntries(d,editorOptions).some(e=>entryKey(e)===previewKey)){previewKey='';previewDeck=d.id;}
-  return `<div class="deck-card-area" id="editor-card-area"><aside class="deck-hover-preview" aria-label="Card preview"><div id="deck-card-preview">${previewMarkup(d)}</div></aside><div class="deck-rows">${deckList(d,true)}</div></div>`;
+  return `<div id="editor-card-area"><p class="hint deck-drag-help" id="deck-drag-help">Drag all copies in an entry to a zone${editorOptions.group==='role'?' or Function group':''}. Delete card asks for confirmation across all zones. For keyboard or touch, use the card’s options menu.</p><div class="deck-card-area"><aside class="deck-hover-preview" aria-label="Card preview"><div id="deck-card-preview">${previewMarkup(d)}</div></aside><div class="deck-rows">${deckList(d,true)}</div></div><div id="deck-drag-targets" hidden><p id="deck-drag-label" role="status"></p><div class="drag-zone-targets" aria-label="Move all entry copies to a zone">${Object.entries(ZONES).map(([zone,label])=>`<div data-drop-zone="${zone}">Move to ${label}</div>`).join('')}</div><div class="drag-trash" data-drop-trash title="Confirm deletion of all copies across all zones"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg><span>Delete card…</span><small>All zones · asks first</small></div></div></div>`;
 }
 function previewEntry(key) {
   const d=current();if(view!=='deck' || deckTab!=='cards' || !d || previewKey===key)return;
@@ -228,8 +230,8 @@ function deckEntry(e) {
   const quantity=`<div class="card-quantity">${visual?plus+minus:minus+plus}</div>`;
   const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
   const badge=`<span class="entry-quantity${visual&&e.qty>=100?' three-digits':''}" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>`;
-  const art=`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
-  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}</div>${art}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
+  const art=`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable aria-describedby="deck-drag-help" data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}</div>${art}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckList(d, full=false) {
   const filtered=full?deckEntries(d,editorOptions):d.cards,zones=['command','main','sideboard','maybeboard'].map(z=>[z,ZONES[z]]);
@@ -237,9 +239,94 @@ function deckList(d, full=false) {
     if(['sideboard','maybeboard'].includes(zone)&&!d.cards.some(e=>zoneFor(e)===zone))return '';
     const entries=filtered.filter(e=>zoneFor(e)===zone),groups=new Map();
     for(const e of entries){const group=full?(editorOptions.group==='role'?primaryRole(e):editorOptions.group==='type'?category(e.card):''):'';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(e);}
-    return `<section class="deck-zone"><h3>${label} · ${zoneCount(d,zone)}${full&&editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3><div class="deck-group-list">${[...groups].map(([group,items])=>`<section class="deck-group">${group?`<h4>${esc(group)}</h4>`:''}<div class="deck-group-items" style="--stack-divisor:${Math.max(1,items.length-2)}">${items.map(e=>full?(editorOptions.layout.startsWith('visual')?`<div class="card-slot">${deckEntry(e)}</div>`:deckEntry(e)):`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span><div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}</div></section>`).join('')||`<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</div></section>`;
+    return `<section class="deck-zone"${full?` data-drop-zone="${zone}"`: ''}><h3>${label} · ${zoneCount(d,zone)}${full&&editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3><div class="deck-group-list">${[...groups].map(([group,items])=>`<section class="deck-group"${full&&editorOptions.group==='role'&&items.some(e=>e.tags[0]===group)?` data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"`:''}>${group?`<h4>${esc(group)}</h4>`:''}<div class="deck-group-items" style="--stack-divisor:${Math.max(1,items.length-2)}">${items.map(e=>full?(editorOptions.layout.startsWith('visual')?`<div class="card-slot">${deckEntry(e)}</div>`:deckEntry(e)):`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span><div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}</div></section>`).join('')||`<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</div></section>`;
   }).join('')+'</div>';
 }
+function finishCardDrag() {
+  cardDragPress=null;
+  if(!cardDrag)return;
+  suppressCardClick=true;
+  if(cardDrag.source.hasPointerCapture?.(cardDrag.pointerId))cardDrag.source.releasePointerCapture(cardDrag.pointerId);
+  cancelAnimationFrame(cardDrag.frame);
+  cardDrag.target?.classList.remove('is-drop-target');
+  cardDrag.source.classList.remove('is-dragging');
+  cardDrag=null;
+  delete document.documentElement.dataset.cardDragging;
+  $('#deck-drag-targets').hidden=true;
+}
+function cardDropTarget(node) {
+  if(!cardDrag || view!=='deck' || deckTab!=='cards' || current()!==cardDrag.deck)return null;
+  const target=node?.closest('[data-drop-trash], [data-drop-function], [data-drop-zone]');
+  if(!target || !$('#editor-card-area').contains(target))return null;
+  if(target.dataset.dropFunction!==undefined && (editorOptions.group!=='role' || !cardDrag.deck.cards.some(e=>e.tags.includes(target.dataset.dropFunction))))return null;
+  if(target.dataset.dropZone!==undefined && (!Object.hasOwn(ZONES,target.dataset.dropZone) || target.dataset.dropZone===cardDrag.zone))return null;
+  return target;
+}
+function highlightCardDrop(node) {
+  const target=cardDropTarget(node);
+  if(target!==cardDrag.target){cardDrag.target?.classList.remove('is-drop-target');target?.classList.add('is-drop-target');cardDrag.target=target;}
+  return target;
+}
+function scrollCardDrag() {
+  if(!cardDrag)return;
+  const {x,y}=cardDrag;
+  if(x!==null && x>=0 && x<innerWidth && y>=0 && y<innerHeight) {
+    const node=document.elementFromPoint(x,y);
+    if(!node?.closest('#deck-drag-targets')) {
+      const top=$('.workspace-nav').getBoundingClientRect().bottom+56;
+      const speed=y<top?-Math.min(16,(top-y)/4):y>innerHeight-64?Math.min(16,(y-innerHeight+64)/4):0;
+      if(speed)scrollBy({top:speed,behavior:'instant'});
+    }
+    highlightCardDrop(document.elementFromPoint(x,y));
+  }
+  cardDrag.frame=requestAnimationFrame(scrollCardDrag);
+}
+// Leave touch scrolling and keyboard controls native. Mouse/trackpad dragging uses
+// the same pointer events as the existing tracker resize, without browser image drags.
+$('#app').addEventListener('dragstart',e=>{if(e.target.closest('[data-card-draggable]'))e.preventDefault();});
+$('#app').addEventListener('pointerdown',e=>{
+  suppressCardClick=false;
+  if(e.pointerType!=='mouse' || e.button!==0)return;
+  const source=e.target.closest('[data-card-draggable]'),button=e.target.closest('button');
+  if(!source || (button&&!button.matches('[data-inspect]')) || view!=='deck' || deckTab!=='cards')return;
+  const d=current(),key=source.dataset.previewEntry,entry=d?.cards.find(e=>entryKey(e)===key);
+  if(entry)cardDragPress={deck:d,key,zone:zoneFor(entry),source,pointerId:e.pointerId,x:e.clientX,y:e.clientY};
+});
+addEventListener('pointermove',e=>{
+  if(!cardDrag && cardDragPress && e.pointerId===cardDragPress.pointerId) {
+    if(Math.hypot(e.clientX-cardDragPress.x,e.clientY-cardDragPress.y)<6)return;
+    cardDrag={...cardDragPress,target:null,frame:0};cardDragPress=null;
+    closeCardActions(false);
+    cardDrag.source.setPointerCapture(e.pointerId);
+    cardDrag.source.classList.add('is-dragging');document.documentElement.dataset.cardDragging='true';
+    const entry=cardDrag.deck.cards.find(entry=>entryKey(entry)===cardDrag.key);
+    if(!entry){finishCardDrag();return;}
+    $('#deck-drag-label').textContent=`${entry.card.name} · ${entry.qty} ${entry.qty===1?'copy':'copies'} · ${ZONES[zoneFor(entry)]}`;
+    $('#deck-drag-targets').hidden=false;
+    cardDrag.frame=requestAnimationFrame(scrollCardDrag);
+  }
+  if(!cardDrag || e.pointerId!==cardDrag.pointerId)return;
+  e.preventDefault();cardDrag.x=e.clientX;cardDrag.y=e.clientY;
+  highlightCardDrop(document.elementFromPoint(e.clientX,e.clientY));
+});
+addEventListener('pointerup',e=>{
+  if(!cardDrag){cardDragPress=null;return;}
+  if(e.pointerId!==cardDrag.pointerId)return;
+  e.preventDefault();
+  const target=cardDropTarget(document.elementFromPoint(e.clientX,e.clientY)),{deck:d,key}=cardDrag;
+  finishCardDrag();
+  if(!target)return;
+  const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
+  try {
+    if(target.dataset.dropTrash!==undefined){removeCopiesDialog(d,key);return;}
+    if(target.dataset.dropFunction!==undefined){changeNamedDeck(d,deck=>assignEntryFunction(deck,key,target.dataset.dropFunction));focusCardEntry(d,key);toast('Function assigned in '+d.name);}
+    else {const zone=target.dataset.dropZone,nextKey=entryKey({card:entry.card,zone});changeNamedDeck(d,deck=>moveEntry(deck,key,zone));focusCardEntry(d,nextKey);toast('All entry copies moved to '+ZONES[zone]);}
+  }catch(error){toast(error.message);}
+});
+addEventListener('pointercancel',finishCardDrag);
+addEventListener('blur',finishCardDrag);
+addEventListener('keydown',e=>{if(e.key==='Escape'&&(cardDrag||cardDragPress)){e.preventDefault();finishCardDrag();}});
+
 function closeCardSubmenu(restore=false) {
   const menu=$('#card-actions'),previous=menu.dataset.submenu,sub=$('#card-submenu');
   if(sub?.matches(':popover-open'))sub.hidePopover();
@@ -509,6 +596,7 @@ $('#app').addEventListener('change',e=>{
   try{changeDeck(d=>moveEntry(d,key,e.target.value));toast('All copies moved; roles preserved');}catch(error){toast(error.message);render();}
 });
 $('#app').addEventListener('click',async e=>{
+  if(e.detail>0 && suppressCardClick){suppressCardClick=false;e.preventDefault();return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;readFilters();
   if(button.dataset.view){e.preventDefault?.();view=button.dataset.view;render();if(view==='decks')$('#library-title')?.focus();else $('#raw')?.focus();return;}
   if(button.dataset.cardMenu){openCardActions(button.dataset.cardMenu,button);return;}

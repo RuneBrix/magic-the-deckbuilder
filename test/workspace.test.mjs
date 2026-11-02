@@ -36,6 +36,113 @@ function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, 
   return { context, document, media, node, writes, timers, events };
 }
 
+function startCardDrag(w,key) {
+  w.context.requestAnimationFrame=fn=>{w.dragFrame=fn;return 1;};w.context.cancelAnimationFrame=()=>{w.dragFrame=null;};
+  w.node('#editor-card-area').contains=()=>true;w.document.elementFromPoint=()=>null;
+  const source={dataset:{previewEntry:key},setPointerCapture(){},classList:{add(){},remove(){}},closest(selector){return selector==='button'?null:this;}};
+  w.node('#app').pointerdown({target:source,pointerId:1,pointerType:'mouse',button:0,clientX:100,clientY:100});
+  w.events.pointermove({pointerId:1,clientX:110,clientY:110,preventDefault(){}});
+}
+function dropCard(w,dataset) {
+  const target={dataset,classList:{add(){},remove(){}},closest(){return this;}};
+  w.document.elementFromPoint=()=>target;
+  w.events.pointerup({pointerId:1,clientX:300,clientY:400,preventDefault(){}});
+}
+
+test('desktop card drops move whole entries, preserve merges and reject overflow and foreign payloads',()=>{
+  const d=editorDeck();
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  vm.runInContext("view='deck';render()",w.context);
+  const key=core.entryKey(d.cards[1]);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  dropCard(w,{dropZone:'sideboard'}); // No editor drag session: an external drop cannot mutate data.
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+  startCardDrag(w,key);assert.equal(w.node('#deck-drag-targets').hidden,false);
+  dropCard(w,{dropZone:'maybeboard'});
+  let moved=JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.find(e=>e.zone==="maybeboard"))',w.context));
+  assert.equal(moved.qty,d.cards[1].qty);assert.deepEqual(moved.card,d.cards[1].card);assert.deepEqual(moved.tags,d.cards[1].tags);
+  vm.runInContext("decks[0].cards.push({...structuredClone(decks[0].cards.find(e=>e.zone==='maybeboard')),zone:'sideboard',qty:499,tags:['Other'],card:{...decks[0].cards.find(e=>e.zone==='maybeboard').card,id:'destination-printing'}})",w.context);
+  const atLimit=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
+  startCardDrag(w,core.entryKey(moved));dropCard(w,{dropZone:'sideboard'});
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),atLimit);assert.equal(w.writes.length,writes);
+  assert.match(w.node('#toast').textContent,/Maximum 500/);
+  vm.runInContext("decks[0].cards.find(e=>e.zone==='sideboard').qty=1",w.context);
+  startCardDrag(w,core.entryKey(moved));dropCard(w,{dropZone:'sideboard'});
+  moved=JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.find(e=>e.zone==="sideboard"))',w.context));
+  assert.equal(moved.qty,1+d.cards[1].qty);assert.equal(moved.card.id,'destination-printing');assert.deepEqual(moved.tags,[...new Set(['Other',...d.cards[1].tags])]);
+  assert.equal(vm.runInContext("decks[0].cards.some(e=>e.zone==='maybeboard')",w.context),false);
+});
+
+test('Function drops retain other labels and source zones; invalid, cancelled and stale drags do nothing',async()=>{
+  const d=editorDeck();d.cards[0].tags=['Draw'];
+  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';editorOptions.group='role';render()",w.context);
+  const key=core.entryKey(d.cards[1]);
+  startCardDrag(w,key);dropCard(w,{dropFunction:'Draw'});
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[1].tags)',w.context)),['Draw',...d.cards[1].tags]);
+  assert.equal(vm.runInContext('decks[0].cards[1].zone',w.context),d.cards[1].zone);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
+  startCardDrag(w,key);dropCard(w,{dropFunction:'Imaginary'});
+  startCardDrag(w,key);w.events.pointercancel();dropCard(w,{dropZone:'command'});
+  let suppressed=false;
+  await w.node('#app').click({detail:1,preventDefault(){suppressed=true;}});assert.equal(suppressed,true);
+  startCardDrag(w,key);vm.runInContext("view='decks';render()",w.context);dropCard(w,{dropZone:'command'});
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,writes);
+  assert.equal(w.node('#deck-drag-targets').hidden,true);assert.equal(w.document.documentElement.dataset.cardDragging,undefined);
+});
+
+test('trash drops request existing all-zone confirmation and only its explicit action deletes copies',()=>{
+  const d=editorDeck();d.cards.push({...structuredClone(d.cards[1]),qty:3,zone:'maybeboard'});
+  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';render()",w.context);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context),key=core.entryKey(d.cards[1]);
+  startCardDrag(w,key);dropCard(w,{dropTrash:''});
+  assert.match(w.node('#dialog').innerHTML,/across all zones, including Maybeboard/);assert.match(w.node('#dialog').innerHTML,/Delete 5 copies/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+  w.node('#keep-copies').onclick();assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  startCardDrag(w,key);dropCard(w,{dropTrash:''});w.node('#remove-copies').onclick();
+  assert.equal(vm.runInContext('decks[0].cards.length',w.context),1);assert.equal(w.writes.length,1);
+});
+
+test('drag targets follow current hit testing during edge scroll and cleanup stops the frame',()=>{
+  const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';render()",w.context);
+  const calls=[],target={dataset:{dropZone:'sideboard'},closest(){return this;},classList:{add(){calls.push('highlight');},remove(){calls.push('clear');}}};
+  // The fixed dock itself must not induce edge scrolling; ordinary zones do.
+  target.closest=selector=>selector==='#deck-drag-targets'?null:target;
+  w.document.elementFromPoint=()=>target;w.context.scrollBy=options=>calls.push(options.top);
+  startCardDrag(w,core.entryKey(d.cards[1]));w.document.elementFromPoint=()=>target;
+  w.events.pointermove({pointerId:1,clientX:300,clientY:899,preventDefault(){}});
+  w.dragFrame();assert.ok(calls.some(x=>typeof x==='number'&&x>0));
+  calls.length=0;target.closest=()=>null;w.document.elementFromPoint=()=>null;w.dragFrame();assert.ok(calls.includes('clear'));
+  w.events.pointercancel();assert.equal(w.dragFrame,null);assert.equal(w.node('#deck-drag-targets').hidden,true);
+});
+
+test('all layouts expose drag scope and empty-zone destinations; only real Function groups receive assignment overlays',()=>{
+  const d=editorDeck();d.cards[0].tags=['<Draw & more>'];
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']) {
+    w.context.dragLayout=layout;vm.runInContext("view='deck';editorOptions.layout=dragLayout;editorOptions.group='role';render()",w.context);
+    const html=w.node('#app').innerHTML;assert.match(html,/data-card-draggable aria-describedby="deck-drag-help"/);assert.match(html,/Drag all copies in an entry/);
+    assert.match(html,/data-drop-function="&lt;Draw &amp; more&gt;"/);assert.doesNotMatch(html,/data-drop-function="Unassigned"/);
+    assert.match(html,/data-drop-zone="sideboard">Move to Sideboard/);assert.match(html,/data-drop-zone="maybeboard">Move to Maybeboard/);
+    vm.runInContext("editorOptions.group='type';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/data-drop-function=/);
+  }
+  vm.runInContext("view='explore';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/data-drop-function|data-card-draggable|data-drop-zone/);
+});
+
+test('touch gestures, card controls and clicks below the drag threshold keep their existing behavior',()=>{
+  const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';render()",w.context);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  const source={dataset:{previewEntry:core.entryKey(d.cards[1])},closest(selector){return selector==='button'?null:this;}};
+  w.node('#app').pointerdown({target:source,pointerType:'touch',pointerId:1,button:0,clientX:100,clientY:100});
+  w.events.pointermove({pointerId:1,clientX:300,clientY:400});assert.equal(w.document.documentElement.dataset.cardDragging,undefined);
+  source.closest=selector=>selector==='button'?{matches(){return false;}}:source;
+  w.node('#app').pointerdown({target:source,pointerType:'mouse',pointerId:1,button:0,clientX:100,clientY:100});
+  w.events.pointermove({pointerId:1,clientX:300,clientY:400});assert.equal(w.document.documentElement.dataset.cardDragging,undefined);
+  source.closest=selector=>selector==='button'?null:source;
+  w.node('#app').pointerdown({target:source,pointerType:'mouse',pointerId:1,button:0,clientX:100,clientY:100});
+  w.events.pointermove({pointerId:1,clientX:102,clientY:102});w.events.pointerup({pointerId:1});
+  assert.equal(w.document.documentElement.dataset.cardDragging,undefined);assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+});
+
 test('appearance honors saved choice, follows system only in system mode, and never writes deck data', () => {
   const w = workspace({ savedTheme: 'dark' });
   assert.equal(w.document.documentElement.dataset.theme, 'dark');

@@ -1,5 +1,9 @@
 # Changelog
 
+## Direct deck-card dragging — 2026-11-02
+
+- Drag all copies of a deck/zone entry into zones or existing Function groups (#55). Function drops make that label primary while retaining other assignments and the source zone; zone merges keep the destination printing. During dragging, show group overlays, all zone destinations and a fixed lower-right trash target; trash opens the existing all-zones confirmation. Edge scrolling keeps hit testing current, cancellation leaves cards unchanged, and keyboard/touch retain card-menu actions.
+
 ## Clearer Commander bracket guidance — 2026-11-02
 
 - Simplify bracket discussion and replace the dated update links with the current official Commander source (#60). Show one Last updated date as the last developer review of bundled data, explain developer-maintained app updates and separate card-legality refresh. Preserve manual assignments, Game Changer evidence and stale/missing-data limits.
