@@ -238,8 +238,8 @@ function deckList(d, full=false) {
   return `<div class="zone-counts" aria-label="Deck zone counts">${zones.map(([z,label])=>`<span>${label}: ${zoneCount(d,z)}</span>`).join('')}</div><div class="deck-zones ${full?esc(editorOptions.layout):'tracker-zones'}">`+zones.map(([zone,label])=>{
     if(['sideboard','maybeboard'].includes(zone)&&!d.cards.some(e=>zoneFor(e)===zone))return '';
     const entries=filtered.filter(e=>zoneFor(e)===zone),groups=new Map();
-    for(const e of entries){const group=full?(editorOptions.group==='role'?primaryRole(e):editorOptions.group==='type'?category(e.card):''):'';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(e);}
-    return `<section class="deck-zone"${full?` data-drop-zone="${zone}"`: ''}><h3>${label} · ${zoneCount(d,zone)}${full&&editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3><div class="deck-group-list">${[...groups].map(([group,items])=>`<section class="deck-group"${full&&editorOptions.group==='role'&&items.some(e=>e.tags[0]===group)?` data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"`:''}>${group?`<h4>${esc(group)}</h4>`:''}<div class="deck-group-items" style="--stack-divisor:${Math.max(1,items.length-2)}">${items.map(e=>full?(editorOptions.layout.startsWith('visual')?`<div class="card-slot">${deckEntry(e)}</div>`:deckEntry(e)):`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span><div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}</div></section>`).join('')||`<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</div></section>`;
+    for(const e of entries){const group=full&&zone!=='command'?(editorOptions.group==='role'?primaryRole(e):editorOptions.group==='type'?category(e.card):''):'';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(e);}
+    return `<section class="deck-zone"${full?` data-drop-zone="${zone}"`: ''}><h3>${label} · ${zoneCount(d,zone)}${full&&editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3><div class="deck-group-list">${[...groups].map(([group,items])=>`<section class="deck-group"${full&&editorOptions.group==='role'&&items.some(e=>e.tags[0]===group)?` data-drop-zone="${zone}" data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"`:''}>${group?`<h4>${esc(group)}</h4>`:''}<div class="deck-group-items" style="--stack-divisor:${Math.max(1,items.length-2)}">${items.map(e=>full?(editorOptions.layout.startsWith('visual')?`<div class="card-slot">${deckEntry(e)}</div>`:deckEntry(e)):`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span><div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}</div></section>`).join('')||`<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</div></section>`;
   }).join('')+'</div>';
 }
 function finishCardDrag() {
@@ -250,6 +250,9 @@ function finishCardDrag() {
   cancelAnimationFrame(cardDrag.frame);
   cardDrag.target?.classList.remove('is-drop-target');
   cardDrag.source.classList.remove('is-dragging');
+  cardDrag.originGroup?.classList.remove('is-drag-origin');
+  cardDrag.ghost?.remove();
+  if(cardDrag.source.contains(document.activeElement))document.activeElement.blur();
   cardDrag=null;
   delete document.documentElement.dataset.cardDragging;
   $('#deck-drag-targets').hidden=true;
@@ -258,9 +261,17 @@ function cardDropTarget(node) {
   if(!cardDrag || view!=='deck' || deckTab!=='cards' || current()!==cardDrag.deck)return null;
   const target=node?.closest('[data-drop-trash], [data-drop-function], [data-drop-zone]');
   if(!target || !$('#editor-card-area').contains(target))return null;
-  if(target.dataset.dropFunction!==undefined && (editorOptions.group!=='role' || !cardDrag.deck.cards.some(e=>e.tags.includes(target.dataset.dropFunction))))return null;
-  if(target.dataset.dropZone!==undefined && (!Object.hasOwn(ZONES,target.dataset.dropZone) || target.dataset.dropZone===cardDrag.zone))return null;
+  const zone=target.dataset.dropZone,entry=cardDrag.deck.cards.find(e=>entryKey(e)===cardDrag.key);
+  if(!entry || (zone!==undefined && !Object.hasOwn(ZONES,zone)))return null;
+  if(target.dataset.dropFunction!==undefined) {
+    if(zone==='command' || editorOptions.group!=='role' || !cardDrag.deck.cards.some(e=>zoneFor(e)===zone && e.tags[0]===target.dataset.dropFunction))return null;
+    if(zone===cardDrag.zone && primaryRole(entry)===target.dataset.dropFunction)return null;
+  }else if(zone===cardDrag.zone)return null;
   return target;
+}
+function positionDraggedCard(x,y) {
+  const {ghost,offsetX,offsetY}=cardDrag;
+  ghost.style.transform=`translate(${x-offsetX}px,${y-offsetY}px)`;
 }
 function highlightCardDrop(node) {
   const target=cardDropTarget(node);
@@ -301,12 +312,21 @@ addEventListener('pointermove',e=>{
     cardDrag.source.classList.add('is-dragging');document.documentElement.dataset.cardDragging='true';
     const entry=cardDrag.deck.cards.find(entry=>entryKey(entry)===cardDrag.key);
     if(!entry){finishCardDrag();return;}
+    cardDrag.originGroup=cardDrag.source.closest('[data-drop-function]');
+    cardDrag.originGroup?.classList.add('is-drag-origin');
+    const rect=cardDrag.source.getBoundingClientRect(),ghost=cardDrag.source.cloneNode(true);
+    ghost.id='dragged-card';ghost.inert=true;ghost.setAttribute('aria-hidden','true');
+    ghost.classList.remove('is-dragging','is-previewed');ghost.classList.add('card-drag-ghost');
+    ghost.style.width=rect.width+'px';ghost.style.height=rect.height+'px';
+    cardDrag.ghost=ghost;cardDrag.offsetX=cardDrag.x-rect.left;cardDrag.offsetY=cardDrag.y-rect.top;
+    document.body.append(ghost);positionDraggedCard(e.clientX,e.clientY);
     $('#deck-drag-label').textContent=`${entry.card.name} · ${entry.qty} ${entry.qty===1?'copy':'copies'} · ${ZONES[zoneFor(entry)]}`;
     $('#deck-drag-targets').hidden=false;
     cardDrag.frame=requestAnimationFrame(scrollCardDrag);
   }
   if(!cardDrag || e.pointerId!==cardDrag.pointerId)return;
   e.preventDefault();cardDrag.x=e.clientX;cardDrag.y=e.clientY;
+  positionDraggedCard(e.clientX,e.clientY);
   highlightCardDrop(document.elementFromPoint(e.clientX,e.clientY));
 });
 addEventListener('pointerup',e=>{
@@ -319,8 +339,18 @@ addEventListener('pointerup',e=>{
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
   try {
     if(target.dataset.dropTrash!==undefined){removeCopiesDialog(d,key);return;}
-    if(target.dataset.dropFunction!==undefined){changeNamedDeck(d,deck=>assignEntryFunction(deck,key,target.dataset.dropFunction));focusCardEntry(d,key);toast('Function assigned in '+d.name);}
-    else {const zone=target.dataset.dropZone,nextKey=entryKey({card:entry.card,zone});changeNamedDeck(d,deck=>moveEntry(deck,key,zone));focusCardEntry(d,nextKey);toast('All entry copies moved to '+ZONES[zone]);}
+    if(target.dataset.dropFunction!==undefined){
+      const zone=target.dataset.dropZone,name=target.dataset.dropFunction;
+      changeNamedDeck(d,deck=>{
+        // Stage both operations: a Function validation failure must not leave a zone move behind.
+        const staged={...deck,cards:deck.cards.map(e=>({...e,tags:[...e.tags]}))};
+        moveEntry(staged,key,zone);
+        assignEntryFunction(staged,entryKey({card:entry.card,zone}),name);
+        deck.cards=staged.cards;
+      });
+      toast(`Add "${entry.card.name}" to "${name}"`);
+    }
+    else {const zone=target.dataset.dropZone;changeNamedDeck(d,deck=>moveEntry(deck,key,zone));toast('All entry copies moved to '+ZONES[zone]);}
   }catch(error){toast(error.message);}
 });
 addEventListener('pointercancel',finishCardDrag);
@@ -405,7 +435,7 @@ function focusCardEntry(d,key) {
 function assignFunctionDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
   showDialog(`<h2>Add a function</h2><p>${esc(entry.card.name)} · ${esc(d.name)} · ${ZONES[zoneFor(entry)]}. The new function becomes primary; other functions stay assigned.</p><form id="function-form"><label>Function name<input name="new-function" required maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Create and assign</button></form>`);
-  $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast('Function assigned in '+d.name);}catch(error){$('#function-error').textContent=error.message;}};
+  $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast(`Add "${entry.card.name}" to "${name.trim()}"`);}catch(error){$('#function-error').textContent=error.message;}};
   $('#function-form input').focus();
 }
 function copyEntryDialog(d,key) {
@@ -432,7 +462,7 @@ $('#card-actions').addEventListener('click',async e=>{
     if(action==='new-function')assignFunctionDialog(d,key);
     if(action==='assign-function'){
       if(!d.cards.some(e=>e.tags.includes(button.dataset.function)))throw Error('This function is no longer in this deck. Reopen the menu.');
-      changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast('Function assigned in '+d.name);
+      changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast(`Add "${entry.card.name}" to "${button.dataset.function}"`);
     }
     if(action==='copy-deck')copyEntryDialog(d,key);
     if(action==='remove')removeCopiesDialog(d,key);

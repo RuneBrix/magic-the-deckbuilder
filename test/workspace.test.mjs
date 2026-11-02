@@ -39,15 +39,62 @@ function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, 
 function startCardDrag(w,key) {
   w.context.requestAnimationFrame=fn=>{w.dragFrame=fn;return 1;};w.context.cancelAnimationFrame=()=>{w.dragFrame=null;};
   w.node('#editor-card-area').contains=()=>true;w.document.elementFromPoint=()=>null;
-  const source={dataset:{previewEntry:key},setPointerCapture(){},classList:{add(){},remove(){}},closest(selector){return selector==='button'?null:this;}};
+  const ghost=w.node('#dragged-card');ghost.remove=()=>{ghost.removed=true;};
+  w.document.body={append(node){assert.equal(node,ghost);}};
+  const source={dataset:{previewEntry:key},setPointerCapture(){},getBoundingClientRect(){return {left:50,top:50,width:190,height:264};},cloneNode(){return ghost;},contains(){return false;},classList:{add(){},remove(){}},closest(selector){return selector==='button'?null:this;}};
   w.node('#app').pointerdown({target:source,pointerId:1,pointerType:'mouse',button:0,clientX:100,clientY:100});
   w.events.pointermove({pointerId:1,clientX:110,clientY:110,preventDefault(){}});
+  return source;
 }
 function dropCard(w,dataset) {
   const target={dataset,classList:{add(){},remove(){}},closest(){return this;}};
   w.document.elementFromPoint=()=>target;
   w.events.pointerup({pointerId:1,clientX:300,clientY:400,preventDefault(){}});
 }
+
+test('Command zone stays ungrouped and Function drops move commanders into the target zone',()=>{
+  const d=editorDeck();d.cards[0].tags=['Ramp','Life gain'];d.cards[1].tags=['Ramp'];
+  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';editorOptions.group='role';render()",w.context);
+  const html=w.node('#app').innerHTML,command=html.slice(html.indexOf('<section class="deck-zone"'),html.indexOf('<section class="deck-zone"',html.indexOf('<section class="deck-zone"')+1));
+  assert.doesNotMatch(command,/<h4>|data-drop-function/);
+  startCardDrag(w,core.entryKey(d.cards[0]));dropCard(w,{dropFunction:'Ramp',dropZone:'main'});
+  assert.equal(vm.runInContext('decks[0].cards[0].zone',w.context),'main');
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[0].tags)',w.context)),['Ramp','Life gain']);
+  assert.equal(w.node('#toast').textContent,'Add "Leader" to "Ramp"');
+  const before=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
+  startCardDrag(w,core.entryKey({...d.cards[0],zone:'main'}));dropCard(w,{dropFunction:'Ramp',dropZone:'main'});
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,writes);
+});
+
+test('dragged artwork follows the pointer and is removed after cancellation without restoring card focus',()=>{
+  const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';render()",w.context);
+  const source=startCardDrag(w,core.entryKey(d.cards[1]));let blurred=0;
+  source.contains=()=>true;w.document.activeElement={blur(){blurred++;}};
+  const ghost=w.node('#dragged-card');assert.equal(ghost.inert,true);assert.equal(ghost.style.width,'190px');assert.equal(ghost.style.height,'264px');
+  assert.equal(ghost.style.transform,'translate(60px,60px)');
+  w.events.pointermove({pointerId:1,clientX:200,clientY:240,preventDefault(){}});
+  assert.equal(ghost.style.transform,'translate(150px,190px)');
+  w.events.pointercancel();assert.equal(ghost.removed,true);assert.equal(blurred,1);assert.equal(w.writes.length,0);
+});
+
+test('Function and zone changes are atomic on merges; Unassigned zone drops retain hidden commander Functions',()=>{
+  const d=editorDeck();d.cards[0].tags=['Life gain'];
+  d.cards.push({...structuredClone(d.cards[0]),zone:'main',qty:2,tags:['Ramp'],card:{...d.cards[0].card,id:'other-printing'}});
+  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';editorOptions.group='role';render()",w.context);
+  const key=core.entryKey(d.cards[0]);startCardDrag(w,key);dropCard(w,{dropZone:'main',dropFunction:'Ramp'});
+  const merged=JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.find(e=>e.card.id==="other-printing"))',w.context));
+  assert.equal(merged.qty,3);assert.deepEqual(merged.tags,['Ramp','Life gain']);assert.equal(vm.runInContext('decks[0].cards.some(e=>e.zone==="command")',w.context),false);
+  startCardDrag(w,core.entryKey(merged));dropCard(w,{dropZone:'command'});
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.find(e=>e.zone==="command").tags)',w.context)),['Ramp','Life gain']);
+  // The non-target Unassigned group resolves to its zone and keeps personal labels.
+  startCardDrag(w,core.entryKey({...merged,zone:'command'}));dropCard(w,{dropZone:'sideboard'});
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.find(e=>e.zone==="sideboard").tags)',w.context)),['Ramp','Life gain']);
+  const writes=w.writes.length;
+  vm.runInContext("decks[0].cards.push({...structuredClone(decks[0].cards[0]),tags:['Bad, name'],zone:'main',card:{...decks[0].cards[0].card,id:'bad',oracle_id:'bad'}})",w.context);
+  const invalidBefore=vm.runInContext('JSON.stringify(decks)',w.context);
+  startCardDrag(w,core.entryKey({...merged,zone:'sideboard'}));dropCard(w,{dropZone:'main',dropFunction:'Bad, name'});
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),invalidBefore);assert.equal(w.writes.length,writes);
+});
 
 test('desktop card drops move whole entries, preserve merges and reject overflow and foreign payloads',()=>{
   const d=editorDeck();
@@ -73,15 +120,15 @@ test('desktop card drops move whole entries, preserve merges and reject overflow
   assert.equal(vm.runInContext("decks[0].cards.some(e=>e.zone==='maybeboard')",w.context),false);
 });
 
-test('Function drops retain other labels and source zones; invalid, cancelled and stale drags do nothing',async()=>{
-  const d=editorDeck();d.cards[0].tags=['Draw'];
+test('Function drops retain other labels; invalid, cancelled and stale drags do nothing',async()=>{
+  const d=editorDeck();d.cards.push({...structuredClone(d.cards[0]),card:{...d.cards[0].card,id:'Draw card'},zone:'main',tags:['Draw']});
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';editorOptions.group='role';render()",w.context);
   const key=core.entryKey(d.cards[1]);
-  startCardDrag(w,key);dropCard(w,{dropFunction:'Draw'});
+  startCardDrag(w,key);dropCard(w,{dropFunction:'Draw',dropZone:'main'});
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[1].tags)',w.context)),['Draw',...d.cards[1].tags]);
   assert.equal(vm.runInContext('decks[0].cards[1].zone',w.context),d.cards[1].zone);
   const before=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
-  startCardDrag(w,key);dropCard(w,{dropFunction:'Imaginary'});
+  startCardDrag(w,key);dropCard(w,{dropFunction:'Imaginary',dropZone:'main'});
   startCardDrag(w,key);w.events.pointercancel();dropCard(w,{dropZone:'command'});
   let suppressed=false;
   await w.node('#app').click({detail:1,preventDefault(){suppressed=true;}});assert.equal(suppressed,true);
@@ -116,14 +163,17 @@ test('drag targets follow current hit testing during edge scroll and cleanup sto
 });
 
 test('all layouts expose drag scope and empty-zone destinations; only real Function groups receive assignment overlays',()=>{
-  const d=editorDeck();d.cards[0].tags=['<Draw & more>'];
+  const d=editorDeck();d.cards[1].tags=['<Draw & more>'];
   const w=workspace({savedDecks:JSON.stringify([d])});
+  const commandSection=html=>html.match(/<section class="deck-zone" data-drop-zone="command">([\s\S]*?)(?=<section class="deck-zone"|$)/)[1];
   for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']) {
     w.context.dragLayout=layout;vm.runInContext("view='deck';editorOptions.layout=dragLayout;editorOptions.group='role';render()",w.context);
     const html=w.node('#app').innerHTML;assert.match(html,/data-card-draggable aria-describedby="deck-drag-help"/);assert.match(html,/Drag all copies in an entry/);
+    assert.doesNotMatch(commandSection(html),/<h4>|data-drop-function/);
     assert.match(html,/data-drop-function="&lt;Draw &amp; more&gt;"/);assert.doesNotMatch(html,/data-drop-function="Unassigned"/);
     assert.match(html,/data-drop-zone="sideboard">Move to Sideboard/);assert.match(html,/data-drop-zone="maybeboard">Move to Maybeboard/);
     vm.runInContext("editorOptions.group='type';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/data-drop-function=/);
+    assert.doesNotMatch(commandSection(w.node('#app').innerHTML),/<h4>/);
   }
   vm.runInContext("view='explore';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/data-drop-function|data-card-draggable|data-drop-zone/);
 });

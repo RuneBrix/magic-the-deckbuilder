@@ -1,8 +1,8 @@
 # Changelog
 
-## Direct deck-card dragging — 2026-11-02
+## Direct deck-card dragging — 2026-11-03
 
-- Drag all copies of a deck/zone entry into zones or existing Function groups (#55). Function drops make that label primary while retaining other assignments and the source zone; zone merges keep the destination printing. During dragging, show group overlays, all zone destinations and a fixed lower-right trash target; trash opens the existing all-zones confirmation. Edge scrolling keeps hit testing current, cancellation leaves cards unchanged, and keyboard/touch retain card-menu actions.
+- Drag all copies of a deck/zone entry into zones or existing Function groups (#55). Function drops move into the group's zone and make that label primary while retaining other assignments; both changes apply together. Command zone cards stay ungrouped while retaining their Functions. Same-group drops do nothing; Unassigned only moves zones and retains Functions. A full-size card copy follows the cursor with a dimmed original and clean hover/focus outlines after release; notifications name the card and Function. Zone merges keep the destination printing. During dragging, show group overlays, all zone destinations and a fixed lower-right trash target; trash opens the existing all-zones confirmation. Edge scrolling keeps hit testing current, cancellation leaves cards unchanged, and keyboard/touch retain card-menu actions.
 
 ## Clearer Commander bracket guidance — 2026-11-02
 
