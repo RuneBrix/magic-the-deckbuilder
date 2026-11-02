@@ -149,6 +149,23 @@ test('trash drops request existing all-zone confirmation and only its explicit a
   assert.equal(vm.runInContext('decks[0].cards.length',w.context),1);assert.equal(w.writes.length,1);
 });
 
+test('new Function drop target opens a scoped dialog without changing cards until valid submission',()=>{
+  const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';editorOptions.group='type';render()",w.context);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context),key=core.entryKey(d.cards[1]);
+  startCardDrag(w,key);dropCard(w,{dropNewFunction:''});
+  assert.match(w.node('#dialog').innerHTML,/Add a function/);assert.match(w.node('#dialog').innerHTML,/Ramp spell/);
+  assert.equal(w.node('#deck-drag-targets').hidden,true);assert.equal(w.node('#dragged-card').removed,true);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+  w.node('#dialog').close();assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  startCardDrag(w,key);dropCard(w,{dropNewFunction:''});
+  formValues(w,{'new-function':'Invalid, function'});w.node('#function-form').onsubmit({preventDefault(){}});
+  assert.match(w.node('#function-error').textContent,/without commas/);assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+  formValues(w,{'new-function':'Graveyard setup'});w.node('#function-form').onsubmit({preventDefault(){}});
+  const entry=JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[1])',w.context));
+  assert.deepEqual(entry.tags,['Graveyard setup',...d.cards[1].tags]);assert.deepEqual(entry.card,d.cards[1].card);assert.equal(entry.qty,d.cards[1].qty);assert.equal(entry.zone,d.cards[1].zone);
+  assert.equal(w.writes.length,1);assert.equal(w.node('#toast').textContent,'Added Ramp spell to Graveyard setup');
+});
+
 test('drag targets follow current hit testing during edge scroll and cleanup stops the frame',()=>{
   const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("view='deck';render()",w.context);
   const calls=[],target={dataset:{dropZone:'sideboard'},closest(){return this;},classList:{add(){calls.push('highlight');},remove(){calls.push('clear');}}};
@@ -169,10 +186,12 @@ test('all layouts expose drag scope and empty-zone destinations; only real Funct
   for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']) {
     w.context.dragLayout=layout;vm.runInContext("view='deck';editorOptions.layout=dragLayout;editorOptions.group='role';render()",w.context);
     const html=w.node('#app').innerHTML;assert.match(html,/data-card-draggable aria-describedby="deck-drag-help"/);assert.match(html,/Drag all copies in an entry/);
+    assert.match(html,/data-drop-new-function>Add to new function/);
     assert.doesNotMatch(commandSection(html),/<h4>|data-drop-function/);
     assert.match(html,/data-drop-function="&lt;Draw &amp; more&gt;"/);assert.doesNotMatch(html,/data-drop-function="Unassigned"/);
     assert.match(html,/data-drop-zone="sideboard">Move to Sideboard/);assert.match(html,/data-drop-zone="maybeboard">Move to Maybeboard/);
     vm.runInContext("editorOptions.group='type';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/data-drop-function=/);
+    assert.match(w.node('#app').innerHTML,/data-drop-new-function>Add to new function/);
     assert.doesNotMatch(commandSection(w.node('#app').innerHTML),/<h4>/);
   }
   vm.runInContext("view='explore';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/data-drop-function|data-card-draggable|data-drop-zone/);

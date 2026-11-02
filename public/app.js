@@ -216,7 +216,7 @@ function previewMarkup(d) {
 }
 function deckCards(d) {
   if(previewDeck!==d.id || !deckEntries(d,editorOptions).some(e=>entryKey(e)===previewKey)){previewKey='';previewDeck=d.id;}
-  return `<div id="editor-card-area"><p class="hint deck-drag-help" id="deck-drag-help">Drag all copies in an entry to a zone${editorOptions.group==='role'?' or Function group':''}. Delete card asks for confirmation across all zones. For keyboard or touch, use the card’s options menu.</p><div class="deck-card-area"><aside class="deck-hover-preview" aria-label="Card preview"><div id="deck-card-preview">${previewMarkup(d)}</div></aside><div class="deck-rows">${deckList(d,true)}</div></div><div id="deck-drag-targets" hidden><p id="deck-drag-label" role="status"></p><div class="drag-zone-targets" aria-label="Move all entry copies to a zone">${Object.entries(ZONES).map(([zone,label])=>`<div data-drop-zone="${zone}">Move to ${label}</div>`).join('')}</div><div class="drag-trash" data-drop-trash title="Confirm deletion of all copies across all zones"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg><span>Delete card…</span><small>All zones · asks first</small></div></div></div>`;
+  return `<div id="editor-card-area"><p class="hint deck-drag-help" id="deck-drag-help">Drag all copies in an entry to a zone${editorOptions.group==='role'?' or Function group':''}. Delete card asks for confirmation across all zones. For keyboard or touch, use the card’s options menu.</p><div class="deck-card-area"><aside class="deck-hover-preview" aria-label="Card preview"><div id="deck-card-preview">${previewMarkup(d)}</div></aside><div class="deck-rows">${deckList(d,true)}</div></div><div id="deck-drag-targets" hidden><p id="deck-drag-label" role="status"></p><div class="drag-zone-targets" aria-label="Card drop destinations"><div class="drag-new-function" data-drop-new-function>Add to new function</div>${Object.entries(ZONES).map(([zone,label])=>`<div data-drop-zone="${zone}">Move to ${label}</div>`).join('')}</div><div class="drag-trash" data-drop-trash title="Confirm deletion of all copies across all zones"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg><span>Delete card…</span><small>All zones · asks first</small></div></div></div>`;
 }
 function previewEntry(key) {
   const d=current();if(view!=='deck' || deckTab!=='cards' || !d || previewKey===key)return;
@@ -259,7 +259,7 @@ function finishCardDrag() {
 }
 function cardDropTarget(node) {
   if(!cardDrag || view!=='deck' || deckTab!=='cards' || current()!==cardDrag.deck)return null;
-  const target=node?.closest('[data-drop-trash], [data-drop-function], [data-drop-zone]');
+  const target=node?.closest('[data-drop-trash], [data-drop-new-function], [data-drop-function], [data-drop-zone]');
   if(!target || !$('#editor-card-area').contains(target))return null;
   const zone=target.dataset.dropZone,entry=cardDrag.deck.cards.find(e=>entryKey(e)===cardDrag.key);
   if(!entry || (zone!==undefined && !Object.hasOwn(ZONES,zone)))return null;
@@ -339,6 +339,7 @@ addEventListener('pointerup',e=>{
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
   try {
     if(target.dataset.dropTrash!==undefined){removeCopiesDialog(d,key);return;}
+    if(target.dataset.dropNewFunction!==undefined){assignFunctionDialog(d,key);return;}
     if(target.dataset.dropFunction!==undefined){
       const zone=target.dataset.dropZone,name=target.dataset.dropFunction;
       changeNamedDeck(d,deck=>{
