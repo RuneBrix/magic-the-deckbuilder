@@ -38,6 +38,12 @@ Maybeboard is outside the playing deck by the user’s explicit decision (#44): 
 Checks remain in the dedicated workspace. Red failure sections, amber data/freshness notices, neutral informational/manual sections and green supported-pass states include authored SVG symbols and explicit labels. Existing messages retain card/zone names; unsupported rules remain manual and missing/stale data cannot produce a green overall pass. Commander/companion automation remains #13/#14.
 
 
+## Legality result presentation (#58)
+
+The Checks tab labels deck legality explicitly and explains the checked rules and zones. Failed checks use stored deck/card data, with card, zone and format context where available; freshness remains separate from a legality result. Empty failure, unavailable-data and manual-review categories are hidden. Missing data never means a card is banned, and stale/failed refreshes cannot produce a supported-pass summary. A fresh supported pass with unsupported rules remains a neutral manual-review state.
+
+Commander coverage names the implemented size, copy, commander-quantity and single-commander color-identity checks. Manual review identifies eligibility, pairing, basic-land type and special-rule limits and links [#13](https://github.com/RuneBrix/magic-the-deckbuilder/issues/13); companion support remains [#14](https://github.com/RuneBrix/magic-the-deckbuilder/issues/14). No new rules are automated here. Bracket discussion follows the legality results.
+
 ## Exact-printing legality refresh (#59)
 
 Refresh now requests each distinct stored printing id, in batches of at most 75, through the same serialized/cached collection proxy. Names are still used by text import, but no longer identify refresh results. A real live probe confirmed two Very Cryptic Command printings with the same name and different Oracle identities; name-keyed mapping collapsed those variants and repeatedly reported mismatches. A second regression showed empty legality objects were incorrectly labeled fresh. Exact-id matching and selected-format status validation fix those causes without replacing card facts or weakening identity checks.

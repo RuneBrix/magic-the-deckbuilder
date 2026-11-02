@@ -173,7 +173,7 @@ test('legacy saved decks get explicit in-memory zones without writing storage',(
   assert.match(w.node('#app').innerHTML,/Command zone: 1/);
   vm.runInContext("view='deck'; deckTab='checks'; render()",w.context);
   assert.match(w.node('#app').innerHTML,/Failed checks/);
-  assert.match(w.node('#app').innerHTML,/Data unavailable/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Data unavailable/);
   assert.match(w.node('#app').innerHTML,/Manual review/);
   assert.match(w.node('#app').innerHTML,/coverage is partial/);
 });
@@ -574,10 +574,47 @@ test('fresh supported Modern checks pass and aged data becomes stale without a f
   vm.runInContext("view='deck';deckTab='checks';render()",w.context);
   assert.match(w.node('#app').innerHTML,/Supported checks passed/);
   assert.match(w.node('#app').innerHTML,/check-summary check-success/);
+  assert.match(w.node('#app').innerHTML,/<h2>Deck legality checks<\/h2>/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Failed checks|Data unavailable|Manual review|None found/);
   vm.runInContext("legalityStates.get('modern').time-=300_001;render()",w.context);
   assert.match(w.node('#app').innerHTML,/Legality data is stale/);
   assert.match(w.node('#app').innerHTML,/Checks incomplete/);
   assert.match(w.node('#app').innerHTML,/Retry legality refresh/);
+});
+
+test('legality results distinguish stored violations, missing data and unsupported Commander rules',()=>{
+  const d=editorDeck();
+  d.cards.push({card:{...editorCard('<Unknown>','Instant'),color_identity:['U'],legalities:{}},qty:1,tags:[],zone:'main'});
+  d.cards.push({card:{...editorCard('Banned spell','Instant'),legalities:{commander:'banned'}},qty:1,tags:[],zone:'main'});
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  vm.runInContext("view='deck';deckTab='checks';render()",w.context);
+  const html=w.node('#app').innerHTML;
+  assert.match(html,/Deck legality issues found/);
+  assert.match(html,/Failed checks · [1-9]/);
+  assert.match(html,/Banned spell \(Main deck\): banned in commander according to stored card legality/);
+  assert.match(html,/&lt;Unknown&gt; \(Main deck\) is outside your commander&#39;s color identity \(Leader\)/);
+  assert.match(html,/Data unavailable · 1/);
+  assert.match(html,/does not mean the affected cards are banned/);
+  assert.match(html,/Manual review · 1/);
+  assert.match(html,/basic-land types allowed by commander color identity/);
+  assert.match(html,/issues\/13/);
+  assert.match(html,/Sideboard and Maybeboard are excluded/);
+  assert.ok(html.indexOf('Failed checks')<html.indexOf('Commander bracket discussion'));
+  assert.doesNotMatch(html,/check-summary check-success|None found|<Unknown>/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  assert.equal(w.writes.length,0);
+});
+
+test('fresh Commander results keep supported passes separate from manual review',()=>{
+  const d=editorDeck();d.cards[1]={card:editorCard('Forest','Basic Land — Forest'),qty:99,tags:[],zone:'main'};
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  vm.runInContext("legalityStates.set('editor',{status:'fresh',time:Date.now(),signature:legalitySignature(decks[0])});view='deck';deckTab='checks';render()",w.context);
+  const html=w.node('#app').innerHTML;
+  assert.match(html,/Supported checks passed · manual review needed/);
+  assert.match(html,/check-summary check-info/);
+  assert.match(html,/Manual review · 1/);
+  assert.doesNotMatch(html,/Failed checks|Data unavailable|check-summary check-success/);
 });
 
 

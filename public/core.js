@@ -226,12 +226,12 @@ export function legalityReport(deck) {
     if (commanders.length > 1) manual.push('Multiple commanders: pairing compatibility and combined identity require manual review.');
     if (commander && !(/Legendary.*Creature/.test(commander.card.type_line) || /can be your commander/i.test(oracle(commander.card)))) manual.push(`${commander.card.name}: commander eligibility requires manual review.`);
     if (side) manual.push('Commander sideboard/outside-game cards are not validated; they do not count toward the 100-card deck.');
-    manual.push('Commander coverage is partial: pairings, basic-land type restrictions and special construction rules require manual review.');
+    manual.push('Commander coverage is partial: verify commander eligibility and pairings, basic-land types allowed by commander color identity, and special construction rules. The app does not fully check these rules.');
   } else {
     if (main < 60) failed.push(`Main deck needs at least 60 cards (${main}/60); sideboard and command-zone cards do not count.`);
     if (side > 15) failed.push(`Sideboard has ${side} cards; maximum 15.`);
     if (command) failed.push('This constructed format has no command zone. Move those cards to the main deck or sideboard.');
-    if (deck.format !== 'modern') manual.push('D03 validates Modern construction; this format uses shared constructed checks with remaining format-specific rules requiring manual review.');
+    if (deck.format !== 'modern') manual.push('Only Modern has a supported construction rule set. This format uses shared size and copy checks; verify its format-specific construction rules yourself.');
   }
   const groups = new Map();
   const checked = deck.cards.filter(e => zoneFor(e) !== 'maybeboard' && zoneFor(e) !== (deck.format === 'commander' ? 'sideboard' : 'command'));
@@ -241,10 +241,10 @@ export function legalityReport(deck) {
     groups.get(name).push(entry);
     const status = card.legalities?.[deck.format];
     if (!status || !['legal','restricted','banned','not_legal'].includes(status) || (status === 'restricted' && deck.format !== 'vintage')) unavailable.push(`${card.name} (${ZONES[zoneFor(entry)]}): legality data unavailable. Refresh card data.`);
-    else if (status !== 'legal' && status !== 'restricted') failed.push(`${card.name} (${ZONES[zoneFor(entry)]}): ${status.replaceAll('_',' ')}.`);
+    else if (status !== 'legal' && status !== 'restricted') failed.push(`${card.name} (${ZONES[zoneFor(entry)]}): ${status.replaceAll('_',' ')} in ${deck.format} according to stored card legality.`);
     if (!hasOracle(card)) unavailable.push(`${card.name}: Oracle text unavailable; copy exceptions and special restrictions cannot be fully checked.`);
     if (/\bCompanion\b/.test(oracle(card)) || card.keywords?.includes('Companion')) manual.push(`${card.name}: companion designation and starting-deck restrictions are not checked.`);
-    if (deck.format === 'commander' && commanders.length === 1 && commander && card.color_identity.some(c => !commander.card.color_identity.includes(c))) failed.push(`${card.name} is outside your commander's color identity.`);
+    if (deck.format === 'commander' && commanders.length === 1 && commander && card.color_identity.some(c => !commander.card.color_identity.includes(c))) failed.push(`${card.name} (${ZONES[zoneFor(entry)]}) is outside your commander's color identity (${commander.card.name}).`);
   }
   for (const entries of groups.values()) {
     const qty = count({cards:entries}), card = (entries.find(e=>hasOracle(e.card)) || entries[0]).card, text = oracle(card);
