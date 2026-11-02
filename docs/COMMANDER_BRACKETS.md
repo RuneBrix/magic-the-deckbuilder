@@ -24,6 +24,18 @@ This is a **bundled snapshot, not live synchronization**. The app suppresses new
 
 To update: inspect the current official page and subsequent announcements; review all added/removed names and bracket policy changes; update the data module and provenance dates only after that review. Update the count/addition/removal regression fixtures and this document. Run the full suite and review the UI before publishing a changed policy. Never move the verification date merely to silence the stale warning.
 
+## Refresh feasibility and date meaning (#60)
+
+Investigated on **2026-11-02**, before changing the presentation:
+
+- The [official Commander page](https://magic.wizards.com/en/formats/commander) remains the current entry point for bracket names, Game Changer limits and the embedded list. Its linked [February announcement](https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-february-9-2026) and [October policy explanation](https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-october-21-2025) supply historical provenance and important intent/thematic exceptions. No documented, versioned feed covering both list membership and bracket policy was found on these reviewed pages. This is an observation about the reviewed sources, not a claim that no API can exist.
+- The existing page extraction depends on serialized `auto-card` website content, not a published data contract. An HTML change could silently omit cards, and names alone cannot establish policy changes. It is unsuitable for a button that claims to refresh all official guidance reliably.
+- A Scryfall membership mirror is a possible future input, but would still be separate from Wizards' bracket policy. Its [search syntax](https://scryfall.com/docs/syntax) and [card documentation](https://scryfall.com/docs/api/cards) returned HTTP 403 during this investigation; the reviewed [first-party card types](https://github.com/scryfall/api-types/blob/main/src/objects/Card/CardFields.ts) did not document `game_changer`. A live query or secondary report alone is not treated as a verified combined update contract.
+
+**Selected behavior:** keep the bundled list and policy developer-maintained. There is no automatic or user-triggered in-app bracket refresh. UI **Last updated** means the last developer review of the bundled list and guidance (`verifiedAt`), not an announcement's publication date, opening the source link, a successful card-legality lookup, or this feasibility investigation. The last complete snapshot review remains **2026-10-29**; this work does not advance that date or change the 53 names, bracket rules or 90-day application review policy. Updates arrive through app versions.
+
+Any future refresh must stage a complete, validated list and a compatible reviewed policy before applying it. Success may advance retrieval metadata only for the data actually verified; a membership-only lookup must not renew the policy-review date. Missing/partial/invalid data or network errors must retain last-good data, report failure, and preserve player assignments and decks. Cancellation must do nothing. Until that path has a verified contract and tests, the current official link is a source reference, not a refresh action.
+
 ## Data preservation
 
 The optional deck-level `bracket` is an integer 1–5; absence means unassigned. Old backups remain valid. Complete per-deck/workspace JSON backup, restore and independent duplication preserve the field. Invalid assigned values reject a backup atomically. Quantities, zones, cards and roles are unchanged by assignment. Text decklists do not preserve bracket metadata; no external-format preservation is promised.

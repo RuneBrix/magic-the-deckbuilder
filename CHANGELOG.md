@@ -1,5 +1,9 @@
 # Changelog
 
+## Clearer Commander bracket guidance — 2026-11-02
+
+- Simplify bracket discussion and replace the dated update links with the current official Commander source (#60). Show one Last updated date as the last developer review of bundled data, explain developer-maintained app updates and separate card-legality refresh. Preserve manual assignments, Game Changer evidence and stale/missing-data limits.
+
 ## Simpler card action menus — 2026-11-02
 
 - Group deck-card actions into Function and Move to submenus (#54). Existing deck Functions assign directly; Add new function opens a scoped create-and-assign dialog. Keep the card name in the visible header, retain deck/zone context for accessibility, and label all-zone deletion Delete card with its existing confirmation. Function and Move to open as side flyouts on hover and close when leaving the option/flyout, including after clicking the option. Outside clicks dismiss both panels; Left/Escape and viewport fitting retain keyboard and narrow-screen use.
