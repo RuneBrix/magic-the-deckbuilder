@@ -1075,6 +1075,7 @@ test('optional viewing zones follow stored entries rather than filter matches in
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
   assert.equal(w.writes.length,0);
   vm.runInContext("openDeck('editor');openCardActions(entryKey(decks[0].cards[1]),$('.card-menu-trigger'))",w.context);
+  vm.runInContext("renderCardActions('move')",w.context);
   assert.match(w.node('#card-actions').innerHTML,/Sideboard/);
   assert.match(w.node('#card-actions').innerHTML,/Maybeboard/);
 });
@@ -1109,13 +1110,79 @@ test('card action menu scopes moves and details to the chosen entry and supports
   const key=core.entryKey(editorDeck().cards[1]);w.context.key=key;let returned=false;
   const trigger={isConnected:true,setAttribute(){},focus(){returned=true;},getBoundingClientRect(){return {right:500,bottom:600};}};w.context.trigger=trigger;
   vm.runInContext('openCardActions(key,trigger)',w.context);
-  assert.match(w.node('#card-actions').innerHTML,/Move to Maybeboard/);assert.match(w.node('#card-actions').innerHTML,/Remove all copies · all zones/);
-  w.node('#card-actions').keydown({key:'Escape',preventDefault(){}});assert.equal(returned,true);assert.equal(w.node('#card-actions').popoverOpen,false);
+  assert.match(w.node('#card-actions').innerHTML,/Assign card to function…/);assert.match(w.node('#card-actions').innerHTML,/Delete card/);
+  assert.doesNotMatch(w.node('#card-actions').innerHTML,/Garden|Main deck|Move to Maybeboard|<small>/);
+  w.node('#card-actions').keydown({key:'Escape',target:{closest:()=>null},preventDefault(){}});assert.equal(returned,true);assert.equal(w.node('#card-actions').popoverOpen,false);
   vm.runInContext('openCardActions(key,trigger)',w.context);
+  await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'move-menu'}})}});
+  assert.match(w.node('#card-actions').innerHTML,/Maybeboard/);
+  assert.doesNotMatch(w.node('#card-actions').innerHTML,/>Main deck</);
   await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'move:maybeboard'}})}});
   assert.equal(vm.runInContext('decks[0].cards[1].zone',w.context),'maybeboard');assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[1].tags)',w.context)),['Removal','Ramp']);
   assert.match(w.node('#app').innerHTML,/Maybeboard · 2/);
+});
+
+test('function submenu lists only the named deck labels, assigns a primary without losing functions, and creates through a dialog',async()=>{
+  const d=editorDeck(),other={...editorDeck(),id:'other',name:'Other'};other.cards[1].tags=['Other deck only'];
+  const w=workspace({savedDecks:JSON.stringify([d,other])});vm.runInContext("openDeck('editor')",w.context);
+  w.context.key=core.entryKey(d.cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};
+  const click=dataset=>w.node('#card-actions').click({target:{closest:()=>({dataset})}});
+  vm.runInContext('openCardActions(key,trigger)',w.context);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  await click({cardAction:'function-menu'});
+  const html=w.node('#card-actions').innerHTML;
+  assert.match(html,/data-function="Draw"/);assert.match(html,/data-function="Ramp"/);
+  assert.match(html,/data-function="Removal"[^>]*aria-checked="true"/);
+  assert.match(html,/role="menuitemradio"/);
+  assert.doesNotMatch(html,/Other deck only/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  await click({cardAction:'assign-function',function:'Draw'});
+  assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Draw,Removal,Ramp');
+  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
+  assert.equal(vm.runInContext('decks[1].cards[1].tags[0]',w.context),'Other deck only');
+  vm.runInContext('openCardActions(key,trigger)',w.context);await click({cardAction:'function-menu'});await click({cardAction:'new-function'});
+  assert.match(w.node('#dialog').innerHTML,/Add a function|Create and assign/);
+  assert.doesNotMatch(w.node('#dialog').innerHTML,/Existing function/);
+  formValues(w,{'new-function':'Graveyard setup'});w.node('#function-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Graveyard setup,Draw,Removal,Ramp');
+  assert.equal(vm.runInContext('decks[1].cards[1].tags[0]',w.context),'Other deck only');
+});
+
+test('submenu keyboard navigation returns to its parent before closing and stays within the viewport',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
+  w.context.key=core.entryKey(editorDeck().cards[1]);let returned=false,focused='';
+  w.context.trigger={isConnected:true,setAttribute(){},focus(){returned=true;},getBoundingClientRect(){return {right:390,bottom:840};}};
+  vm.runInContext('innerWidth=390;innerHeight=844;openCardActions(key,trigger)',w.context);
+  const menu=w.node('#card-actions');menu.querySelector=selector=>({focus(){focused=selector;}});
+  const key=(key,action)=>menu.keydown({key,target:{closest:()=>({dataset:{cardAction:action}})},preventDefault(){}});
+  key('ArrowRight','function-menu');assert.equal(menu.dataset.submenu,'function');
+  assert.equal(menu.popoverOpen,true);
+  const buttons=['back','first','last'].map(name=>({focus(){focused=name;}}));menu.querySelectorAll=()=>buttons;
+  w.document.activeElement=buttons[1];key('ArrowDown');assert.equal(focused,'last');
+  key('Home');assert.equal(focused,'back');key('End');assert.equal(focused,'last');
+  key('ArrowLeft');assert.equal(menu.dataset.submenu,'');assert.match(focused,/function-menu/);
+  assert.equal(menu.popoverOpen,true);
+  key('ArrowRight','move-menu');key('Escape');assert.equal(menu.dataset.submenu,'');assert.match(focused,/move-menu/);
+  key('Escape');assert.equal(menu.popoverOpen,false);assert.equal(returned,true);
+  assert.ok(parseFloat(menu.style.left)>=16);assert.ok(parseFloat(menu.style.top)+400<=828);
+});
+
+test('function submenu handles empty decks, escapes labels, and rejects stale selections without edits',async()=>{
+  const d=editorDeck();d.cards.forEach(e=>e.tags=[]);
+  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor')",w.context);
+  w.context.key=core.entryKey(d.cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};
+  vm.runInContext("openCardActions(key,trigger);renderCardActions('function')",w.context);
+  assert.match(w.node('#card-actions').innerHTML,/No functions in this deck yet/);
+  assert.match(w.node('#card-actions').innerHTML,/Add new function/);
+  vm.runInContext(`decks[0].cards[0].tags=['<Draw & "ramp">'];renderCardActions('function')`,w.context);
+  assert.match(w.node('#card-actions').innerHTML,/&lt;Draw &amp; &quot;ramp&quot;&gt;/);
+  assert.doesNotMatch(w.node('#card-actions').innerHTML,/<Draw/);
+  vm.runInContext('decks[0].cards[0].tags=[]',w.context);
+  const before=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
+  await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'assign-function',function:'<Draw & "ramp">'}})}});
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,writes);
+  assert.match(w.node('#toast').textContent,/no longer in this deck/);
 });
 
 test('card function creation is deck scoped, cross-deck copying requires a target, and all-zone removal can be cancelled', () => {

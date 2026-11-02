@@ -246,17 +246,44 @@ function closeCardActions(restore=true) {
   cardActionTrigger?.setAttribute('aria-expanded','false');
   if(restore && cardActionTrigger?.isConnected)cardActionTrigger.focus();
 }
+function positionCardActions() {
+  const menu=$('#card-actions');
+  menu.style.width=Math.min(270,innerWidth-32)+'px';
+  const anchor=cardActionTrigger.getBoundingClientRect(),{height,width}=menu.getBoundingClientRect();
+  menu.style.left=Math.max(16,Math.min(anchor.right-width,innerWidth-width-16))+'px';
+  menu.style.top=Math.max(16,Math.min(anchor.bottom+6,innerHeight-height-16))+'px';
+}
+function renderCardActions(submenu='') {
+  const menu=$('#card-actions'),d=decks.find(d=>d.id===menu.dataset.deck),entry=d?.cards.find(e=>entryKey(e)===menu.dataset.entry);
+  if(!entry || current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
+  const action=(value,label,attributes='',role='menuitem')=>`<button role="${role}" data-card-action="${value}" ${attributes}>${label}</button>`;
+  let items;
+  if(submenu==='function') {
+    const functions=[...new Set(d.cards.flatMap(e=>e.tags))].sort((a,b)=>a.localeCompare(b));
+    items=action('back','← Back')+'<p class="card-submenu-title">Primary function</p>'+(functions.length?functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join(''):'<p class="hint">No functions in this deck yet.</p>')+action('new-function','Add new function…');
+  } else if(submenu==='move') {
+    items=action('back','← Back')+'<p class="card-submenu-title">Move all entry copies to</p>'+Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
+  } else {
+    items=action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>','aria-haspopup="menu"')+action('move-menu','Move to… <span aria-hidden="true">›</span>','aria-haspopup="menu"')+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card');
+  }
+  menu.dataset.submenu=submenu;
+  menu.setAttribute('aria-label',`${submenu==='function'?'Functions':submenu==='move'?'Move destinations':'Card actions'} for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
+  menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>${items}`;
+  menu.scrollTop=0;
+  if(!menu.matches(':popover-open'))menu.showPopover();
+  positionCardActions();
+  menu.querySelector(submenu?'button:not([data-card-action="back"]):not(:disabled)':'button:not(:disabled)')?.focus();
+}
+function backCardActions() {
+  const previous=$('#card-actions').dataset.submenu;
+  renderCardActions();
+  $('#card-actions').querySelector(`[data-card-action="${previous}-menu"]`)?.focus();
+}
 function openCardActions(key,trigger) {
   closeCardActions(false);
   const d=current(),entry=d?.cards.find(e=>entryKey(e)===key);if(!entry)return;
   const menu=$('#card-actions');cardActionTrigger=trigger;menu.dataset.deck=d.id;menu.dataset.entry=key;
-  const action=(value,label,disabled=false)=>`<button role="menuitem" data-card-action="${esc(value)}" ${disabled?'disabled':''}>${label}</button>`;
-  menu.innerHTML=`<h3>${esc(entry.card.name)}<small>${esc(d.name)} · ${ZONES[zoneFor(entry)]}</small></h3>${action('details','Open details')}${action('function','Assign function…')}${Object.entries(ZONES).map(([z,label])=>action('move:'+z,'Move to '+label,z===zoneFor(entry))).join('')}${action('copy-name','Copy card name')}${action('copy-deck','Add to another deck…',decks.length<2)}${action('remove','Remove all copies · all zones…')}`;
-  menu.style.width=Math.min(250,innerWidth-32)+'px';menu.showPopover();trigger.setAttribute('aria-expanded','true');
-  const anchor=trigger.getBoundingClientRect(),height=menu.getBoundingClientRect().height,width=menu.getBoundingClientRect().width;
-  menu.style.left=Math.max(16,Math.min(anchor.right-width,innerWidth-width-16))+'px';
-  menu.style.top=Math.max(16,Math.min(anchor.bottom+6,innerHeight-height-16))+'px';
-  menu.querySelector('button:not(:disabled)')?.focus();
+  renderCardActions();trigger.setAttribute('aria-expanded','true');
 }
 function focusCardEntry(d,key) {
   if(current()!==d || typeof CSS==='undefined')return;
@@ -264,9 +291,9 @@ function focusCardEntry(d,key) {
 }
 function assignFunctionDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
-  const functions=[...new Set(d.cards.flatMap(e=>e.tags))].sort();
-  showDialog(`<h2>Function for ${esc(entry.card.name)}</h2><p>${esc(d.name)} · ${ZONES[zoneFor(entry)]}. The chosen function becomes primary; other functions stay assigned.</p><form id="function-form"><label>Existing function<select name="function"><option value="">Choose a function…</option>${functions.map(f=>`<option ${f===primaryRole(entry)?'selected':''}>${esc(f)}</option>`).join('')}</select></label><label>Or create a function for this deck<input name="new-function" maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Assign function</button></form>`);
-  $('#function-form').onsubmit=e=>{e.preventDefault();try{const data=new FormData(e.target),name=String(data.get('new-function')||'').trim()||String(data.get('function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast('Function assigned in '+d.name);}catch(error){$('#function-error').textContent=error.message;}};
+  showDialog(`<h2>Add a function</h2><p>${esc(entry.card.name)} · ${esc(d.name)} · ${ZONES[zoneFor(entry)]}. The new function becomes primary; other functions stay assigned.</p><form id="function-form"><label>Function name<input name="new-function" required maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Create and assign</button></form>`);
+  $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast('Function assigned in '+d.name);}catch(error){$('#function-error').textContent=error.message;}};
+  $('#function-form input').focus();
 }
 function copyEntryDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
@@ -276,18 +303,25 @@ function copyEntryDialog(d,key) {
 function removeCopiesDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
   const matches=d.cards.filter(e=>cardKey(e.card)===cardKey(entry.card)),total=matches.reduce((n,e)=>n+e.qty,0);
-  showDialog(`<h2>Remove all ${esc(entry.card.name)}?</h2><p>Remove ${total} ${total===1?'copy':'copies'} from ${esc(d.name)} across all zones, including Maybeboard.</p><p>${matches.map(e=>`${ZONES[zoneFor(e)]}: ${e.qty}`).join(' · ')}</p><div class="workspace-actions"><button id="keep-copies" class="secondary">Keep cards</button><button id="remove-copies" class="danger">Remove ${total} ${total===1?'copy':'copies'}</button></div><p id="remove-copies-error" role="alert"></p>`);
+  showDialog(`<h2>Delete ${esc(entry.card.name)}?</h2><p>Remove ${total} ${total===1?'copy':'copies'} from ${esc(d.name)} across all zones, including Maybeboard.</p><p>${matches.map(e=>`${ZONES[zoneFor(e)]}: ${e.qty}`).join(' · ')}</p><div class="workspace-actions"><button id="keep-copies" class="secondary">Keep cards</button><button id="remove-copies" class="danger">Delete ${total} ${total===1?'copy':'copies'}</button></div><p id="remove-copies-error" role="alert"></p>`);
   $('#keep-copies').onclick=()=>$('#dialog').close();$('#keep-copies').focus();
   $('#remove-copies').onclick=()=>{try{changeNamedDeck(d,deck=>removeCardCopies(deck,key));$('#dialog').close();$('#deck-title')?.focus();toast('All copies removed from '+d.name);}catch(error){$('#remove-copies-error').textContent=error.message;}};
 }
 $('#card-actions').addEventListener('click',async e=>{
-  const button=e.target.closest('[data-card-action]');if(!button)return;
-  const menu=$('#card-actions'),d=decks.find(x=>x.id===menu.dataset.deck),key=menu.dataset.entry,entry=d?.cards.find(e=>entryKey(e)===key);closeCardActions();
-  if(!d||!entry||current()!==d){toast('This card entry is no longer available in this view.');return;}
+  const button=e.target.closest('[data-card-action]');if(!button || button.disabled)return;
+  const menu=$('#card-actions'),d=decks.find(x=>x.id===menu.dataset.deck),key=menu.dataset.entry,entry=d?.cards.find(e=>entryKey(e)===key);
+  if(!d||!entry||current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
   const action=button.dataset.cardAction;
+  if(action==='function-menu'||action==='move-menu'){renderCardActions(action==='function-menu'?'function':'move');return;}
+  if(action==='back'){backCardActions();return;}
+  closeCardActions();
   try{
     if(action==='details')inspect(entry.card.id,key);
-    if(action==='function')assignFunctionDialog(d,key);
+    if(action==='new-function')assignFunctionDialog(d,key);
+    if(action==='assign-function'){
+      if(!d.cards.some(e=>e.tags.includes(button.dataset.function)))throw Error('This function is no longer in this deck. Reopen the menu.');
+      changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast('Function assigned in '+d.name);
+    }
     if(action==='copy-deck')copyEntryDialog(d,key);
     if(action==='remove')removeCopiesDialog(d,key);
     if(action==='copy-name'){await navigator.clipboard.writeText(entry.card.name);toast('Card name copied');}
@@ -295,10 +329,13 @@ $('#card-actions').addEventListener('click',async e=>{
   }catch(error){toast(error.message);}
 });
 $('#card-actions').addEventListener('keydown',e=>{
-  if(e.key==='Escape'){e.preventDefault();closeCardActions();return;}
+  const menu=$('#card-actions'),button=e.target.closest('[data-card-action]');
+  if(e.key==='Escape'||e.key==='ArrowLeft'&&menu.dataset.submenu){e.preventDefault();if(menu.dataset.submenu)backCardActions();else closeCardActions();return;}
+  if(e.key==='ArrowRight'&&['function-menu','move-menu'].includes(button?.dataset.cardAction)){e.preventDefault();renderCardActions(button.dataset.cardAction==='function-menu'?'function':'move');return;}
   if(e.key==='Tab'){closeCardActions();return;}
-  if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const buttons=[...$('#card-actions').querySelectorAll('button:not(:disabled)')],i=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();}
+  if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const buttons=[...menu.querySelectorAll('button:not(:disabled)')],i=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();}
 });
+addEventListener('resize',()=>{if($('#card-actions').matches(':popover-open'))positionCardActions();});
 $('#card-actions').addEventListener('toggle',e=>{if(e.newState==='closed')cardActionTrigger?.setAttribute('aria-expanded','false');});
 addEventListener('scroll',e=>{if(!$('#card-actions').contains(e.target))closeCardActions(false);},true);
 function curve(s) { const max=Math.max(1,...s.curve); return `<div class="curve" role="img" aria-label="Mana curve: ${s.curve.map((n,i)=>`${i===7?'7+':i} mana: ${n}`).join(', ')}">${s.curve.map((n,i)=>`<div class="curve-column"><span>${n || ''}</span><div style="height:${n ? Math.max(4,n/max*54) : 2}px" class="${n?'filled':''}"></div><small>${i===7?'7+':i}</small></div>`).join('')}</div>`; }
