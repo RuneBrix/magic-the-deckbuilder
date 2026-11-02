@@ -935,6 +935,9 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     }
     assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,layout.startsWith('visual')?3:0);
     assert.equal((w.node('#app').innerHTML.match(/data-card-menu=/g)||[]).length,3);
+    const largeQuantity=vm.runInContext('deckEntry({...decks[0].cards[0],qty:500})',w.context);
+    if(layout.startsWith('visual'))assert.match(largeQuantity,/class="entry-quantity three-digits" aria-label="500 copies">500<\/span>/);
+    else assert.doesNotMatch(largeQuantity,/three-digits/);
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
     else assert.match(w.node('#app').innerHTML,/class="entry-quantity"/);
