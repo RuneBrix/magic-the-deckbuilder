@@ -738,6 +738,12 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .printing-browser label,.detail-deck-context label{display:block;margin:16px 0 7px}
 .printing-browser select,.detail-deck-context select,.detail-deck-context input{width:100%;min-width:0;background:var(--ground);color:var(--ink);border:1px solid var(--line);padding:10px;border-radius:3px}
 .detail-deck-context button{max-width:100%;white-space:normal;text-align:left;line-height:1.5;margin:8px 8px 0 0}
+.detail-targets{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.detail-quantity{display:flex;align-items:center;gap:8px;margin-top:16px}
+.detail-quantity span{margin-right:auto}
+.detail-quantity output{min-width:3ch;text-align:center;font-variant-numeric:tabular-nums}
+.detail-deck-context .detail-quantity button{display:grid;place-items:center;width:44px;height:44px;padding:0;margin:0}
+.detail-deck-context button:disabled{cursor:default}
 .detail-information .detail-error{color:var(--danger)}
 .detail-information .detail-saved{color:var(--success)}
 #discard-roles{color:var(--danger);text-decoration:underline}

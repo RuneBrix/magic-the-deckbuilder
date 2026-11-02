@@ -1,5 +1,9 @@
 # Changelog
 
+## Explicit card-detail destinations — 2026-11-02
+
+- Add deck/zone selectors and compact minus/quantity/plus controls to card details (#45). Selecting a target leaves the preview and decks unchanged; copy edits and printing application affect only that target. Use Functions labels, retain invalid drafts when switching is blocked, and replace the matching-printing wait cursor with a normal disabled state.
+
 ## Clearer deck legality results — 2026-11-02
 
 - Label deck legality checks and their zone/rule scope, hide empty result categories, explain stored-data failures and missing-data limits, and place Commander bracket discussion after legality results (#58). Manual Commander checks name unsupported eligibility, pairings and basic-land restrictions; #13 remains open.

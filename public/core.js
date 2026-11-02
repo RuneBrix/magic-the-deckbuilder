@@ -47,9 +47,9 @@ export function moveEntry(deck, key, zone) {
   else { entry.zone = zone; entry.commander = zone === 'command'; }
 }
 export function editEntry(deck, key, roles, zone) {
-  if (typeof roles !== 'string' || roles.length > 500) throw Error('Use at most 500 characters for personal roles.');
+  if (typeof roles !== 'string' || roles.length > 500) throw Error('Use at most 500 characters for functions.');
   const tags=[...new Set(roles.split(',').map(t=>t.trim()).filter(Boolean))];
-  if (tags.some(t=>t.length>80)) throw Error('Each personal role must be 80 characters or fewer. Your text is kept for correction.');
+  if (tags.some(t=>t.length>80)) throw Error('Each function must be 80 characters or fewer. Your text is kept for correction.');
   const entry=deck.cards.find(e=>entryKey(e)===key);
   if (!entry) throw Error('This deck entry no longer exists. Reopen the card from your deck.');
   const other=deck.cards.find(e=>e!==entry && (e.card.oracle_id||e.card.id)===(entry.card.oracle_id||entry.card.id) && zoneFor(e)===zone);

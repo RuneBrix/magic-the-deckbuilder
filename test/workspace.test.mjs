@@ -653,7 +653,7 @@ test('card details bind the named deck and row printing; roles autosave without 
   const w=workspace({savedDecks:JSON.stringify([d,{...editorDeck(),id:'other',name:'Other'}])});
   vm.runInContext("results=[{...decks[0].cards[1].card,set_name:'Search release'}];inspect('Ramp spell',entryKey(decks[0].cards[1]));",w.context);
   assert.match(w.node('#detail-facts').innerHTML,/Stored release/);
-  assert.match(w.node('#detail-deck').innerHTML,/Deck: Garden/);
+  assert.match(w.node('#detail-deck').innerHTML,/selected>Garden/);
   assert.doesNotMatch(w.node('#dialog').innerHTML,/Save zone and roles/);
   const input=w.node('#detail-roles');input.value='Draw, Ramp, ';
   input.input();
@@ -679,25 +679,46 @@ test('invalid roles remain visible across printing preview and prevent Escape/cl
   w.node('#view-printing').change({target:{value:'preview'}});
   assert.equal(input.value,'x'.repeat(81));
   assert.equal(vm.runInContext('decks[0].cards[1].card.id',w.context),'Ramp spell');
+  w.node('#detail-zone').change({target:{value:'sideboard'}});
+  assert.equal(vm.runInContext('detail.zone',w.context),'main');
+  assert.equal(input.value,'x'.repeat(81));
+  w.node('#detail-target').change({target:{value:''}});
+  assert.equal(vm.runInContext('detail.deck.id',w.context),'editor');
+  assert.equal(input.value,'x'.repeat(81));
   w.node('#discard-roles').onclick();assert.equal(vm.runInContext('detail',w.context),null);
 });
 
-test('zone autosave merges quantities and ordered roles, retains destination printing and rejects overflow atomically',()=>{
+test('details select deck and zone without moving copies or replacing the preview; quantity edits affect only that target',()=>{
   const d=editorDeck();d.cards.push({...structuredClone(d.cards[1]),qty:3,tags:['Destination'],zone:'sideboard',card:{...d.cards[1].card,id:'side-print'}});
-  const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("inspect('Ramp spell')",w.context);
-  w.node('#detail-roles').value='Ramp, Draw';w.node('#detail-roles').input();
+  const other={...editorDeck(),id:'other',name:'Other'};
+  const w=workspace({savedDecks:JSON.stringify([d,other])});vm.runInContext("inspect('Ramp spell')",w.context);
+  w.node('#detail-roles').value='Removal, Ramp';
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
   w.node('#detail-zone').change({target:{value:'sideboard'}});
-  assert.equal(vm.runInContext('decks[0].cards.length',w.context),2);
-  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),5);
-  assert.equal(vm.runInContext('decks[0].cards[1].card.id',w.context),'side-print');
-  assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Destination,Ramp,Draw');
-  assert.match(w.node('#detail-deck').innerHTML,/Sideboard/);
-  const over=editorDeck();over.cards.push({...structuredClone(over.cards[1]),qty:500,zone:'sideboard'});
-  const v=workspace({savedDecks:JSON.stringify([over])});vm.runInContext("inspect('Ramp spell')",v.context);v.node('#detail-roles').value='New role';
-  const before=vm.runInContext('JSON.stringify(decks)',v.context);v.node('#detail-zone').change({target:{value:'sideboard'}});
-  assert.equal(vm.runInContext('JSON.stringify(decks)',v.context),before);
-  assert.match(v.node('#detail-save-status').textContent,/Nothing moved/);
-  assert.equal(v.node('#detail-roles').value,'New role');
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  assert.equal(w.writes.length,0);
+  assert.equal(vm.runInContext('detail.card.id',w.context),'Ramp spell');
+  assert.match(w.node('#detail-deck').innerHTML,/id="detail-quantity"[^>]*>3<\/output>/);
+  w.node('#detail-roles').value='Destination';
+  w.node('#detail-add').onclick();
+  assert.equal(vm.runInContext('decks[0].cards[2].qty',w.context),4);
+  assert.equal(vm.runInContext('decks[0].cards[2].card.id',w.context),'side-print');
+  assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
+  w.node('#detail-remove').onclick();
+  assert.equal(vm.runInContext('decks[0].cards[2].qty',w.context),3);
+  w.node('#detail-target').change({target:{value:'other'}});
+  assert.equal(vm.runInContext('detail.zone',w.context),'sideboard');
+  assert.equal(vm.runInContext('detail.card.id',w.context),'Ramp spell');
+  assert.match(w.node('#detail-deck').innerHTML,/id="detail-quantity"[^>]*>0<\/output>/);
+  w.node('#detail-add').onclick();
+  assert.equal(vm.runInContext('decks[1].cards.at(-1).qty',w.context),1);
+  assert.equal(vm.runInContext('decks[1].cards.at(-1).zone',w.context),'sideboard');
+  w.node('#detail-roles').value='';
+  w.node('#detail-remove').onclick();
+  assert.equal(vm.runInContext('decks[1].cards.length',w.context),2);
+  assert.equal(vm.runInContext('detail.key',w.context),null);
+  assert.equal(vm.runInContext('detail.card.id',w.context),'Ramp spell');
+  assert.match(w.node('#detail-deck').innerHTML,/id="detail-quantity"[^>]*>0<\/output>/);
 });
 
 test('printing browsing paginates safely, ignores dismissed responses, and preview/apply preserves entry metadata and backup',async()=>{
@@ -741,15 +762,43 @@ test('printing failures retain viewed/stored cards and show retry; invalid ident
 test('no-tracker details preview leaves decks unchanged; adding the viewed printing requires a named destination',()=>{
   const c=editorCard('Preview'),w=workspace({savedDecks:JSON.stringify([editorDeck()]),savedTracker:JSON.stringify({id:''})});
   w.context.preview=c;vm.runInContext('results=[preview];inspect(preview.id)',w.context);
-  assert.match(w.node('#detail-deck').innerHTML,/No deck is tracked/);
+  assert.match(w.node('#detail-deck').innerHTML,/Choose a deck before adding/);
   assert.equal(w.node('#detail-roles-section').innerHTML,'');
   assert.equal(w.writes.length,0);
   vm.runInContext("detail.card={...detail.card,id:'specific-print'}",w.context);
-  w.node('#detail-add').onclick();assert.match(w.node('#dialog').innerHTML,/Choose the destination/);
-  w.node('#add-destination').value='editor';w.node('#add-destination-form').onsubmit({preventDefault(){}});
+  w.node('#detail-add').onclick();assert.match(w.node('#detail-save-status').textContent,/Choose a destination deck/);
+  w.node('#detail-target').change({target:{value:'editor'}});
+  assert.equal(w.writes.length,0);
+  w.node('#detail-add').onclick();
   assert.equal(vm.runInContext('decks[0].cards.at(-1).card.id',w.context),'specific-print');
   assert.equal(vm.runInContext('tracker.id',w.context),'');
 
+});
+
+test('details apply a preview only to the selected deck and zone and reject stale targets and quantity overflow',()=>{
+  const d=editorDeck(),other={...editorDeck(),id:'other',name:'Other'};
+  other.cards[1].zone='maybeboard';other.cards[1].qty=500;other.cards[1].tags=['Private'];
+  const w=workspace({savedDecks:JSON.stringify([d,other])});
+  vm.runInContext("inspect('Ramp spell');detail.card={...detail.card,id:'new-print',set_name:'New release'}",w.context);
+  w.node('#detail-roles').value='Removal, Ramp';
+  w.node('#detail-target').change({target:{value:'other'}});
+  w.node('#detail-zone').change({target:{value:'maybeboard'}});
+  assert.match(w.node('#detail-deck').innerHTML,/id="detail-add"[^>]*disabled/);
+  w.node('#detail-roles').value='Private';
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  w.node('#detail-add').onclick();
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  assert.match(w.node('#detail-save-status').textContent,/Maximum 500/);
+  w.node('#apply-printing').click();
+  assert.equal(vm.runInContext('decks[1].cards[1].card.id',w.context),'new-print');
+  assert.equal(vm.runInContext('decks[1].cards[1].qty',w.context),500);
+  assert.equal(vm.runInContext('decks[1].cards[1].tags[0]',w.context),'Private');
+  assert.equal(vm.runInContext('decks[0].cards[1].card.id',w.context),'Ramp spell');
+  vm.runInContext('decks.pop()',w.context);
+  const remaining=vm.runInContext('JSON.stringify(decks)',w.context);
+  w.node('#detail-remove').onclick();
+  assert.match(w.node('#detail-save-status').textContent,/deck no longer exists/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),remaining);
 });
 
 

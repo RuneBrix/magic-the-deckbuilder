@@ -519,7 +519,7 @@ function chooseDestination(id,zone='main',preview) {
   };
   else $('#create-destination').onclick=()=>deckForm(undefined,d=>{view='explore';try{addToDeck(c,d,zone);}catch(error){toast(error.message);}});
 }
-function closeDialog(discard=false) {if(discard!==true && detail && !saveDetailRoles())return false;const s=detail;detail=null;$('#dialog').close();if(s && typeof CSS!=='undefined')document.querySelector(s.key?'[data-entry="'+CSS.escape(s.key)+'"]':'[data-inspect="'+CSS.escape(s.source.id)+'"]')?.focus({preventScroll:true});return true;}
+function closeDialog(discard=false) {if(discard!==true && detail && !saveDetailRoles())return false;const s=detail;detail=null;$('#dialog').close();if(s && typeof CSS!=='undefined')document.querySelector(s.originKey?'[data-entry="'+CSS.escape(s.originKey)+'"]':'[data-inspect="'+CSS.escape(s.source.id)+'"]')?.focus({preventScroll:true});return true;}
 function showDialog(html) {detail=null;const dialog=$('#dialog');dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=closeDialog;}
 $('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}});
 $('#dialog').addEventListener('cancel',e=>{if(detail){e.preventDefault();closeDialog();}});
@@ -569,22 +569,33 @@ function detailMessage(message, error=false) {
   $('#detail-save-status').className=error?'detail-error':'detail-saved';
   $('#discard-roles').hidden=!error;
 }
-function saveDetailRoles(zone) {
+function saveDetailRoles() {
   const s=detail;if(!s?.key)return true;
   try {
-    if(!decks.includes(s.deck))throw Error('This deck no longer exists. Your role text is kept below.');
-    const entry=detailEntry(s);if(!entry)throw Error('This entry changed or was removed. Your role text is kept below.');
+    if(!decks.includes(s.deck))throw Error('This deck no longer exists. Your function text is kept below.');
+    const entry=detailEntry(s);if(!entry)throw Error('This entry changed or was removed. Your function text is kept below.');
     const raw=$('#detail-roles').value;
-    const target=zone || zoneFor(entry);
-    // Keep the raw input intact while typing; only the validated tags are stored.
-    const before=JSON.stringify([entry.tags,zoneFor(entry)]);
-    const moved=editEntry(s.deck,s.key,raw,target);s.key=entryKey(moved);
-    if(before!==JSON.stringify([moved.tags,zoneFor(moved)])) {s.deck.updated=new Date().toISOString();save();render();}
-    if(zone) {$('#detail-roles').value=moved.tags.join(', ');renderDetailDeck();}
+    // Keep the raw input intact while typing; only the validated functions are stored.
+    const before=JSON.stringify(entry.tags);
+    editEntry(s.deck,s.key,raw,zoneFor(entry));
+    if(before!==JSON.stringify(entry.tags)) {s.deck.updated=new Date().toISOString();save();render();}
     s.invalidRoles=false;
-    detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Saved to '+s.deck.name+' · '+ZONES[zoneFor(moved)],Boolean(storageError));
+    detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Saved to '+s.deck.name+' · '+ZONES[s.zone],Boolean(storageError));
     return true;
-  }catch(error){s.invalidRoles=true;detailMessage(error.message,true);if(zone)$('#detail-zone').value=detailEntry(s)?zoneFor(detailEntry(s)):'main';return false;}
+  }catch(error){s.invalidRoles=true;detailMessage(error.message,true);return false;}
+}
+function selectDetailTarget(deckId,zone) {
+  const s=detail;if(!s)return;
+  if(!saveDetailRoles()) {
+    $('#detail-target').value=s.deck?.id || '';$('#detail-zone').value=s.zone;
+    return;
+  }
+  const d=decks.find(d=>d.id===deckId);
+  if((deckId&&!d)||!Object.hasOwn(ZONES,zone)){detailMessage('Choose an available deck and zone.',true);return;}
+  s.deck=d;s.zone=zone;
+  const entry=d?.cards.find(e=>cardKey(e.card)===cardKey(s.source)&&zoneFor(e)===zone);
+  s.key=entry?entryKey(entry):null;
+  renderDetailDeck();renderDetailRoles();detailMessage('');
 }
 function printingLabel(c) { return `${c.set_name || c.set || 'Unknown set'} · #${c.collector_number || '?'} · ${(c.lang || 'en').toUpperCase()}${c.released_at?' · '+c.released_at:''}`; }
 function renderDetailFacts() {
@@ -594,28 +605,46 @@ function renderDetailFacts() {
   $('#detail-facts').innerHTML=`<h2 id="detail-title">${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost || c.card_faces?.map(f=>f.mana_cost||'').join(' // '))}</div><p class="detail-type">${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><dl class="card-facts"><div><dt>Mana value</dt><dd>${esc(c.cmc)}</dd></div>${c.power!==undefined?`<div><dt>Power / toughness</dt><dd>${esc(c.power)} / ${esc(c.toughness)}</dd></div>`:''}${c.loyalty!==undefined?`<div><dt>Loyalty</dt><dd>${esc(c.loyalty)}</dd></div>`:''}<div><dt>Release</dt><dd>${esc(printingLabel(c))}</dd></div><div><dt>Rarity</dt><dd>${esc(c.rarity || 'Unavailable')}</dd></div><div><dt>Artist</dt><dd>${esc(c.artist || c.card_faces?.map(f=>f.artist).filter(Boolean).join(' / ') || 'Unavailable')}</dd></div></dl><details class="detail-legality"><summary>Stored format legality</summary><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><p class="hint">Stored data can be outdated. Deck Checks shows refresh status and validation limits.</p></details><p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View this printing on Scryfall</a></p>`;
 }
 function renderDetailDeck() {
-  const s=detail,entry=detailEntry(s),d=s.deck;
-  $('#detail-deck').innerHTML=`<h3>${d?'Deck: '+esc(d.name):'Add to a deck'}</h3>${entry?`<p id="detail-entry-context">${entry.qty} ${entry.qty===1?'copy':'copies'} · ${ZONES[zoneFor(entry)]} · Stored printing: ${esc(printingLabel(entry.card))}</p><label for="detail-zone">Deck zone</label><select id="detail-zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zoneFor(entry)===z?'selected':''}>${label}</option>`).join('')}</select><p class="hint">Moves every copy. Matching entries merge quantities and roles, keeping the destination printing.</p>`:`<p>${d?'This card is not in '+esc(d.name)+'’s Main deck.':'No deck is tracked. Choose a destination before adding a card.'}</p>`}<button class="primary" id="detail-add">${entry?'Add 1 to '+esc(d.name)+' · '+ZONES[zoneFor(entry)] : d?'Add 1 to '+esc(d.name)+' · Main deck':'Add to…'}</button>${entry?`<button class="secondary" id="apply-printing" ${entry.card.id===s.card.id?'disabled':''}>Use viewed printing in ${esc(d.name)} · ${ZONES[zoneFor(entry)]}</button><p class="hint">Changes the printing for all copies in this entry (${entry.qty}). Other zones stay unchanged.</p>`:''}`;
-  $('#detail-zone')?.addEventListener('change',e=>saveDetailRoles(e.target.value));
+  const s=detail,entry=detailEntry(s),d=s.deck,zone=s.zone;
+  const context=d?d.name+' · '+ZONES[zone]:'a selected deck and zone';
+  $('#detail-deck').innerHTML=`<h3>Deck</h3><div class="detail-targets"><div><label for="detail-target">Destination deck</label><select id="detail-target"><option value="">Choose a deck…</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck===d?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></div><div><label for="detail-zone">Deck zone</label><select id="detail-zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zone===z?'selected':''}>${label}</option>`).join('')}</select></div></div><div class="detail-quantity" role="group" aria-label="Quantity in ${esc(context)}"><span>Copies</span><button class="secondary" id="detail-remove" aria-label="Remove one ${esc(s.card.name)} from ${esc(context)}" ${!entry?'disabled':''}>${icon('minus',16)}</button><output id="detail-quantity" aria-live="polite" aria-label="Copies in ${esc(context)}">${entry?.qty||0}</output><button class="secondary" id="detail-add" aria-label="Add one ${esc(s.card.name)} to ${esc(context)}" ${!d||entry?.qty>=500?'disabled':''}>${icon('plus',16)}</button></div>${!d?'<p class="hint">Choose a deck before adding copies.</p>':''}${entry?`<p class="hint" id="detail-entry-context">Stored printing: ${esc(printingLabel(entry.card))}</p><button class="secondary" id="apply-printing" ${entry.card.id===s.card.id?'disabled':''}>${entry.card.id===s.card.id?'Printing already selected':'Use viewed printing'}</button><p class="hint">Applies to ${entry.qty} ${entry.qty===1?'copy':'copies'} in ${esc(context)}.</p>`:''}`;
+  $('#detail-target').addEventListener('change',e=>{selectDetailTarget(e.target.value,s.zone);$('#detail-target').focus();});
+  $('#detail-zone').addEventListener('change',e=>{selectDetailTarget(s.deck?.id||'',e.target.value);$('#detail-zone').focus();});
   $('#detail-add').onclick=()=>{
     if(!saveDetailRoles())return;
-    if(!d) {const card=s.card;closeDialog();chooseDestination(card.id,'main',card);return;}
-    try {if(!decks.includes(d))throw Error('This deck no longer exists.');const zone=entry?zoneFor(entry):'main';addToDeck(s.card,d,zone);s.key=entryKey({card:s.card,zone});renderDetailDeck();renderDetailRoles();detailMessage('Added to '+d.name+' · '+ZONES[zone]);}catch(error){detailMessage(error.message,true);}
+    try {
+      if(!d)throw Error('Choose a destination deck first.');
+      addToDeck(s.card,d,zone);s.key=entryKey({card:s.card,zone});
+      renderDetailDeck();renderDetailRoles();
+      detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Added to '+context,Boolean(storageError));
+      $('#detail-add').focus();
+    }catch(error){detailMessage(error.message,true);}
+  };
+  $('#detail-remove').onclick=()=>{
+    if(!saveDetailRoles())return;
+    try {
+      if(!decks.includes(d))throw Error('This deck no longer exists.');
+      const currentEntry=detailEntry(s);if(!currentEntry)return;
+      if(--currentEntry.qty===0){d.cards=d.cards.filter(e=>e!==currentEntry);s.key=null;}
+      d.updated=new Date().toISOString();save();render();renderDetailDeck();renderDetailRoles();
+      detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Removed one copy from '+context,Boolean(storageError));
+      $(s.key?'#detail-remove':'#detail-add').focus();
+    }catch(error){detailMessage(error.message,true);}
   };
   $('#apply-printing')?.addEventListener('click',()=>{
     if(!saveDetailRoles())return;
-    try{if(!decks.includes(d))throw Error('This deck no longer exists.');setEntryPrinting(d,s.key,s.card);d.updated=new Date().toISOString();save();render();renderDetailDeck();detailMessage(storageError?'Printing kept for this session. Export a JSON backup.':'Printing saved to '+d.name+' · '+ZONES[zoneFor(detailEntry(s))],Boolean(storageError));}catch(error){detailMessage(error.message,true);}
+    try{if(!decks.includes(d))throw Error('This deck no longer exists.');setEntryPrinting(d,s.key,s.card);d.updated=new Date().toISOString();save();render();renderDetailDeck();detailMessage(storageError?'Printing kept for this session. Export a JSON backup.':'Printing saved to '+context,Boolean(storageError));$('#detail-target').focus();}catch(error){detailMessage(error.message,true);}
   });
 }
 function renderDetailRoles() {
   const entry=detailEntry();
-  $('#detail-roles-section').innerHTML=entry?`<label for="detail-roles">Your ordered personal roles</label><input id="detail-roles" maxlength="500" value="${esc(entry.tags.join(', '))}" placeholder="e.g. Ramp, Removal" aria-describedby="detail-roles-help detail-save-status"><p class="hint" id="detail-roles-help">Separate roles with commas. The first role groups this card by primary function; all roles appear in filters and statistics. These are your private deck labels, separate from Scryfall function tags. Valid edits save as you type.</p>`:'';
+  $('#detail-roles-section').innerHTML=entry?`<label for="detail-roles">Functions</label><input id="detail-roles" maxlength="500" value="${esc(entry.tags.join(', '))}" placeholder="e.g. Ramp, Removal" aria-describedby="detail-roles-help detail-save-status"><p class="hint" id="detail-roles-help">Separate functions with commas; the first sets the group. Saves as you type.</p>`:'';
   $('#detail-roles')?.addEventListener('input',()=>saveDetailRoles());
   $('#detail-roles')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveDetailRoles();}});
 }
 function renderPrintings() {
   const s=detail;
-  $('#printing-options').innerHTML=s.loaded?`<label for="view-printing">View a set / printing</label><select id="view-printing">${s.printings.map(c=>`<option value="${esc(c.id)}" ${c.id===s.card.id?'selected':''}>${esc(printingLabel(c))}</option>`).join('')}</select><p class="hint">Selection changes this preview. Apply it below to change a named deck entry.</p>`:'';
+  $('#printing-options').innerHTML=s.loaded?`<label for="view-printing">View a set / printing</label><select id="view-printing">${s.printings.map(c=>`<option value="${esc(c.id)}" ${c.id===s.card.id?'selected':''}>${esc(printingLabel(c))}</option>`).join('')}</select>`:'';
   $('#view-printing')?.addEventListener('change',e=>{s.card=s.printings.find(c=>c.id===e.target.value)||s.card;renderDetailFacts();renderDetailDeck();});
   $('#printing-status').textContent=s.printingError || (s.loading?'Loading printings…':s.loaded?`${s.printings.length} printings loaded${s.more?'; more available':''}.`:'Browse paper releases for this card.');
   $('#load-printings').textContent=s.printingError?'Retry loading printings':s.loaded&&s.more?'Load more printings':'Browse printings';
@@ -639,8 +668,8 @@ function inspect(id,entryId) {
   const d=current(), row=entryId?d?.cards.find(e=>entryKey(e)===entryId):null;
   const c=row?.card || findCard(id);if(!c)return;
   const entry=row || d?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');
-  showDialog(`<div class="card-detail"><div id="detail-images" class="detail-images"></div><div class="detail-information"><div id="detail-facts"></div><section class="printing-browser" aria-label="Card printings"><h3>Sets and printings</h3><div id="printing-options"></div><p id="printing-status" role="status"></p><button class="secondary" id="load-printings">Browse printings</button></section><section class="detail-deck-context" aria-label="Deck-specific changes"><div id="detail-deck"></div><div id="detail-roles-section"></div><p id="detail-save-status" role="status"></p><button class="text-button" id="discard-roles" hidden>Discard unsaved role text and close</button></section></div></div>`);
-  detail={deck:d,key:entry?entryKey(entry):null,source:c,card:c,printings:[c],page:0,more:false,loaded:false,loading:false,printingError:''};
+  showDialog(`<div class="card-detail"><div id="detail-images" class="detail-images"></div><div class="detail-information"><div id="detail-facts"></div><section class="printing-browser" aria-label="Card printings"><h3>Sets and printings</h3><div id="printing-options"></div><p id="printing-status" role="status"></p><button class="secondary" id="load-printings">Browse printings</button></section><section class="detail-deck-context" aria-label="Deck-specific changes"><div id="detail-deck"></div><div id="detail-roles-section"></div><p id="detail-save-status" role="status"></p><button class="text-button" id="discard-roles" hidden>Discard unsaved function text and close</button></section></div></div>`);
+  detail={deck:d,zone:entry?zoneFor(entry):'main',key:entry?entryKey(entry):null,originKey:entry?entryKey(entry):null,source:c,card:c,printings:[c],page:0,more:false,loaded:false,loading:false,printingError:''};
   renderDetailFacts();renderDetailDeck();renderDetailRoles();renderPrintings();
   $('#dialog').setAttribute('aria-label',c.name+' — Card details');
   $('#load-printings').onclick=loadPrintings;
