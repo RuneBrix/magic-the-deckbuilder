@@ -2,7 +2,7 @@
 
 ## Simpler card action menus — 2026-11-02
 
-- Group deck-card actions into Function and Move to submenus (#54). Existing deck Functions assign directly; Add new function opens a scoped create-and-assign dialog. Keep the card name in the visible header, retain deck/zone context for accessibility, and label all-zone deletion Delete card with its existing confirmation. Back/Left/Escape navigation and viewport fitting support keyboard and narrow-screen use.
+- Group deck-card actions into Function and Move to submenus (#54). Existing deck Functions assign directly; Add new function opens a scoped create-and-assign dialog. Keep the card name in the visible header, retain deck/zone context for accessibility, and label all-zone deletion Delete card with its existing confirmation. Function and Move to open as side flyouts on hover and close when leaving the option/flyout unless pinned by a click. Outside clicks dismiss them; Left/Escape, viewport fitting and scroll repositioning retain keyboard and narrow-screen use.
 
 ## Explicit card-detail destinations — 2026-11-02
 

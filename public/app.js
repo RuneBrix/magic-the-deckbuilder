@@ -240,44 +240,71 @@ function deckList(d, full=false) {
     return `<section class="deck-zone"><h3>${label} · ${zoneCount(d,zone)}${full&&editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3><div class="deck-group-list">${[...groups].map(([group,items])=>`<section class="deck-group">${group?`<h4>${esc(group)}</h4>`:''}<div class="deck-group-items" style="--stack-divisor:${Math.max(1,items.length-2)}">${items.map(e=>full?(editorOptions.layout.startsWith('visual')?`<div class="card-slot">${deckEntry(e)}</div>`:deckEntry(e)):`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span><div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}</div></section>`).join('')||`<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</div></section>`;
   }).join('')+'</div>';
 }
+function closeCardSubmenu(restore=false) {
+  const menu=$('#card-actions'),previous=menu.dataset.submenu,sub=$('#card-submenu');
+  if(sub?.matches(':popover-open'))sub.hidePopover();
+  menu.dataset.submenu='';menu.dataset.pinned='false';
+  menu.querySelectorAll('[aria-haspopup="menu"]').forEach(button=>button.setAttribute('aria-expanded','false'));
+  if(restore&&previous)menu.querySelector(`[data-card-action="${previous}-menu"]`)?.focus();
+}
 function closeCardActions(restore=true) {
+  closeCardSubmenu();
   const menu=$('#card-actions');
   if(menu.matches?.(':popover-open'))menu.hidePopover();
   cardActionTrigger?.setAttribute('aria-expanded','false');
   if(restore && cardActionTrigger?.isConnected)cardActionTrigger.focus();
 }
+function positionCardSubmenu() {
+  const menu=$('#card-actions');if(!menu.dataset.submenu)return;
+  const parent=menu.querySelector(`[data-card-action="${menu.dataset.submenu}-menu"]`),sub=$('#card-submenu');
+  const anchor=parent.getBoundingClientRect(),preferred=Math.min(270,Math.floor((innerWidth-32)/2));
+  const right=innerWidth-16-anchor.right,left=anchor.left-16,opensLeft=right<preferred&&left>right;
+  const width=Math.min(preferred,Math.max(left,right));
+  sub.style.width=width+'px';
+  sub.style.left=(opensLeft?anchor.left-width:anchor.right)+'px';
+  sub.style.top=Math.max(16,Math.min(anchor.top,innerHeight-sub.getBoundingClientRect().height-16))+'px';
+}
 function positionCardActions() {
   const menu=$('#card-actions');
-  menu.style.width=Math.min(270,innerWidth-32)+'px';
+  menu.style.width=Math.min(270,Math.floor((innerWidth-32)/2))+'px';
   const anchor=cardActionTrigger.getBoundingClientRect(),{height,width}=menu.getBoundingClientRect();
   menu.style.left=Math.max(16,Math.min(anchor.right-width,innerWidth-width-16))+'px';
   menu.style.top=Math.max(16,Math.min(anchor.bottom+6,innerHeight-height-16))+'px';
+  positionCardSubmenu();
 }
-function renderCardActions(submenu='') {
-  const menu=$('#card-actions'),d=decks.find(d=>d.id===menu.dataset.deck),entry=d?.cards.find(e=>entryKey(e)===menu.dataset.entry);
+function showCardSubmenu(type,pin=false,focus=false) {
+  const menu=$('#card-actions'),sub=$('#card-submenu'),d=decks.find(d=>d.id===menu.dataset.deck),entry=d?.cards.find(e=>entryKey(e)===menu.dataset.entry);
   if(!entry || current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
-  const action=(value,label,attributes='',role='menuitem')=>`<button role="${role}" data-card-action="${value}" ${attributes}>${label}</button>`;
-  let items;
-  if(submenu==='function') {
-    const functions=[...new Set(d.cards.flatMap(e=>e.tags))].sort((a,b)=>a.localeCompare(b));
-    items=action('back','← Back')+'<p class="card-submenu-title">Primary function</p>'+(functions.length?functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join(''):'<p class="hint">No functions in this deck yet.</p>')+action('new-function','Add new function…');
-  } else if(submenu==='move') {
-    items=action('back','← Back')+'<p class="card-submenu-title">Move all entry copies to</p>'+Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
-  } else {
-    items=action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>','aria-haspopup="menu"')+action('move-menu','Move to… <span aria-hidden="true">›</span>','aria-haspopup="menu"')+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card');
+  if(menu.dataset.pinned==='true'&&!pin)return;
+  if(menu.dataset.submenu!==type) {
+    closeCardSubmenu();
+    const action=(value,label,attributes='',role='menuitem')=>`<button role="${role}" data-card-action="${value}" ${attributes}>${label}</button>`;
+    let items;
+    if(type==='function') {
+      const functions=[...new Set(d.cards.flatMap(e=>e.tags))].sort((a,b)=>a.localeCompare(b));
+      items='<p class="card-submenu-title">Primary function</p>'+(functions.length?functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join(''):'<p class="hint">No functions in this deck yet.</p>')+action('new-function','Add new function…');
+    } else {
+      items='<p class="card-submenu-title">Move all entry copies to</p>'+Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
+    }
+    sub.innerHTML=items;sub.scrollTop=0;
+    sub.setAttribute('aria-label',`${type==='function'?'Functions':'Move destinations'} for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
+    menu.dataset.submenu=type;
+    menu.querySelector(`[data-card-action="${type}-menu"]`).setAttribute('aria-expanded','true');
+    sub.showPopover();positionCardSubmenu();
   }
-  menu.dataset.submenu=submenu;
-  menu.setAttribute('aria-label',`${submenu==='function'?'Functions':submenu==='move'?'Move destinations':'Card actions'} for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
-  menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>${items}`;
-  menu.scrollTop=0;
-  if(!menu.matches(':popover-open'))menu.showPopover();
-  positionCardActions();
-  menu.querySelector(submenu?'button:not([data-card-action="back"]):not(:disabled)':'button:not(:disabled)')?.focus();
+  if(pin)menu.dataset.pinned='true';
+  if(focus)sub.querySelector('button:not(:disabled)')?.focus();
 }
-function backCardActions() {
-  const previous=$('#card-actions').dataset.submenu;
-  renderCardActions();
-  $('#card-actions').querySelector(`[data-card-action="${previous}-menu"]`)?.focus();
+function renderCardActions() {
+  const menu=$('#card-actions'),d=decks.find(d=>d.id===menu.dataset.deck),entry=d?.cards.find(e=>entryKey(e)===menu.dataset.entry);
+  if(!entry || current()!==d){closeCardActions();return;}
+  const action=(value,label,attributes='')=>`<button role="menuitem" data-card-action="${value}" ${attributes}>${label}</button>`;
+  const submenu='aria-haspopup="menu" aria-expanded="false" aria-controls="card-submenu"';
+  menu.setAttribute('aria-label',`Card actions for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
+  menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>`+action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>',submenu)+action('move-menu','Move to… <span aria-hidden="true">›</span>',submenu)+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card')+'<div id="card-submenu" popover="manual" role="menu"></div>';
+  menu.scrollTop=0;
+  menu.showPopover();positionCardActions();
+  menu.querySelector(':scope > button:not(:disabled)')?.focus();
 }
 function openCardActions(key,trigger) {
   closeCardActions(false);
@@ -308,12 +335,11 @@ function removeCopiesDialog(d,key) {
   $('#remove-copies').onclick=()=>{try{changeNamedDeck(d,deck=>removeCardCopies(deck,key));$('#dialog').close();$('#deck-title')?.focus();toast('All copies removed from '+d.name);}catch(error){$('#remove-copies-error').textContent=error.message;}};
 }
 $('#card-actions').addEventListener('click',async e=>{
-  const button=e.target.closest('[data-card-action]');if(!button || button.disabled)return;
+  const button=e.target.closest('[data-card-action]');if(!button){if(!$('#card-submenu').contains(e.target))closeCardSubmenu();return;}if(button.disabled)return;
   const menu=$('#card-actions'),d=decks.find(x=>x.id===menu.dataset.deck),key=menu.dataset.entry,entry=d?.cards.find(e=>entryKey(e)===key);
   if(!d||!entry||current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
   const action=button.dataset.cardAction;
-  if(action==='function-menu'||action==='move-menu'){renderCardActions(action==='function-menu'?'function':'move');return;}
-  if(action==='back'){backCardActions();return;}
+  if(action==='function-menu'||action==='move-menu'){showCardSubmenu(action==='function-menu'?'function':'move',true,e.detail===0);return;}
   closeCardActions();
   try{
     if(action==='details')inspect(entry.card.id,key);
@@ -328,16 +354,27 @@ $('#card-actions').addEventListener('click',async e=>{
     if(action.startsWith('move:')){const zone=action.slice(5),nextKey=entryKey({card:entry.card,zone});changeNamedDeck(d,deck=>moveEntry(deck,key,zone));focusCardEntry(d,nextKey);toast('All entry copies moved to '+ZONES[zone]);}
   }catch(error){toast(error.message);}
 });
+$('#card-actions').addEventListener('pointerover',e=>{
+  if(e.pointerType==='touch')return;
+  const action=e.target.closest('[data-card-action]')?.dataset.cardAction;
+  if(action==='function-menu'||action==='move-menu')showCardSubmenu(action==='function-menu'?'function':'move');
+});
+$('#card-actions').addEventListener('pointerout',e=>{
+  const menu=$('#card-actions');if(!menu.dataset.submenu||menu.dataset.pinned==='true')return;
+  const parent=menu.querySelector(`[data-card-action="${menu.dataset.submenu}-menu"]`),next=e.relatedTarget;
+  if(parent.contains(next)||$('#card-submenu').contains(next))return;
+  closeCardSubmenu();
+});
 $('#card-actions').addEventListener('keydown',e=>{
-  const menu=$('#card-actions'),button=e.target.closest('[data-card-action]');
-  if(e.key==='Escape'||e.key==='ArrowLeft'&&menu.dataset.submenu){e.preventDefault();if(menu.dataset.submenu)backCardActions();else closeCardActions();return;}
-  if(e.key==='ArrowRight'&&['function-menu','move-menu'].includes(button?.dataset.cardAction)){e.preventDefault();renderCardActions(button.dataset.cardAction==='function-menu'?'function':'move');return;}
+  const menu=$('#card-actions'),button=e.target.closest('[data-card-action]'),sub=$('#card-submenu');
+  if(e.key==='Escape'||e.key==='ArrowLeft'&&menu.dataset.submenu){e.preventDefault();if(menu.dataset.submenu)closeCardSubmenu(true);else closeCardActions();return;}
+  if(e.key==='ArrowRight'&&['function-menu','move-menu'].includes(button?.dataset.cardAction)){e.preventDefault();showCardSubmenu(button.dataset.cardAction==='function-menu'?'function':'move',true,true);return;}
   if(e.key==='Tab'){closeCardActions();return;}
-  if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const buttons=[...menu.querySelectorAll('button:not(:disabled)')],i=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();}
+  if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const scope=sub.contains(e.target)?sub:menu,buttons=[...scope.querySelectorAll(':scope > button:not(:disabled)')],i=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();}
 });
 addEventListener('resize',()=>{if($('#card-actions').matches(':popover-open'))positionCardActions();});
-$('#card-actions').addEventListener('toggle',e=>{if(e.newState==='closed')cardActionTrigger?.setAttribute('aria-expanded','false');});
-addEventListener('scroll',e=>{if(!$('#card-actions').contains(e.target))closeCardActions(false);},true);
+$('#card-actions').addEventListener('toggle',e=>{if(e.target===$('#card-actions')&&e.newState==='closed'){closeCardSubmenu();cardActionTrigger?.setAttribute('aria-expanded','false');}});
+addEventListener('scroll',e=>{const menu=$('#card-actions');if(menu.contains(e.target)){if(e.target===menu)positionCardSubmenu();}else if(menu.matches(':popover-open')&&menu.dataset.pinned==='true')positionCardActions();else closeCardActions(false);},true);
 function curve(s) { const max=Math.max(1,...s.curve); return `<div class="curve" role="img" aria-label="Mana curve: ${s.curve.map((n,i)=>`${i===7?'7+':i} mana: ${n}`).join(', ')}">${s.curve.map((n,i)=>`<div class="curve-column"><span>${n || ''}</span><div style="height:${n ? Math.max(4,n/max*54) : 2}px" class="${n?'filled':''}"></div><small>${i===7?'7+':i}</small></div>`).join('')}</div>`; }
 function statPanel(s) {
   return `<div class="stats-view"><section class="stat-tool"><h3>Mana curve</h3>${curve(s)}<div class="stat-pair"><span>Average mana value</span><b>${s.average.toFixed(2)}</b></div></section><div class="stat-tools"><section class="stat-tool"><h3>Card types</h3>${Object.entries(s.types).map(([t,n])=>`<div class="stat-pair"><span>${t}</span><b>${n}</b></div>`).join('') || '<p class="hint">Add cards to see the breakdown.</p>'}</section><section class="stat-tool"><h3>Your role tags</h3>${Object.entries(s.tags).map(([t,n])=>`<div class="stat-pair"><span>${esc(t)}</span><b>${n}</b></div>`).join('') || '<p class="hint">Inspect a deck card to assign roles such as ramp or removal.</p>'}</section><section class="stat-tool"><h3>Colors on cards</h3><div class="color-stats">${Object.entries(s.colors).map(([c,n])=>`<div><span class="mana mana-${c}">${c}</span><b>${n}</b></div>`).join('')}</div><p class="hint">Multicolor cards count in each of their colors.</p></section></div></div>`;

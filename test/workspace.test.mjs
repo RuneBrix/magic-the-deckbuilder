@@ -14,7 +14,7 @@ function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, 
     if (!nodes.has(selector)) nodes.set(selector, {
       innerHTML: '', content: '', addEventListener(type, fn) { this[type] = fn; },
       contains() { return false; }, querySelector: node, querySelectorAll:()=>[], scrollIntoView() {}, dataset:{}, isConnected:true,
-      matches(){return Boolean(this.popoverOpen);}, showPopover(){this.popoverOpen=true;}, hidePopover(){this.popoverOpen=false;}, getBoundingClientRect(){return {right:300,bottom:100,height:400,width:250};},
+      matches(){return Boolean(this.popoverOpen);}, showPopover(){this.popoverOpen=true;}, hidePopover(){this.popoverOpen=false;}, getBoundingClientRect(){return {left:50,right:300,top:50,bottom:450,height:400,width:250};},
       setAttribute() {}, showModal() {}, focus() {}, close() {},
       classList: { add() {}, remove() {}, toggle() {} }, style: { setProperty() {} },
     });
@@ -1075,9 +1075,9 @@ test('optional viewing zones follow stored entries rather than filter matches in
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
   assert.equal(w.writes.length,0);
   vm.runInContext("openDeck('editor');openCardActions(entryKey(decks[0].cards[1]),$('.card-menu-trigger'))",w.context);
-  vm.runInContext("renderCardActions('move')",w.context);
-  assert.match(w.node('#card-actions').innerHTML,/Sideboard/);
-  assert.match(w.node('#card-actions').innerHTML,/Maybeboard/);
+  vm.runInContext("showCardSubmenu('move')",w.context);
+  assert.match(w.node('#card-submenu').innerHTML,/Sideboard/);
+  assert.match(w.node('#card-submenu').innerHTML,/Maybeboard/);
 });
 
 test('statistics tool board renders existing weighted playing-deck values and escapes personal roles', () => {
@@ -1115,8 +1115,8 @@ test('card action menu scopes moves and details to the chosen entry and supports
   w.node('#card-actions').keydown({key:'Escape',target:{closest:()=>null},preventDefault(){}});assert.equal(returned,true);assert.equal(w.node('#card-actions').popoverOpen,false);
   vm.runInContext('openCardActions(key,trigger)',w.context);
   await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'move-menu'}})}});
-  assert.match(w.node('#card-actions').innerHTML,/Maybeboard/);
-  assert.doesNotMatch(w.node('#card-actions').innerHTML,/>Main deck</);
+  assert.match(w.node('#card-submenu').innerHTML,/Maybeboard/);
+  assert.doesNotMatch(w.node('#card-submenu').innerHTML,/>Main deck</);
   await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'move:maybeboard'}})}});
   assert.equal(vm.runInContext('decks[0].cards[1].zone',w.context),'maybeboard');assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[1].tags)',w.context)),['Removal','Ramp']);
@@ -1131,7 +1131,7 @@ test('function submenu lists only the named deck labels, assigns a primary witho
   vm.runInContext('openCardActions(key,trigger)',w.context);
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   await click({cardAction:'function-menu'});
-  const html=w.node('#card-actions').innerHTML;
+  const html=w.node('#card-submenu').innerHTML;
   assert.match(html,/data-function="Draw"/);assert.match(html,/data-function="Ramp"/);
   assert.match(html,/data-function="Removal"[^>]*aria-checked="true"/);
   assert.match(html,/role="menuitemradio"/);
@@ -1149,35 +1149,72 @@ test('function submenu lists only the named deck labels, assigns a primary witho
   assert.equal(vm.runInContext('decks[1].cards[1].tags[0]',w.context),'Other deck only');
 });
 
-test('submenu keyboard navigation returns to its parent before closing and stays within the viewport',()=>{
+test('submenu keyboard navigation returns to its parent before closing and stays within the viewport',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
   w.context.key=core.entryKey(editorDeck().cards[1]);let returned=false,focused='';
   w.context.trigger={isConnected:true,setAttribute(){},focus(){returned=true;},getBoundingClientRect(){return {right:390,bottom:840};}};
+  const menu=w.node('#card-actions'),sub=w.node('#card-submenu');
+  const parents=Object.fromEntries(['function','move'].map(type=>[type,{focus(){focused=type;},setAttribute(){},getBoundingClientRect(){return {left:50,right:220,top:400,bottom:444};}}]));
+  menu.querySelector=selector=>selector.includes('function-menu')?parents.function:parents.move;
+  menu.querySelectorAll=()=>Object.values(parents);
   vm.runInContext('innerWidth=390;innerHeight=844;openCardActions(key,trigger)',w.context);
-  const menu=w.node('#card-actions');menu.querySelector=selector=>({focus(){focused=selector;}});
-  const key=(key,action)=>menu.keydown({key,target:{closest:()=>({dataset:{cardAction:action}})},preventDefault(){}});
+  const child={closest:()=>({dataset:{}})};sub.contains=target=>target===child;
+  const key=(key,action,target)=>menu.keydown({key,target:target||{closest:()=>({dataset:{cardAction:action}})},preventDefault(){}});
   key('ArrowRight','function-menu');assert.equal(menu.dataset.submenu,'function');
-  assert.equal(menu.popoverOpen,true);
-  const buttons=['back','first','last'].map(name=>({focus(){focused=name;}}));menu.querySelectorAll=()=>buttons;
-  w.document.activeElement=buttons[1];key('ArrowDown');assert.equal(focused,'last');
-  key('Home');assert.equal(focused,'back');key('End');assert.equal(focused,'last');
-  key('ArrowLeft');assert.equal(menu.dataset.submenu,'');assert.match(focused,/function-menu/);
-  assert.equal(menu.popoverOpen,true);
-  key('ArrowRight','move-menu');key('Escape');assert.equal(menu.dataset.submenu,'');assert.match(focused,/move-menu/);
+  assert.equal(menu.popoverOpen,true);assert.equal(sub.popoverOpen,true);
+  const buttons=['first','last'].map(name=>({focus(){focused=name;}}));sub.querySelectorAll=()=>buttons;
+  w.document.activeElement=buttons[0];key('ArrowDown',null,child);assert.equal(focused,'last');
+  key('Home',null,child);assert.equal(focused,'first');key('End',null,child);assert.equal(focused,'last');
+  key('ArrowLeft');assert.equal(menu.dataset.submenu,'');assert.equal(focused,'function');
+  assert.equal(menu.popoverOpen,true);assert.equal(sub.popoverOpen,false);
+  key('ArrowRight','move-menu');key('Escape');assert.equal(menu.dataset.submenu,'');assert.equal(focused,'move');
   key('Escape');assert.equal(menu.popoverOpen,false);assert.equal(returned,true);
   assert.ok(parseFloat(menu.style.left)>=16);assert.ok(parseFloat(menu.style.top)+400<=828);
+  assert.ok(parseFloat(sub.style.left)>=16);assert.ok(parseFloat(sub.style.left)+parseFloat(sub.style.width)<=374);
+  vm.runInContext('openCardActions(key,trigger)',w.context);
+  sub.querySelector=()=>({focus(){focused='submenu';}});
+  await menu.click({detail:0,target:{closest:()=>({dataset:{cardAction:'function-menu'}})}});
+  assert.equal(focused,'submenu');assert.equal(menu.dataset.pinned,'true');
+});
+
+test('side flyouts close on hover exit but clicks pin them until another click or dismissal',async()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
+  w.context.key=core.entryKey(editorDeck().cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};
+  const menu=w.node('#card-actions'),sub=w.node('#card-submenu'),expanded={};
+  const parents=Object.fromEntries(['function','move'].map(type=>[type,{focus(){},contains:target=>target===type,setAttribute(name,value){expanded[type]=value;},getBoundingClientRect(){return {left:240,right:360,top:750,bottom:794};}}]));
+  menu.querySelector=selector=>selector.includes('function-menu')?parents.function:parents.move;
+  menu.querySelectorAll=()=>Object.values(parents);sub.contains=target=>target==='sub';
+  vm.runInContext('innerWidth=390;innerHeight=844;openCardActions(key,trigger)',w.context);
+  const root=menu.innerHTML,before=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
+  const target=action=>({closest:()=>({dataset:{cardAction:action}})});
+  menu.pointerover({pointerType:'touch',target:target('function-menu')});assert.equal(menu.dataset.submenu,'');
+  menu.pointerover({pointerType:'mouse',target:target('function-menu')});
+  assert.equal(sub.popoverOpen,true);assert.equal(menu.dataset.pinned,'false');assert.equal(expanded.function,'true');
+  assert.equal(menu.innerHTML,root);assert.ok(parseFloat(sub.style.left)<240);
+  menu.pointerout({relatedTarget:'sub'});assert.equal(sub.popoverOpen,true);
+  menu.pointerout({relatedTarget:'function'});assert.equal(sub.popoverOpen,true);
+  menu.pointerout({relatedTarget:null});assert.equal(sub.popoverOpen,false);assert.equal(menu.popoverOpen,true);
+  menu.pointerover({pointerType:'mouse',target:target('function-menu')});
+  await menu.click({target:target('function-menu')});assert.equal(menu.dataset.pinned,'true');
+  menu.pointerout({relatedTarget:null});assert.equal(sub.popoverOpen,true);
+  w.events.scroll({target:w.document});assert.equal(menu.popoverOpen,true);assert.equal(sub.popoverOpen,true);
+  menu.pointerover({pointerType:'mouse',target:target('move-menu')});assert.equal(menu.dataset.submenu,'function');
+  await menu.click({target:target('move-menu')});assert.equal(menu.dataset.submenu,'move');assert.equal(expanded.function,'false');
+  menu.popoverOpen=false;menu.toggle({target:menu,newState:'closed'});
+  assert.equal(sub.popoverOpen,false);assert.equal(menu.dataset.pinned,'false');
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,writes);
 });
 
 test('function submenu handles empty decks, escapes labels, and rejects stale selections without edits',async()=>{
   const d=editorDeck();d.cards.forEach(e=>e.tags=[]);
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor')",w.context);
   w.context.key=core.entryKey(d.cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};
-  vm.runInContext("openCardActions(key,trigger);renderCardActions('function')",w.context);
-  assert.match(w.node('#card-actions').innerHTML,/No functions in this deck yet/);
-  assert.match(w.node('#card-actions').innerHTML,/Add new function/);
-  vm.runInContext(`decks[0].cards[0].tags=['<Draw & "ramp">'];renderCardActions('function')`,w.context);
-  assert.match(w.node('#card-actions').innerHTML,/&lt;Draw &amp; &quot;ramp&quot;&gt;/);
-  assert.doesNotMatch(w.node('#card-actions').innerHTML,/<Draw/);
+  vm.runInContext("openCardActions(key,trigger);closeCardSubmenu();showCardSubmenu('function')",w.context);
+  assert.match(w.node('#card-submenu').innerHTML,/No functions in this deck yet/);
+  assert.match(w.node('#card-submenu').innerHTML,/Add new function/);
+  vm.runInContext(`decks[0].cards[0].tags=['<Draw & "ramp">'];closeCardSubmenu();showCardSubmenu('function')`,w.context);
+  assert.match(w.node('#card-submenu').innerHTML,/&lt;Draw &amp; &quot;ramp&quot;&gt;/);
+  assert.doesNotMatch(w.node('#card-submenu').innerHTML,/<Draw/);
   vm.runInContext('decks[0].cards[0].tags=[]',w.context);
   const before=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
   await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'assign-function',function:'<Draw & "ramp">'}})}});

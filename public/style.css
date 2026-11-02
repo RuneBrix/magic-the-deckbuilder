@@ -857,12 +857,13 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .text-horizontal .text-card{width:100%;max-width:100%}
 .text-vertical .deck-group-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:16px 16px;padding:4px}
 .text-vertical .deck-group-items{display:flex;flex-direction:column;gap:4px}
-#card-actions{position:fixed;inset:auto;margin:0;padding:6px;max-height:calc(100dvh - 32px);overflow-y:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);box-shadow:0 8px 24px #0003}
+#card-actions,#card-submenu{position:fixed;inset:auto;margin:0;padding:6px;max-height:calc(100dvh - 32px);overflow-y:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);box-shadow:0 8px 24px #0003}
 #card-actions h3{padding:10px;font-size:14px;overflow-wrap:anywhere}
 #card-actions .card-submenu-title,#card-actions .hint{padding:8px 10px;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 #card-actions button{display:block;width:100%;text-align:left;min-height:40px;padding:10px;font-size:12px;border-radius:2px;overflow-wrap:anywhere}
 #card-actions button span{float:right}
 #card-actions [aria-checked="true"]{font-weight:600;background:var(--soft)}
+#card-actions [aria-expanded="true"]{background:var(--soft)}
 #card-actions button:hover,#card-actions button:focus-visible{background:var(--soft)}
 #card-actions button:disabled{cursor:default}
 #card-actions [data-card-action="remove"]{color:var(--danger);border-top:1px solid var(--line);margin-top:4px}
