@@ -592,7 +592,7 @@ dialog h2{font-size:28px}
 #app,#app:has(.library),#app:has(.deck-workspace){display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr}
 #app:has(.explorer){grid-template-columns:minmax(0,1fr)}
 #app.has-tracker:has(.explorer){grid-template-columns:minmax(0,1fr) min(var(--tracker-width,340px),40vw)}
-.workspace-nav{grid-column:1/-1;display:flex;align-items:center;gap:24px;min-height:76px;padding:12px 30px;border-bottom:1px solid var(--line);background:var(--surface)}
+.workspace-nav{grid-column:1/-1;position:sticky;top:0;align-self:start;z-index:6;display:flex;align-items:center;gap:24px;min-height:76px;padding:12px 30px;border-bottom:1px solid var(--line);background:var(--surface)}
 .workspace-nav .brand{padding:0;min-height:44px;font-size:30px;flex-shrink:0;letter-spacing:-.025em}
 .workspace-nav nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .workspace-nav .nav-item{width:auto;margin:0;padding:10px 14px;min-height:44px;font-size:13px;white-space:nowrap}
@@ -790,7 +790,7 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .deck-hover-preview img{display:block;width:100%;height:auto;max-height:calc(100dvh - 110px);object-fit:contain;border-radius:9px}
 .deck-hover-preview figcaption{margin-top:10px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;color:var(--muted)}
 .deck-row.is-previewed,.deck-workspace .deck-row:hover,.deck-workspace .deck-row:focus-within{background:var(--soft)}
-@media(min-width:1100px){.deck-card-area{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;align-items:start}.deck-hover-preview{display:block;position:sticky;top:20px;align-self:start;padding-top:12px}.deck-hover-preview .hint{line-height:1.6;max-width:24ch}.deck-hover-preview img{max-height:calc(100dvh - 122px)}}
+@media(min-width:1100px){.deck-card-area{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;align-items:start}.deck-hover-preview{display:block;position:sticky;top:calc(var(--nav-height,76px) + 20px);align-self:start;padding-top:12px}.deck-hover-preview .hint{line-height:1.6;max-width:24ch}.deck-hover-preview img{max-height:calc(100dvh - var(--nav-height,76px) - 122px)}}
 @media(max-width:600px){.editor-controls .deck-text-filter{min-width:100%;flex-basis:100%}.editor-controls>button{min-height:36px}}
 
 /* Shared deck entries across visual stacks and text views (#41 / #43). */
@@ -873,3 +873,17 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 
 .backup-help{margin-top:20px;line-height:1.6;overflow-wrap:anywhere}
 #backup-status{font-weight:600}
+
+/* Viewport navigation and compact statistics (#57 / #61). */
+html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
+.stats-view{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:32px;max-width:900px}
+.stat-tools{display:grid;gap:28px;min-width:0}
+.stat-tool{min-width:0}
+.stat-tool h3{margin:0 0 12px}
+.stat-tool .stat-pair{justify-content:flex-start;align-items:baseline;gap:16px;overflow-wrap:anywhere}
+.stat-tool .stat-pair b{flex-shrink:0}
+.stat-tool .curve{margin-top:0}
+.stat-tool .color-stats{justify-content:flex-start;flex-wrap:wrap;gap:12px 20px}
+.stat-tool .hint{margin-top:12px}
+@media(min-width:961px){#deck-tracker{position:sticky;top:var(--nav-height,76px);align-self:start;height:calc(100dvh - var(--nav-height,76px));min-height:0}}
+@media(max-width:600px){.stats-view{grid-template-columns:minmax(0,1fr);gap:28px}}

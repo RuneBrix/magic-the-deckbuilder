@@ -1,5 +1,11 @@
 # Changelog
 
+## Quieter deck views and persistent navigation — 2026-11-02
+
+- Hide actually empty Sideboard and Maybeboard viewing sections in all four layouts and the tracker; populated zones remain visible when filters match no cards, and all zones remain add/move destinations ([#53](https://github.com/RuneBrix/magic-the-deckbuilder/issues/53)).
+- Place the mana curve beside compact card-type, personal-role and color tools; stack the tools on narrow screens without changing calculations ([#57](https://github.com/RuneBrix/magic-the-deckbuilder/issues/57)).
+- Keep shared navigation at the viewport top and measure its wrapped height for scroll targets, the sticky preview and desktop tracker ([#61](https://github.com/RuneBrix/magic-the-deckbuilder/issues/61)). Browser layout/scroll verification remains pending.
+
 ## Reliable legality refresh — 2026-11-01
 
 - Refresh exact stored printing ids so same-name rules variants no longer collide (#59). Require usable selected-format data before marking coverage fresh; identify missing/mismatched cards and retain stored data on failure. Printing/format changes and in-flight edits retain safe follow-up coverage.
