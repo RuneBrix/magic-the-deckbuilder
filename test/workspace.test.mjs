@@ -821,8 +821,8 @@ test('manual bracket assignment is explicit, preserved by duplication/backups an
   assert.match(w.node('#app').innerHTML,/Player assigned:<\/strong> Bracket 2/);
   vm.runInContext("decks[0].cards[1].card.name='Farewell';render();duplicateDeck(decks[0])",w.context);
   assert.equal(vm.runInContext('decks[0].bracket',w.context),2);assert.equal(vm.runInContext('decks[1].bracket',w.context),2);
-  assert.match(w.node('#app').innerHTML,/Suggested discussion range: Brackets 3–5/);
-  assert.match(w.node('#app').innerHTML,/below this standard count-based range/);
+  assert.match(w.node('#app').innerHTML,/Discussion range: Brackets 3–5/);
+  assert.match(w.node('#app').innerHTML,/below this count-based range/);
   assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
   vm.runInContext("view='decks';render()",w.context);assert.match(w.node('#app').innerHTML,/Bracket 2 · Core/);assert.doesNotMatch(w.node('#app').innerHTML,/Player assigned:/);
   vm.runInContext("view='deck';render()",w.context);w.node('#assigned-bracket').change({target:{value:''}});
@@ -835,10 +835,10 @@ test('stale and missing bracket data stay visibly unavailable rather than produc
   const w=workspace({savedDecks:JSON.stringify([d])});
   w.context.bracketReport=d=>core.bracketReport(d,null,Date.parse('2026-10-29'));
   vm.runInContext("view='deck';deckTab='checks';render()",w.context);
-  assert.match(w.node('#app').innerHTML,/Suggestion unavailable: bundled list data is missing/);
-  assert.doesNotMatch(w.node('#app').innerHTML,/Suggested discussion range/);
+  assert.match(w.node('#app').innerHTML,/Guidance unavailable: app bracket data is missing/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Discussion range:/);
   w.context.bracketReport=d=>core.bracketReport(d,core.COMMANDER_BRACKETS,Date.parse('2027-02-01'));
-  vm.runInContext('render()',w.context);assert.match(w.node('#app').innerHTML,/overdue for review/);
+  vm.runInContext('render()',w.context);assert.match(w.node('#app').innerHTML,/Guidance is outdated/);
   assert.match(w.node('#app').innerHTML,/Player assigned:<\/strong> Bracket 2/);
   assert.equal(vm.runInContext('decks[0].bracket',w.context),2);
 });
@@ -933,7 +933,7 @@ test('compact editor exposes named management, format and identity; guidance ope
   await w.node('#app').click({preventDefault(){prevented=true;},target:{closest:()=>({dataset:{action:'bracket-guidance'}})}});
   assert.equal(vm.runInContext('deckTab',w.context),'checks');assert.equal(scrolled,1);assert.equal(focused,1);assert.equal(prevented,true);
   html=w.node('#app').innerHTML;assert.match(html,/id="bracket-discussion" tabindex="-1"/);
-  assert.match(html,/not a power rating or bracket certification/);assert.match(html,/Sources and update limits/);
+  assert.match(html,/not a power rating or bracket certification/);assert.match(html,/About bracket data/);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 
@@ -949,6 +949,32 @@ test('deck action menus support arrow navigation, Escape return and outside dism
   press('Home');assert.equal(focused,0);press('End');assert.equal(focused,4);
   press('Escape');assert.equal(menu.open,false);assert.equal(focused,-1);
   menu.open=true;w.document.querySelectorAll=()=>[menu];w.events.click({target:{}});assert.equal(menu.open,false);
+});
+
+test('bracket guidance gives one truthful update date and preserves assignments through data-quality limits',()=>{
+  const d=editorDeck();d.bracket=2;d.cards[1].card.name='Farewell';
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  w.context.bracketReport=deck=>core.bracketReport(deck,core.COMMANDER_BRACKETS,Date.parse('2026-10-29'));
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  const panel=()=>vm.runInContext('bracketPanel(decks[0])',w.context);
+  const html=panel();
+  assert.match(html,/Player assigned:<\/strong> Bracket 2/);
+  assert.match(html,/Discussion range: Brackets 3–5/);
+  assert.match(html,/Last updated: <time datetime="2026-10-29">2026-10-29<\/time>/);
+  assert.match(html,/Developer-maintained/);
+  assert.match(html,/last developer review of the bundled list and guidance/);
+  assert.match(html,/there is no live refresh/);
+  assert.match(html,/Card-legality refresh does not update bracket data/);
+  assert.match(html,/href="https:\/\/magic.wizards.com\/en\/formats\/commander"/);
+  assert.doesNotMatch(html,/Suggestions never change|February 2026|English rules names|front name|list update|90 days|news\/announcements/);
+  assert.match(html,/Sideboard and Maybeboard excluded/);
+  w.context.bracketReport=deck=>core.bracketReport(deck,core.COMMANDER_BRACKETS,Date.parse('2027-02-01'));
+  assert.match(panel(),/Guidance is outdated/);assert.doesNotMatch(panel(),/Discussion range:/);
+  w.context.bracketReport=deck=>core.bracketReport(deck,null);
+  assert.match(panel(),/app bracket data is missing/);assert.match(panel(),/count unavailable/);
+  w.context.bracketReport=deck=>core.bracketReport({...deck,cards:[{card:{},qty:1,zone:'main'}]});
+  assert.match(panel(),/stored card data is incomplete/);assert.doesNotMatch(panel(),/Discussion range:/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 
 test('menu actions target their named deck and close before a dialog; cancel deletion preserves every deck', async () => {
