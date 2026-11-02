@@ -1,5 +1,9 @@
 # Changelog
 
+## Simpler card action menus — 2026-11-02
+
+- Group deck-card actions into Function and Move to submenus (#54). Existing deck Functions assign directly; Add new function opens a scoped create-and-assign dialog. Keep the card name in the visible header, retain deck/zone context for accessibility, and label all-zone deletion Delete card with its existing confirmation. Function and Move to open as side flyouts on hover and close when leaving the option/flyout, including after clicking the option. Outside clicks dismiss both panels; Left/Escape and viewport fitting retain keyboard and narrow-screen use.
+
 ## Explicit card-detail destinations — 2026-11-02
 
 - Add deck/zone selectors and compact minus/quantity/plus controls to card details (#45). Selecting a target leaves the preview and decks unchanged; copy edits and printing application affect only that target. Use Functions labels, retain invalid drafts when switching is blocked, and replace the matching-printing wait cursor with a normal disabled state.
