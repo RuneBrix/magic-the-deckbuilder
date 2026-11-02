@@ -1,5 +1,9 @@
 # Changelog
 
+## Direct deck-card dragging — 2026-11-03
+
+- Drag all copies of a deck/zone entry into zones or existing Function groups (#55). Function drops move into the group's zone and make that label primary while retaining other assignments; both changes apply together. Command zone cards stay ungrouped while retaining their Functions. Same-group drops do nothing; Unassigned only moves zones and retains Functions. A full-size card copy follows the cursor with a dimmed original and clean hover/focus outlines after release; notifications say Added [card name] to [function], without quotation marks. The always-available Add to new function drag group opens the scoped name dialog and assigns only after valid submission. Zone merges keep the destination printing. During dragging, show group overlays, all zone destinations and a fixed lower-right trash target; trash opens the existing all-zones confirmation. Edge scrolling keeps hit testing current, cancellation leaves cards unchanged, and keyboard/touch retain card-menu actions.
+
 ## Clearer Commander bracket guidance — 2026-11-02
 
 - Simplify bracket discussion and replace the dated update links with the current official Commander source (#60). Show one Last updated date as the last developer review of bundled data, explain developer-maintained app updates and separate card-legality refresh. Preserve manual assignments, Game Changer evidence and stale/missing-data limits.
