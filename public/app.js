@@ -348,7 +348,7 @@ addEventListener('pointerup',e=>{
         assignEntryFunction(staged,entryKey({card:entry.card,zone}),name);
         deck.cards=staged.cards;
       });
-      toast(`Add "${entry.card.name}" to "${name}"`);
+      toast(`Added ${entry.card.name} to ${name}`);
     }
     else {const zone=target.dataset.dropZone;changeNamedDeck(d,deck=>moveEntry(deck,key,zone));toast('All entry copies moved to '+ZONES[zone]);}
   }catch(error){toast(error.message);}
@@ -435,7 +435,7 @@ function focusCardEntry(d,key) {
 function assignFunctionDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
   showDialog(`<h2>Add a function</h2><p>${esc(entry.card.name)} · ${esc(d.name)} · ${ZONES[zoneFor(entry)]}. The new function becomes primary; other functions stay assigned.</p><form id="function-form"><label>Function name<input name="new-function" required maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Create and assign</button></form>`);
-  $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast(`Add "${entry.card.name}" to "${name.trim()}"`);}catch(error){$('#function-error').textContent=error.message;}};
+  $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${name.trim()}`);}catch(error){$('#function-error').textContent=error.message;}};
   $('#function-form input').focus();
 }
 function copyEntryDialog(d,key) {
@@ -462,7 +462,7 @@ $('#card-actions').addEventListener('click',async e=>{
     if(action==='new-function')assignFunctionDialog(d,key);
     if(action==='assign-function'){
       if(!d.cards.some(e=>e.tags.includes(button.dataset.function)))throw Error('This function is no longer in this deck. Reopen the menu.');
-      changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast(`Add "${entry.card.name}" to "${button.dataset.function}"`);
+      changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${button.dataset.function}`);
     }
     if(action==='copy-deck')copyEntryDialog(d,key);
     if(action==='remove')removeCopiesDialog(d,key);

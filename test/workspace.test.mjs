@@ -60,7 +60,7 @@ test('Command zone stays ungrouped and Function drops move commanders into the t
   startCardDrag(w,core.entryKey(d.cards[0]));dropCard(w,{dropFunction:'Ramp',dropZone:'main'});
   assert.equal(vm.runInContext('decks[0].cards[0].zone',w.context),'main');
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[0].tags)',w.context)),['Ramp','Life gain']);
-  assert.equal(w.node('#toast').textContent,'Add "Leader" to "Ramp"');
+  assert.equal(w.node('#toast').textContent,'Added Leader to Ramp');
   const before=vm.runInContext('JSON.stringify(decks)',w.context),writes=w.writes.length;
   startCardDrag(w,core.entryKey({...d.cards[0],zone:'main'}));dropCard(w,{dropFunction:'Ramp',dropZone:'main'});
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,writes);
