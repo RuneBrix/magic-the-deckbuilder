@@ -243,7 +243,7 @@ function deckList(d, full=false) {
 function closeCardSubmenu(restore=false) {
   const menu=$('#card-actions'),previous=menu.dataset.submenu,sub=$('#card-submenu');
   if(sub?.matches(':popover-open'))sub.hidePopover();
-  menu.dataset.submenu='';menu.dataset.pinned='false';
+  menu.dataset.submenu='';menu.dataset.keyboard='false';
   menu.querySelectorAll('[aria-haspopup="menu"]').forEach(button=>button.setAttribute('aria-expanded','false'));
   if(restore&&previous)menu.querySelector(`[data-card-action="${previous}-menu"]`)?.focus();
 }
@@ -272,10 +272,9 @@ function positionCardActions() {
   menu.style.top=Math.max(16,Math.min(anchor.bottom+6,innerHeight-height-16))+'px';
   positionCardSubmenu();
 }
-function showCardSubmenu(type,pin=false,focus=false) {
+function showCardSubmenu(type,focus=false) {
   const menu=$('#card-actions'),sub=$('#card-submenu'),d=decks.find(d=>d.id===menu.dataset.deck),entry=d?.cards.find(e=>entryKey(e)===menu.dataset.entry);
   if(!entry || current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
-  if(menu.dataset.pinned==='true'&&!pin)return;
   if(menu.dataset.submenu!==type) {
     closeCardSubmenu();
     const action=(value,label,attributes='',role='menuitem')=>`<button role="${role}" data-card-action="${value}" ${attributes}>${label}</button>`;
@@ -292,7 +291,7 @@ function showCardSubmenu(type,pin=false,focus=false) {
     menu.querySelector(`[data-card-action="${type}-menu"]`).setAttribute('aria-expanded','true');
     sub.showPopover();positionCardSubmenu();
   }
-  if(pin)menu.dataset.pinned='true';
+  menu.dataset.keyboard=String(focus);
   if(focus)sub.querySelector('button:not(:disabled)')?.focus();
 }
 function renderCardActions() {
@@ -339,7 +338,7 @@ $('#card-actions').addEventListener('click',async e=>{
   const menu=$('#card-actions'),d=decks.find(x=>x.id===menu.dataset.deck),key=menu.dataset.entry,entry=d?.cards.find(e=>entryKey(e)===key);
   if(!d||!entry||current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
   const action=button.dataset.cardAction;
-  if(action==='function-menu'||action==='move-menu'){showCardSubmenu(action==='function-menu'?'function':'move',true,e.detail===0);return;}
+  if(action==='function-menu'||action==='move-menu'){showCardSubmenu(action==='function-menu'?'function':'move',e.detail===0);return;}
   closeCardActions();
   try{
     if(action==='details')inspect(entry.card.id,key);
@@ -360,7 +359,7 @@ $('#card-actions').addEventListener('pointerover',e=>{
   if(action==='function-menu'||action==='move-menu')showCardSubmenu(action==='function-menu'?'function':'move');
 });
 $('#card-actions').addEventListener('pointerout',e=>{
-  const menu=$('#card-actions');if(!menu.dataset.submenu||menu.dataset.pinned==='true')return;
+  const menu=$('#card-actions');if(e.pointerType==='touch'||!menu.dataset.submenu||menu.dataset.keyboard==='true')return;
   const parent=menu.querySelector(`[data-card-action="${menu.dataset.submenu}-menu"]`),next=e.relatedTarget;
   if(parent.contains(next)||$('#card-submenu').contains(next))return;
   closeCardSubmenu();
@@ -368,13 +367,13 @@ $('#card-actions').addEventListener('pointerout',e=>{
 $('#card-actions').addEventListener('keydown',e=>{
   const menu=$('#card-actions'),button=e.target.closest('[data-card-action]'),sub=$('#card-submenu');
   if(e.key==='Escape'||e.key==='ArrowLeft'&&menu.dataset.submenu){e.preventDefault();if(menu.dataset.submenu)closeCardSubmenu(true);else closeCardActions();return;}
-  if(e.key==='ArrowRight'&&['function-menu','move-menu'].includes(button?.dataset.cardAction)){e.preventDefault();showCardSubmenu(button.dataset.cardAction==='function-menu'?'function':'move',true,true);return;}
+  if(e.key==='ArrowRight'&&['function-menu','move-menu'].includes(button?.dataset.cardAction)){e.preventDefault();showCardSubmenu(button.dataset.cardAction==='function-menu'?'function':'move',true);return;}
   if(e.key==='Tab'){closeCardActions();return;}
   if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const scope=sub.contains(e.target)?sub:menu,buttons=[...scope.querySelectorAll(':scope > button:not(:disabled)')],i=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();}
 });
 addEventListener('resize',()=>{if($('#card-actions').matches(':popover-open'))positionCardActions();});
 $('#card-actions').addEventListener('toggle',e=>{if(e.target===$('#card-actions')&&e.newState==='closed'){closeCardSubmenu();cardActionTrigger?.setAttribute('aria-expanded','false');}});
-addEventListener('scroll',e=>{const menu=$('#card-actions');if(menu.contains(e.target)){if(e.target===menu)positionCardSubmenu();}else if(menu.matches(':popover-open')&&menu.dataset.pinned==='true')positionCardActions();else closeCardActions(false);},true);
+addEventListener('scroll',e=>{const menu=$('#card-actions');if(!menu.contains(e.target))closeCardActions(false);else if(e.target===menu)positionCardSubmenu();},true);
 function curve(s) { const max=Math.max(1,...s.curve); return `<div class="curve" role="img" aria-label="Mana curve: ${s.curve.map((n,i)=>`${i===7?'7+':i} mana: ${n}`).join(', ')}">${s.curve.map((n,i)=>`<div class="curve-column"><span>${n || ''}</span><div style="height:${n ? Math.max(4,n/max*54) : 2}px" class="${n?'filled':''}"></div><small>${i===7?'7+':i}</small></div>`).join('')}</div>`; }
 function statPanel(s) {
   return `<div class="stats-view"><section class="stat-tool"><h3>Mana curve</h3>${curve(s)}<div class="stat-pair"><span>Average mana value</span><b>${s.average.toFixed(2)}</b></div></section><div class="stat-tools"><section class="stat-tool"><h3>Card types</h3>${Object.entries(s.types).map(([t,n])=>`<div class="stat-pair"><span>${t}</span><b>${n}</b></div>`).join('') || '<p class="hint">Add cards to see the breakdown.</p>'}</section><section class="stat-tool"><h3>Your role tags</h3>${Object.entries(s.tags).map(([t,n])=>`<div class="stat-pair"><span>${esc(t)}</span><b>${n}</b></div>`).join('') || '<p class="hint">Inspect a deck card to assign roles such as ramp or removal.</p>'}</section><section class="stat-tool"><h3>Colors on cards</h3><div class="color-stats">${Object.entries(s.colors).map(([c,n])=>`<div><span class="mana mana-${c}">${c}</span><b>${n}</b></div>`).join('')}</div><p class="hint">Multicolor cards count in each of their colors.</p></section></div></div>`;

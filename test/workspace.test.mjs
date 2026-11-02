@@ -1174,10 +1174,10 @@ test('submenu keyboard navigation returns to its parent before closing and stays
   vm.runInContext('openCardActions(key,trigger)',w.context);
   sub.querySelector=()=>({focus(){focused='submenu';}});
   await menu.click({detail:0,target:{closest:()=>({dataset:{cardAction:'function-menu'}})}});
-  assert.equal(focused,'submenu');assert.equal(menu.dataset.pinned,'true');
+  assert.equal(focused,'submenu');assert.equal(menu.dataset.keyboard,'true');
 });
 
-test('side flyouts close on hover exit but clicks pin them until another click or dismissal',async()=>{
+test('side flyouts remain hover-only after clicks and can switch to another hovered option',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
   w.context.key=core.entryKey(editorDeck().cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};
   const menu=w.node('#card-actions'),sub=w.node('#card-submenu'),expanded={};
@@ -1189,19 +1189,21 @@ test('side flyouts close on hover exit but clicks pin them until another click o
   const target=action=>({closest:()=>({dataset:{cardAction:action}})});
   menu.pointerover({pointerType:'touch',target:target('function-menu')});assert.equal(menu.dataset.submenu,'');
   menu.pointerover({pointerType:'mouse',target:target('function-menu')});
-  assert.equal(sub.popoverOpen,true);assert.equal(menu.dataset.pinned,'false');assert.equal(expanded.function,'true');
+  assert.equal(sub.popoverOpen,true);assert.equal(menu.dataset.keyboard,'false');assert.equal(expanded.function,'true');
   assert.equal(menu.innerHTML,root);assert.ok(parseFloat(sub.style.left)<240);
   menu.pointerout({relatedTarget:'sub'});assert.equal(sub.popoverOpen,true);
   menu.pointerout({relatedTarget:'function'});assert.equal(sub.popoverOpen,true);
   menu.pointerout({relatedTarget:null});assert.equal(sub.popoverOpen,false);assert.equal(menu.popoverOpen,true);
   menu.pointerover({pointerType:'mouse',target:target('function-menu')});
-  await menu.click({target:target('function-menu')});assert.equal(menu.dataset.pinned,'true');
-  menu.pointerout({relatedTarget:null});assert.equal(sub.popoverOpen,true);
-  w.events.scroll({target:w.document});assert.equal(menu.popoverOpen,true);assert.equal(sub.popoverOpen,true);
-  menu.pointerover({pointerType:'mouse',target:target('move-menu')});assert.equal(menu.dataset.submenu,'function');
-  await menu.click({target:target('move-menu')});assert.equal(menu.dataset.submenu,'move');assert.equal(expanded.function,'false');
+  await menu.click({target:target('function-menu')});assert.equal(menu.dataset.keyboard,'false');
+  menu.pointerout({relatedTarget:null});assert.equal(sub.popoverOpen,false);assert.equal(menu.popoverOpen,true);
+  menu.pointerover({pointerType:'mouse',target:target('function-menu')});
+  await menu.click({target:target('function-menu')});
+  menu.pointerover({pointerType:'mouse',target:target('move-menu')});assert.equal(menu.dataset.submenu,'move');
+  assert.equal(expanded.function,'false');
+  menu.pointerout({relatedTarget:null});assert.equal(sub.popoverOpen,false);
   menu.popoverOpen=false;menu.toggle({target:menu,newState:'closed'});
-  assert.equal(sub.popoverOpen,false);assert.equal(menu.dataset.pinned,'false');
+  assert.equal(sub.popoverOpen,false);assert.equal(menu.dataset.keyboard,'false');
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,writes);
 });
 
