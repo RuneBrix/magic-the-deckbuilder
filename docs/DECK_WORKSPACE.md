@@ -1,5 +1,15 @@
 # Deck library and workspace
 
+## Viewing and scrolling follow-ups (#53 / #57 / #61)
+
+Sideboard and Maybeboard viewing sections appear only when the stored zone has entries, across all four editor layouts and the tracker. Filtering a populated zone to zero results retains its heading, underlying count and no-match explanation. Zone totals and add/move destinations remain available, including empty zones; drag-and-drop remains separate work in #55.
+
+Statistics places the mana curve and average on the left, with independent card-type, personal-role and color tools on the right. Labels/counts stay adjacent; the board becomes one column at 600px. Existing quantity weighting, zone exclusions and multicolor counting are unchanged.
+
+Shared navigation sticks to the viewport top. Its measured height follows wrapping, viewport resizing and font loading through ResizeObserver, and supplies scroll padding plus preview/tracker offsets. Navigation sits above ordinary page content and management menus; native dialog/popover top layers retain precedence. The desktop tracker uses the remaining viewport height; on narrow screens it stays in document flow.
+
+Validation: 130 native Node tests pass on Windows / Node 24.14.1, including optional-zone transitions/filtering in all layouts, retained destinations, statistics rendering and header measurement. Browser checks are outstanding: the in-app browser could not reach the local server, and Windows Computer Use stopped because it could not confidently determine Chrome's URL for policy enforcement. No desktop/mobile, light/dark, keyboard/touch or macOS/Safari browser result is claimed for these changes. The Impeccable engine was unavailable.
+
 Issues [#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16), [#17](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17) and [#18](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18) establish shared navigation, a full editor, and library management. GitHub issues/PRs track review and merge status.
 
 ## Navigation and adding cards

@@ -927,7 +927,7 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     w.node('#editor-layout').change({target:{value:layout}});
     assert.match(w.node('#app').innerHTML,new RegExp('deck-zones '+layout));
     const headings=[...w.node('#app').innerHTML.matchAll(/<h3>(Command zone|Main deck|Sideboard|Maybeboard) ·/g)].map(m=>m[1]);
-    assert.deepEqual(headings,['Command zone','Main deck','Sideboard','Maybeboard']);
+    assert.deepEqual(headings,['Command zone','Main deck','Maybeboard']);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="deck-card-name" title="Leader"/);
     else assert.match(w.node('#app').innerHTML,/<div class="card-toolbar">[\s\S]*?<\/div><button class="card-art"/);
     assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,layout.startsWith('visual')?3:0);
@@ -956,6 +956,60 @@ test('horizontal stack slots follow visible group entries without changing quant
   w.node('#editor-search').input({target:{value:'Stack card 19'}});
   assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,1);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+});
+
+test('optional viewing zones follow stored entries rather than filter matches in every layout and tracker', () => {
+  const d=editorDeck();d.cards[1].commander=false;
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']){
+    w.context.layout=layout;
+    vm.runInContext("editorOptions.layout=layout;editorOptions.search='';",w.context);
+    assert.doesNotMatch(vm.runInContext('deckList(decks[0],true)',w.context),/<h3>(Sideboard|Maybeboard) ·/);
+    for(const zone of ['sideboard','maybeboard']){
+      w.context.zone=zone;
+      vm.runInContext("moveEntry(decks[0],entryKey(decks[0].cards[1]),zone)",w.context);
+      const label=core.ZONES[zone];
+      assert.match(vm.runInContext('deckList(decks[0],true)',w.context),new RegExp('<h3>'+label+' ·'));
+      assert.match(vm.runInContext('deckList(decks[0])',w.context),new RegExp('<h3>'+label+' ·'));
+      vm.runInContext("editorOptions.search='no-such-match'",w.context);
+      const filtered=vm.runInContext('deckList(decks[0],true)',w.context);
+      assert.match(filtered,new RegExp(label+' · 2 · 0 shown'));
+      assert.match(filtered,/No cards match these filters/);
+      vm.runInContext("moveEntry(decks[0],entryKey(decks[0].cards[1]),'main');editorOptions.search=''",w.context);
+      assert.doesNotMatch(vm.runInContext('deckList(decks[0],true)',w.context),/<h3>(Sideboard|Maybeboard) ·/);
+    }
+  }
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  assert.equal(w.writes.length,0);
+  vm.runInContext("openDeck('editor');openCardActions(entryKey(decks[0].cards[1]),$('.card-menu-trigger'))",w.context);
+  assert.match(w.node('#card-actions').innerHTML,/Sideboard/);
+  assert.match(w.node('#card-actions').innerHTML,/Maybeboard/);
+});
+
+test('statistics tool board renders existing weighted playing-deck values and escapes personal roles', () => {
+  const d=editorDeck();
+  d.cards[1].tags=['<custom>'];
+  d.cards.push({...structuredClone(d.cards[1]),zone:'sideboard',qty:50},{...structuredClone(d.cards[1]),zone:'maybeboard',qty:50});
+  const w=workspace({savedDecks:JSON.stringify([d])}),s=core.stats(d);
+  const html=vm.runInContext('statPanel(stats(decks[0]))',w.context);
+  assert.match(html,/<section class="stat-tool"><h3>Mana curve<\/h3>/);
+  assert.match(html,/<div class="stat-tools"><section class="stat-tool"><h3>Card types/);
+  assert.match(html,new RegExp('Average mana value</span><b>'+s.average.toFixed(2).replace('.','\\.')));
+  assert.match(html,/<span>&lt;custom&gt;<\/span><b>2<\/b>/);
+  assert.match(html,new RegExp('aria-label="Mana curve: '+s.curve.map((n,i)=>`${i===7?'7\\+':i} mana: ${n}`).join(', ')+'"'));
+  assert.equal(w.writes.length,0);
+});
+
+test('navigation height tracks wrapped header dimensions without touching deck storage', () => {
+  const w=workspace();const sizes=[];
+  w.document.documentElement.style={setProperty:(key,value)=>sizes.push([key,value])};
+  w.node('.workspace-nav').getBoundingClientRect=()=>({height:124.5});
+  vm.runInContext('updateNavigationHeight()',w.context);
+  w.node('.workspace-nav').getBoundingClientRect=()=>({height:76});
+  vm.runInContext('render()',w.context);
+  assert.deepEqual(sizes,[['--nav-height','125px'],['--nav-height','76px']]);
+  assert.equal(w.writes.length,0);
 });
 
 test('card action menu scopes moves and details to the chosen entry and supports keyboard dismissal', async () => {

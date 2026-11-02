@@ -36,6 +36,8 @@ This inventory describes what the app does today. GitHub Issues track future wor
 
 ## Validation baseline
 
+Follow-ups [#53](https://github.com/RuneBrix/magic-the-deckbuilder/issues/53), [#57](https://github.com/RuneBrix/magic-the-deckbuilder/issues/57) and [#61](https://github.com/RuneBrix/magic-the-deckbuilder/issues/61) are implemented pending browser verification: optional empty zone sections are hidden without removing destinations, Statistics uses a responsive two-column tool board, and the shared navigation stays at the viewport top with measured preview/tracker/scroll offsets. Automated rendering and data regressions pass; desktop/mobile light/dark, keyboard and touch checks remain outstanding. These issues remain open until that verification is complete.
+
 The initial MVP passed eight automated checks (`npm test`) and live browser checks for search, card addition, reload persistence, atomic imports, and desktop/mobile layouts. These are the baseline, not a claim of full feature coverage. New fixes need validation appropriate to their behavior.
 
 See [the roadmap](ROADMAP.md) for proposed work and [the development workflow](DEVELOPMENT.md) for how status changes are recorded.
