@@ -929,7 +929,10 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     const headings=[...w.node('#app').innerHTML.matchAll(/<h3>(Command zone|Main deck|Sideboard|Maybeboard) ·/g)].map(m=>m[1]);
     assert.deepEqual(headings,['Command zone','Main deck','Maybeboard']);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="deck-card-name" title="Leader"/);
-    else assert.match(w.node('#app').innerHTML,/<div class="card-toolbar">[\s\S]*?<\/div><button class="card-art"/);
+    else {
+      assert.match(w.node('#app').innerHTML,/<span class="entry-quantity"[^>]*>\d+<\/span><div class="card-side-controls">[\s\S]*?<\/div><button class="card-art"/);
+      assert.doesNotMatch(w.node('#app').innerHTML,/card-toolbar/);
+    }
     assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,layout.startsWith('visual')?3:0);
     assert.equal((w.node('#app').innerHTML.match(/data-card-menu=/g)||[]).length,3);
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
