@@ -43,3 +43,7 @@ Follow-ups [#53](https://github.com/RuneBrix/magic-the-deckbuilder/issues/53), [
 The initial MVP passed eight automated checks (`npm test`) and live browser checks for search, card addition, reload persistence, atomic imports, and desktop/mobile layouts. These are the baseline, not a claim of full feature coverage. New fixes need validation appropriate to their behavior.
 
 See [the roadmap](ROADMAP.md) for proposed work and [the development workflow](DEVELOPMENT.md) for how status changes are recorded.
+
+## Mana/color symbols (#56)
+
+Implemented: a locally bundled Mana font replaces lettered W/U/B/R/G indicators across identity, statistics, costs and guided filters. Colorless uses its diamond; generic and compound costs retain distinct literal notation. Accessible names, asset provenance and current browser verification limits are recorded in [MANA_SYMBOLS.md](MANA_SYMBOLS.md).

@@ -1,6 +1,7 @@
 @font-face{font-family:'Public Sans';src:url('/fonts/PublicSans.ttf') format('truetype');font-weight:100 900;font-display:swap}
 
 @font-face{font-family:Newsreader;src:url('/fonts/Newsreader.ttf') format('truetype');font-weight:200 800;font-display:swap}
+@font-face{font-family:Mana;src:url('/fonts/mana.ttf') format('truetype');font-display:block}
 
 :root{--ink:#243a30;--ground:#f4f1e9;--surface:#fffdf7;--muted:#60685f;--accent:#276047;--hover:#194a35;--on-accent:#fffdf7;--line:#d5d6ca;--soft:#e5eadf;--focus:#397455;--curve:#6f967a;--warning:#79521e;--warning-bg:#f6e8c9;--danger:#a2363e;--danger-bg:#f9e3e0;--danger-line:#cf9b98;--success:#305d43;--success-bg:#e2eddf}
 
@@ -96,6 +97,14 @@ select{text-transform:capitalize}
 .mana-R{background:#f1c4ba;color:#914838}
 .mana-G{background:#cbe0cc;color:#42674b}
 .mana-C{background:#e5e5e8;color:#646572}
+.mana.mana-symbol{display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:16px;min-width:16px;padding:0;vertical-align:middle;color:#24211f}
+.mana-symbol::before{display:block;width:13px;height:13px;font:normal 13px/1 Mana;content:var(--mana-glyph);transform:translateY(-.01em)}
+.mana-W{--mana-glyph:'\e600'}
+.mana-U{--mana-glyph:'\e601'}
+.mana-B{--mana-glyph:'\e602'}
+.mana-R{--mana-glyph:'\e603'}
+.mana-G{--mana-glyph:'\e604'}
+.mana-C{--mana-glyph:'\e904'}
 .text-button{color:var(--accent);font-size:12px;padding:6px 0;display:inline-flex;align-items:center;gap:5px}
 .advanced-toggle{margin-left:auto;padding-bottom:10px;white-space:nowrap}
 .advanced-fields{display:grid;grid-template-columns:1fr 2fr 1fr;gap:12px}
@@ -768,7 +777,6 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .deck-title-row .workspace-actions{flex-shrink:0}
 .deck-editor-meta{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;margin-top:12px;color:var(--muted);font-size:12px}
 .deck-editor-meta .identity-summary,.library-deck-body .identity-summary{margin:0}
-.compact-identity .mana{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:25px;height:25px;padding:0;font-size:12px;line-height:1}
 .deck-editor-header{margin-bottom:16px}
 .bracket-tools{display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap}
 .bracket-tools a{display:inline-flex;align-items:center;min-height:36px;font-size:12px}

@@ -1282,6 +1282,20 @@ test('optional viewing zones follow stored entries rather than filter matches in
   assert.match(w.node('#card-submenu').innerHTML,/Maybeboard/);
 });
 
+test('mana symbols retain accessible colors and distinguish colorless, generic and compound costs', () => {
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  const html=vm.runInContext("mana('{W}{U}{B}{R}{G}{C}{2}{X}{U/B}{G/P}{<bad>}')",w.context);
+  for(const color of ['White','Blue','Black','Red','Green','Colorless'])assert.match(html,new RegExp('role="img" aria-label="'+color+'"'));
+  assert.equal((html.match(/mana-symbol/g)||[]).length,6);
+  for(const symbol of ['2','X','U/B','G/P'])assert.match(html,new RegExp('aria-label="'+symbol+'"'));
+  assert.match(html,/aria-label="&lt;bad&gt;"/);
+  assert.doesNotMatch(html,/<bad>/);
+  const statsHtml=vm.runInContext('statPanel(stats(decks[0]))',w.context);
+  for(const color of ['White','Blue','Black','Red','Green','Colorless'])assert.match(statsHtml,new RegExp('aria-label="'+color+'"'));
+  assert.match(vm.runInContext('guidedControls()',w.context),/mana-symbol/);
+  assert.equal(w.writes.length,0);
+});
+
 test('statistics tool board renders existing weighted playing-deck values and escapes personal roles', () => {
   const d=editorDeck();
   d.cards[1].tags=['<custom>'];
