@@ -1,5 +1,9 @@
 # Changelog
 
+## Archidekt collection CSV - 2026-11-03
+
+- Import pasted or selected CSV with quantity, quoted card names, finish/foil, condition, language and set/edition fields. Ignore unrelated metadata, preview resolved lots and combine matching duplicates after review. Reject unresolved set/language constraints without applying partial data (PR #86).
+
 ## Collection browsing refinements - 2026-11-03
 
 - Anchor one-character literal-prefix search suggestions to the add-card input. Add compact View/Group by/Sort by/Filter controls, fixed-width visual cards, compact text rows, remembered preferences and date/color/EUR-price sorting (PR #86).

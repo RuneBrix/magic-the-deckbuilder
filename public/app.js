@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, resolveImport, validateBackup, validateCollection, collectionReport, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, resolveImport, validateBackup, validateCollection, collectionReport, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -238,10 +238,44 @@ function collectionLotDialog(card=null,index=null){
   options();display();$('#owned-load').onclick();
 }
 function collectionImport(){
-  showDialog('<h2>Import cards to collection</h2><p>Use the same quantity and card-name syntax as deck import. Zone headings are accepted; all copies become owned regular-finish cards with condition not recorded.</p><form id="collection-import"><label>Card list<textarea name="list" rows="10" required placeholder="2 Sol Ring&#10;12 Forest"></textarea></label><p id="collection-import-error" role="alert"></p><div id="collection-import-preview"></div><button class="primary">Review import</button></form>');
+  showDialog('<h2>Import cards to collection</h2><p>Paste a card list or open an Archidekt CSV. Quantity, Name, Finish/Foil, Condition, Language and Edition Name/Code are supported. Other columns are ignored. Missing finish defaults to regular; missing condition stays unrecorded. Without a set or language, the resolved default printing is shown in review.</p><form id="collection-import"><label>CSV file<input id="collection-csv-file" type="file" accept=".csv,text/csv"></label><label>Card list or CSV<textarea name="list" rows="10" required placeholder="Quantity,Name,Finish,Condition&#10;1,Sol Ring,Normal,NM"></textarea></label><p id="collection-import-error" role="alert"></p><div id="collection-import-preview"></div><button class="primary">Review import</button></form>');
   const form=$('#collection-import'),button=form.querySelector('button');let review=null,revision=0,pending=false;
   form.oninput=()=>{revision++;review=null;$('#collection-import-preview').innerHTML='';button.textContent='Review import';};
-  form.onsubmit=async e=>{e.preventDefault();if(pending)return;pending=true;button.disabled=true;try{if(!review){const version=revision,parsed=parseImport(new FormData(form).get('list'));const {cards}=await fetchCollection([...new Set(parsed.map(p=>p.name))]);if(!form.isConnected||$('#dialog').open===false)return;if(version!==revision)throw Error('List changed; review it again.');const result=resolveImport(parsed,cards);if(result.problems.length)throw Error(result.problems.map(p=>p.name+': '+p.reason).join('; '));review=result.entries;$('#collection-import-preview').innerHTML='<p>'+review.reduce((n,e)=>n+e.qty,0)+' copies resolved. Import adds these quantities to your collection.</p>';button.textContent='Import reviewed copies';return;}const next=structuredClone(collection);for(const e of review){const found=next.find(l=>l.card.id===e.card.id&&l.finish==='regular'&&!l.condition);if(found){found.qty+=e.qty;found.updatedAt=new Date().toISOString();}else next.push({card:e.card,finish:'regular',qty:e.qty,addedAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}validateCollection(next);collection=next;save();closeDialog();render();toast('Reviewed copies imported.');}catch(error){$('#collection-import-error').textContent=error.message;}finally{pending=false;button.disabled=false;}};
+  $('#collection-csv-file').onchange=async e=>{form.oninput();const version=revision,file=e.target.files[0];if(!file)return;try{if(file.size>15_000_000)throw Error('CSV exceeds 15 MB.');const text=await file.text();if(form.isConnected&&revision===version){form.querySelector('textarea').value=text;}}catch(error){if(form.isConnected)$('#collection-import-error').textContent=error.message;}};
+  form.onsubmit=async e=>{e.preventDefault();if(pending)return;pending=true;button.disabled=true;try{
+    if(!review){
+      const version=revision,parsed=parseCollectionImport(new FormData(form).get('list'));
+      const {cards}=await fetchCollection([...new Set(parsed.map(p=>p.name))]),resolved=[],cache=new Map();
+      for(const row of parsed){
+        if(!form.isConnected||$('#dialog').open===false)return;
+        if(version!==revision)throw Error('List changed; review it again.');
+        let card;
+        if(row.set||row.language){
+          const cacheKey=JSON.stringify([row.name,row.set,row.language,row.finish]);
+          if(cache.has(cacheKey))card=cache.get(cacheKey);else{
+            const quote=value=>'"'+value.replace(/["\\]/g,'\\$&')+'"';
+            const q='game:paper !'+quote(row.name)+(row.set?' set:'+quote(row.set):'')+(row.language?' lang:'+row.language:'')+' unique:prints';
+            const result=await api('/api/search?'+new URLSearchParams({q,order:'name'}));
+            const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(value=>value?.toLowerCase()===row.set.toLowerCase()))&&(!c.finishes||c.finishes.includes(row.finish)));
+            if(result.has_more||candidates.length!==1)throw Error(row.name+': set/language does not identify one supported printing. Refine the CSV set or add this printing manually.');
+            card=candidates[0];cache.set(cacheKey,card);
+          }
+        }else{
+          const result=resolveImport([{name:row.name,qty:1}],cards);
+          if(result.problems.length)throw Error(row.name+': '+result.problems[0].reason);
+          card=result.entries[0].card;
+          if(card.finishes&&!card.finishes.includes(row.finish))throw Error(row.name+': resolved printing does not support '+row.finish+'. Specify a set or add this printing manually.');
+        }
+        resolved.push({card,qty:row.qty,finish:row.finish,...(row.condition?{condition:row.condition}:{})});
+      }
+      if(!form.isConnected||$('#dialog').open===false)return;if(version!==revision)throw Error('List changed; review it again.');
+      review=resolved;$('#collection-import-preview').innerHTML='<p>'+review.reduce((n,e)=>n+e.qty,0)+' copies resolved. Import adds these quantities to your collection.</p><ul>'+review.map(l=>`<li>${l.qty} ${esc(l.card.name)} · ${esc(printingLabel(l.card))} · ${esc(l.finish)} · ${esc(CONDITION_LABELS[l.condition]||'Condition not recorded')}</li>`).join('')+'</ul>';button.textContent='Import reviewed copies';return;
+    }
+    if(!form.isConnected||$('#dialog').open===false)return;
+    const next=structuredClone(collection);
+    for(const e of review){const found=next.find(l=>l.card.id===e.card.id&&l.finish===e.finish&&(l.condition||'')===(e.condition||''));if(found){found.qty+=e.qty;found.updatedAt=new Date().toISOString();}else next.push({...e,addedAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}
+    validateCollection(next);collection=next;save();closeDialog();render();toast(storageError?'Imported copies kept for this session. Save a workspace copy.':'Reviewed copies imported.');
+  }catch(error){if(form.isConnected)$('#collection-import-error').textContent=error.message;}finally{pending=false;button.disabled=false;}};
 }
 function removeCollectionLot(index){
   const lot=collection[index];if(!lot)return;

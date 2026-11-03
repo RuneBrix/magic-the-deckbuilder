@@ -1589,6 +1589,23 @@ test('collection list import reviews shared deck syntax before adding owned copi
   await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),3);
 });
 
+test('collection CSV import merges matching finish and condition only after review',async()=>{
+  const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition\n1,Forest,Normal,NM\n2,Forest,Normal,NM\n1,Forest,Foil,LP'});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
+  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),0);
+  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),2);
+  assert.equal(vm.runInContext('collection[0].qty',w.context),3);assert.equal(vm.runInContext('collection[1].finish',w.context),'foil');assert.equal(vm.runInContext('collection[1].condition',w.context),'lightly_played');
+});
+
+test('CSV set and language constraints reject mismatches before any collection write',async()=>{
+  const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition,Language,Edition Name\n1,Forest,Normal,NM,Japanese,Example Set'});
+  const wrong={...editorCard('Forest'),lang:'en',set_name:'Other Set',set:'oth'};
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[wrong],not_found:[],has_more:false})});
+  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/set\/language/);
+});
+
 test('EUR refresh is atomic on failure and updates only stored regular prices after complete exact-id coverage',async()=>{
   const d=editorDeck();for(const entry of d.cards)entry.card.prices={eur:'1.00',usd:'9.99'};
   const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
