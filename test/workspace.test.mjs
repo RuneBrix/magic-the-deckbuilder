@@ -8,7 +8,7 @@ import * as core from '../public/core.js';
 const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/, '');
 
 // Exercise the browser module's preferences and rendering without a DOM dependency.
-function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, savedPalette = null, dark = false, blocked = false, initialView = 'explore' } = {}) {
+function workspace({ savedTheme = null, savedDecks = null, savedWorkspace = null, savedTracker = null, savedPalette = null, dark = false, blocked = false, initialView = 'explore' } = {}) {
   const writes = [], nodes = new Map(), timers=[], events={};
   const node = selector => {
     if (!nodes.has(selector)) nodes.set(selector, {
@@ -24,7 +24,7 @@ function workspace({ savedTheme = null, savedDecks = null, savedTracker = null, 
   const document = { querySelector: node, querySelectorAll:()=>[], scrollIntoView() {}, documentElement: { dataset: {} }, activeElement: null };
   const context = vm.createContext({ ...core, document, addEventListener:(type,fn)=>{events[type]=fn;}, matchMedia: () => media,
     localStorage: {
-      getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.palette.v1' ? savedPalette : key === 'arcana.theme.v1' ? savedTheme : key === 'arcana.explorer.v1' ? savedTracker : savedDecks; },
+      getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.palette.v1' ? savedPalette : key === 'arcana.theme.v1' ? savedTheme : key === 'arcana.explorer.v1' ? savedTracker : key==='arcana.workspace.v2'?savedWorkspace:key==='arcana.decks.v1'?savedDecks:null; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },
     },
     innerWidth:1280,innerHeight:900,
@@ -1513,7 +1513,7 @@ test('portable open stages independent copies and failed writes preserve the com
   assert.equal(vm.runInContext('decks.length',w.context),2);
   assert.notEqual(vm.runInContext('decks[0].id',w.context),vm.runInContext('decks[1].id',w.context));
   assert.equal(vm.runInContext('JSON.stringify(decks[0].cards)===JSON.stringify(decks[1].cards)',w.context),true);
-  assert.equal(w.writes.filter(([key])=>key==='arcana.decks.v1').length,1);
+  assert.equal(w.writes.filter(([key])=>key==='arcana.workspace.v2').length,1);
   w.node('#restore-apply').onclick();assert.equal(vm.runInContext('decks.length',w.context),2);
 });
 test('portable open rejects unsupported files, limits and stale selection without writes',async()=>{
@@ -1534,10 +1534,55 @@ test('portable download writes a versioned complete file and reports initiation 
   w.context.URL={createObjectURL:()=> 'blob:test',revokeObjectURL(){}};
   w.document.createElement=()=>({click(){}});
   assert.equal(vm.runInContext('saveWorkspaceCopy()',w.context),true);
-  assert.deepEqual(core.readWorkspaceFile(JSON.parse(content)),[editorDeck()]);
+  assert.deepEqual(core.readWorkspaceFile(JSON.parse(content)),{decks:[editorDeck()],collection:[]});
   assert.match(w.node('#toast').textContent,/download requested/);
   w.document.createElement=()=>({click(){throw Error('Download blocked');}});
   assert.equal(vm.runInContext('saveWorkspaceCopy()',w.context),false);assert.match(w.node('#toast').textContent,/Could not request/);
+});
+
+test('version 2 browser storage renders collection and independent deck ownership planning',()=>{
+  const d=editorDeck();d.cards[0].card.prices={eur:'2.00'};d.cards[1].card.prices={eur:null};
+  const owned={card:{...editorCard('alternate'),oracle_id:'Ramp spell',set_name:'Other set',collector_number:'7'},finish:'regular',qty:1};
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[owned])),initialView:null});
+  assert.equal(vm.runInContext('collection[0].qty',w.context),1);
+  vm.runInContext("view='collection';render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Local inventory|1 owned copy/);assert.match(w.node('#app').innerHTML,/matched by rules identity|evaluated independently/i);
+  vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
+  const html=w.node('#app').innerHTML;
+  assert.match(html,/Ownership & budget/);assert.match(html,/Owned applied<\/span><strong>1/);assert.match(html,/Missing<\/span><strong>2/);assert.match(html,/Unknown/);assert.match(html,/Maybeboard is excluded/);
+  w.node('#deck-budget').change({target:{value:'12.34'}});
+  const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.version,2);assert.equal(saved.decks[0].budgetCents,1234);assert.deepEqual(saved.collection,[owned]);
+});
+
+test('EUR refresh is atomic on failure and updates only stored regular prices after complete exact-id coverage',async()=>{
+  const d=editorDeck();for(const entry of d.cards)entry.card.prices={eur:'1.00',usd:'9.99'};
+  const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
+  w.context.fetch=async()=>{throw Error('Offline');};
+  await vm.runInContext('refreshPrices()',w.context);
+  assert.equal(vm.runInContext("decks.every(d=>d.cards.every(e=>e.card.prices.eur==='1.00'))",w.context),true);assert.match(w.node('#app').innerHTML,/last usable prices were retained/i);
+  w.context.fetch=async(_url,options)=>{const ids=JSON.parse(options.body).ids;return {ok:true,json:async()=>({data:ids.map(id=>({...editorCard(id),prices:{eur:'2.50',usd:'0.01'}})),not_found:[]})};};
+  await vm.runInContext('refreshPrices()',w.context);
+  assert.equal(vm.runInContext("decks.every(d=>d.cards.every(e=>e.card.prices.eur==='2.50'&&e.card.prices.usd==='9.99'))",w.context),true);
+  assert.equal(typeof vm.runInContext('decks[0].priceUpdatedAt',w.context),'string');
+});
+
+test('EUR refresh skips a printing changed while its exact-id request is in flight',async()=>{
+  const d=editorDeck();for(const entry of d.cards)entry.card.prices={eur:'1.00'};
+  const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});let release;
+  w.context.fetch=async(_url,options)=>{const ids=JSON.parse(options.body).ids;await new Promise(resolve=>release=()=>resolve(ids));return {ok:true,json:async()=>({data:ids.map(id=>({...editorCard(id),prices:{eur:'2.50'}})),not_found:[]})};};
+  const pending=vm.runInContext('refreshPrices()',w.context);await Promise.resolve();
+  vm.runInContext("decks[0].cards[0].card={...decks[0].cards[0].card,id:'new-printing',prices:{eur:'8.00'}}",w.context);release();await pending;
+  assert.equal(vm.runInContext("decks[0].cards[0].card.prices.eur",w.context),'8.00');assert.equal(vm.runInContext("decks[0].cards[1].card.prices.eur",w.context),'2.50');
+});
+
+test('version 2 open previews keep versus replace collection without ever summing lots',async()=>{
+  const d=editorDeck(),currentLot={card:editorCard('Current'),finish:'regular',qty:2},fileLot={card:editorCard('File'),finish:'foil',qty:4};
+  const keep=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[currentLot]))});vm.runInContext('restore()',keep.context);
+  await chooseWorkspaceFile(keep,core.workspaceFile([], [fileLot]));assert.match(keep.node('#restore-preview').innerHTML,/Keep current collection|Replace with file collection/);
+  keep.node('#restore-apply').onclick();assert.equal(vm.runInContext("collection[0].card.id",keep.context),'Current');
+  const replace=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[currentLot]))});vm.runInContext('restore()',replace.context);
+  await chooseWorkspaceFile(replace,core.workspaceFile([], [fileLot]));replace.node('#restore-collection').value='replace';replace.node('#restore-apply').onclick();
+  assert.equal(vm.runInContext('collection.length',replace.context),1);assert.equal(vm.runInContext("collection[0].card.id",replace.context),'File');assert.equal(vm.runInContext('collection[0].qty',replace.context),4);
 });
 
 

@@ -302,6 +302,10 @@ export function validateBackup(data) {
   for (const d of data) {
     if (!d || typeof d.id !== 'string' || ids.has(d.id) || typeof d.name !== 'string' || d.name.length > 100 || !FORMATS.includes(d.format) || !Array.isArray(d.cards) || d.cards.length > 1000) throw new Error('Invalid deck backup.');
     if (d.bracket !== undefined && (!Number.isInteger(d.bracket) || !Object.hasOwn(BRACKETS,d.bracket))) throw Error('Invalid assigned Commander bracket.');
+    if (d.budgetCents !== undefined && (!Number.isInteger(d.budgetCents) || d.budgetCents < 0 || d.budgetCents > 100_000_000)) throw Error('Invalid deck budget.');
+    if (d.budgetBasis !== undefined && !['missing','full'].includes(d.budgetBasis)) throw Error('Invalid deck budget basis.');
+    if (d.ownershipMatch !== undefined && !['rules','printing'].includes(d.ownershipMatch)) throw Error('Invalid ownership match mode.');
+    if (d.priceUpdatedAt !== undefined && (typeof d.priceUpdatedAt !== 'string' || !Number.isFinite(Date.parse(d.priceUpdatedAt)))) throw Error('Invalid price refresh date.');
     ids.add(d.id);
     const cards = new Set();
     for (const e of d.cards) {
@@ -319,14 +323,63 @@ export function validateBackup(data) {
   return data;
 }
 
+const FINISHES = ['regular','foil','etched'];
+const CONDITIONS = ['near_mint','lightly_played','moderately_played','heavily_played','damaged'];
 
-export function workspaceFile(decks) {
-  return {format:'arcana-workspace',version:1,exportedAt:new Date().toISOString(),decks:validateBackup(decks)};
+export function rulesIdentity(card) {
+  if (typeof card?.oracle_id === 'string' && card.oracle_id) return card.oracle_id;
+  const ids = [...new Set((card?.card_faces || []).map(face=>face?.oracle_id).filter(id=>typeof id==='string'&&id))];
+  return ids.length===1 ? ids[0] : null;
+}
+
+export function validateCollection(data) {
+  if (!Array.isArray(data) || data.length > 5000) throw Error('Invalid collection.');
+  const keys=new Set();
+  for (const lot of data) {
+    if (!lot || !Number.isInteger(lot.qty) || lot.qty<1 || lot.qty>9999 || !FINISHES.includes(lot.finish) || (lot.condition!==undefined && !CONDITIONS.includes(lot.condition))) throw Error('Invalid collection lot.');
+    validateBackup([{id:'collection',name:'Collection',format:'commander',cards:[{card:lot.card,qty:1,tags:[],zone:'main'}]}]);
+    const key=[lot.card.id,lot.finish,lot.condition||''].join('|');
+    if (keys.has(key)) throw Error('Duplicate collection lot.');
+    keys.add(key);
+  }
+  return data;
+}
+
+export function parseEuroCents(value) {
+  if (typeof value !== 'string' || !/^\d+(?:[.,]\d{1,2})?$/.test(value.trim())) return null;
+  const [euros,cents=''] = value.trim().replace(',','.').split('.');
+  const result=Number(euros)*100+Number(cents.padEnd(2,'0'));
+  return Number.isSafeInteger(result) ? result : null;
+}
+
+export function collectionReport(deck, collection) {
+  validateBackup([deck]);validateCollection(collection);
+  const mode=deck.ownershipMatch||'rules', zoneOrder={main:0,command:1,sideboard:2};
+  const entries=deck.cards.filter(entry=>Object.hasOwn(zoneOrder,zoneFor(entry))).sort((a,b)=>zoneOrder[zoneFor(a)]-zoneOrder[zoneFor(b)]||a.card.id.localeCompare(b.card.id));
+  const matchKey=card=>mode==='printing'?card.id:rulesIdentity(card);
+  const available=new Map();
+  for(const lot of collection){const key=matchKey(lot.card);if(key)available.set(key,(available.get(key)||0)+lot.qty);}
+  let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0;
+  const rows=entries.map(entry=>{
+    const key=matchKey(entry.card),have=key?(available.get(key)||0):0,used=Math.min(entry.qty,have),needed=entry.qty-used,unitCents=parseEuroCents(entry.card.prices?.eur);
+    if(key)available.set(key,have-used);
+    demand+=entry.qty;owned+=used;missing+=needed;
+    if(unitCents===null){fullUnpriced+=entry.qty;missingUnpriced+=needed;}else{fullCents+=unitCents*entry.qty;missingCents+=unitCents*needed;}
+    return {entry,zone:zoneFor(entry),demand:entry.qty,owned:used,missing:needed,unitCents,identityResolved:Boolean(key)};
+  });
+  return {mode,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced,maybeboardExcluded:deck.cards.filter(entry=>zoneFor(entry)==='maybeboard').reduce((sum,entry)=>sum+entry.qty,0)};
+}
+
+
+export function workspaceFile(decks, collection=null) {
+  const file={format:'arcana-workspace',version:collection===null?1:2,exportedAt:new Date().toISOString(),decks:validateBackup(decks)};
+  if(collection!==null)file.collection=validateCollection(collection);
+  return file;
 }
 export function readWorkspaceFile(data) {
-  if (Array.isArray(data)) return validateBackup(data);
+  if (Array.isArray(data)) return {decks:validateBackup(data),collection:null};
   if (!data || data.format!=='arcana-workspace') throw Error('Choose an Arcana workspace JSON file or legacy backup.');
-  if (data.version!==1) throw Error('Unsupported workspace file version. Keep this file and open it with a compatible Arcana version.');
+  if (![1,2].includes(data.version)) throw Error('Unsupported workspace file version. Keep this file and open it with a compatible Arcana version.');
   if (typeof data.exportedAt!=='string' || !Number.isFinite(Date.parse(data.exportedAt))) throw Error('Invalid workspace export date.');
-  return validateBackup(data.decks);
+  return {decks:validateBackup(data.decks),collection:data.version===2?validateCollection(data.collection):null};
 }
