@@ -1581,21 +1581,45 @@ test('owned printing edits remain drafts until Update collection and use absolut
   assert.equal(vm.runInContext('collection.length',w.context),1);
 });
 
-test('collection list import reviews shared deck syntax before adding owned copies',async()=>{
+test('collection TXT reports zones and uploads valid cards after skip confirmation',async()=>{
   const w=workspace();formValues(w,{list:'Mainboard\n2 Forest\nSideboard\n1 Forest'});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
   await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),0);
+  assert.match(w.node('#collection-notices').innerHTML,/Could not process the following cards/);w.node('#collection-accept-ignored').checked=true;
   await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),3);
 });
 
-test('collection CSV import merges matching finish and condition only after review',async()=>{
+test('collection CSV upload merges matching finish and condition without a second review',async()=>{
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition\n1,Forest,Normal,NM\n2,Forest,Normal,NM\n1,Forest,Foil,LP'});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
-  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),0);
   await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),2);
   assert.equal(vm.runInContext('collection[0].qty',w.context),3);assert.equal(vm.runInContext('collection[1].finish',w.context),'foil');assert.equal(vm.runInContext('collection[1].condition',w.context),'lightly_played');
+});
+
+test('CSV ignored columns require confirmation and syntax validation itself sends no requests',async()=>{
+  const w=workspace();formValues(w,{list:'Quantity,Name,Purchase Price,Tags\n1,Forest,5,personal'});let calls=0;
+  w.context.fetch=async()=>{calls++;return {ok:true,json:async()=>({data:[editorCard('Forest')]})};};
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');form.oninput();
+  assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Not counted: Purchase Price, Tags/);assert.equal(form.querySelector('button').disabled,true);
+  await form.onsubmit({preventDefault(){}});assert.equal(calls,0);
+  w.node('#collection-accept-ignored').checked=true;await form.onsubmit({preventDefault(){}});assert.equal(calls,1);assert.equal(vm.runInContext('collection.length',w.context),1);
+});
+
+test('compatible stored collection printings eliminate upload network lookups',async()=>{
+  const lot={card:{...editorCard('Forest'),finishes:['nonfoil']},qty:2,finish:'regular'};
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([],[lot]))});formValues(w,{list:'3 Forest'});
+  w.context.fetch=async()=>{throw Error('Network should not be needed');};vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('collection[0].qty',w.context),5);assert.equal(w.node('#collection-import-error').textContent||'','');
+});
+
+test('collection Text is a sortable table with dates, price and contained actions',async()=>{
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([],[{card:editorCard('Forest'),qty:2,finish:'regular'}]))});formValues(w,{});
+  vm.runInContext("view='collection';collectionOptions.view='text';render()",w.context);const html=w.node('#app').innerHTML;
+  assert.match(html,/<table class="collection-table"/);assert.match(html,/data-collection-sort="price"/);assert.match(html,/data-collection-sort="updated"/);assert.match(html,/class="collection-actions"/);assert.doesNotMatch(html,/Horizontal text|Vertical text/);
+  await w.node('#app').click({target:{closest:()=>({dataset:{collectionSort:'price'}})}});assert.equal(vm.runInContext('collectionOptions.sort',w.context),'price');
+  await w.node('#app').click({target:{closest:()=>({dataset:{collectionSort:'price'}})}});assert.equal(vm.runInContext('collectionOptions.sort',w.context),'price-desc');
 });
 
 test('Archidekt Normal rows accept Scryfall nonfoil finish for the reported three-card CSV',async()=>{
@@ -1603,22 +1627,20 @@ test('Archidekt Normal rows accept Scryfall nonfoil finish for the reported thre
   const csv='Quantity,Name,Finish,Condition\n1,"Aang, Air Nomad",Normal,NM\n1,"Aang, Swift Savior // Aang and La, Ocean\'s Fury",Normal,NM\n1,Abandoned Air Temple,Normal,NM';
   const w=workspace();formValues(w,{list:csv});w.context.fetch=async()=>({ok:true,json:async()=>({data:names.map(name=>({...editorCard(name),finishes:['nonfoil','foil']})),not_found:[]})});
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await form.onsubmit({preventDefault(){}});
-  assert.equal(w.node('#collection-import-error').textContent||'','');assert.match(w.node('#collection-import-preview').innerHTML,/3 copies resolved/);
-  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),3);assert.equal(vm.runInContext("collection.every(l=>l.finish==='regular'&&l.condition==='near_mint')",w.context),true);
+  assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),3);assert.equal(vm.runInContext("collection.every(l=>l.finish==='regular'&&l.condition==='near_mint')",w.context),true);
 });
 
 test('CSV falls back from a foil-only default and a missing double-faced lookup to compatible printings',async()=>{
   const w=workspace(),name='Aang, Air Nomad',double="Aang, Swift Savior // Aang and La, Ocean's Fury";formValues(w,{list:'Quantity,Name,Finish,Condition\n1,"'+name+'",Normal,NM\n1,"'+double+'",Normal,NM'});
   w.context.fetch=async url=>({ok:true,json:async()=>url==='/api/collection'?{data:[{...editorCard(name),finishes:['foil']}],not_found:[{name:double}]}:{data:[{...editorCard(url.includes('Swift')?double:name),id:url.includes('Swift')?'double-nonfoil':'air-nonfoil',finishes:['nonfoil']}],has_more:false}});
-  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});assert.equal(w.node('#collection-import-error').textContent||'','');assert.match(w.node('#collection-import-preview').innerHTML,/2 copies resolved/);
+  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),2);
 });
 
-test('live localhost review resolves the reported Archidekt three-card CSV', {skip:process.env.ARCANA_LIVE_CSV!=='1'},async()=>{
+test('live localhost upload resolves the reported Archidekt three-card CSV in a disposable VM', {skip:process.env.ARCANA_LIVE_CSV!=='1'},async()=>{
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition\n1,"Aang, Air Nomad",Normal,NM\n1,"Aang, Swift Savior // Aang and La, Ocean\'s Fury",Normal,NM\n1,Abandoned Air Temple,Normal,NM'});
   w.context.fetch=(url,options)=>fetch('http://localhost:3000'+url,options);
   vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
-  assert.equal(w.node('#collection-import-error').textContent||'','');assert.match(w.node('#collection-import-preview').innerHTML,/3 copies resolved/);
-  assert.equal(vm.runInContext('collection.length',w.context),0);
+  assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),3);
 });
 
 test('CSV set and language constraints reject mismatches before any collection write',async()=>{
@@ -1636,7 +1658,7 @@ test('large collection review resumes after cooldown without repeating completed
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await form.onsubmit({preventDefault(){}});
   assert.equal(calls,2);assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(form.querySelector('button').disabled,true);
   await form.onsubmit({preventDefault(){}});assert.equal(calls,2);
-  time+=61_000;await form.onsubmit({preventDefault(){}});assert.equal(calls,3);assert.match(w.node('#collection-import-preview').innerHTML,/80 copies resolved/);
+  time+=61_000;await form.onsubmit({preventDefault(){}});assert.equal(calls,3);assert.equal(vm.runInContext('collection.length',w.context),80);
 });
 
 test('EUR refresh is atomic on failure and updates only stored regular prices after complete exact-id coverage',async()=>{

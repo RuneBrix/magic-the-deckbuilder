@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {parseCollectionImport} from '../public/core.js';
+import {parseCollectionImport,prepareCollectionUpload} from '../public/core.js';
 
 test('Archidekt CSV reads quoted names, finish and condition and retains duplicate quantities',()=>{
   const rows=parseCollectionImport('\uFEFFQuantity,Name,Finish,Condition\r\n1,"Aang, Air Nomad",Normal,NM\r\n2,"Aang, Swift Savior // Aang and La, Ocean\'s Fury",Foil,LP\r\n1,Abyssal Specter,Normal,NM\r\n1,Abyssal Specter,Normal,NM');
@@ -14,4 +14,15 @@ test('CSV maps only relevant optional fields regardless of column order',()=>{
 });
 test('invalid CSV rejects malformed quotes, quantities, values and conflicting columns',()=>{
   for(const csv of ['Quantity,Name\n0,Forest','Quantity,Name\n1,"Forest','Quantity,Name\n1,Forest,extra','Quantity,Name,Finish\n1,Forest,Shiny','Quantity,Name,Condition\n1,Forest,Unknown','Quantity,Name,Language\n1,Forest,Unknown','Quantity,Name,Foil,Finish\n1,Forest,true,Foil'])assert.throws(()=>parseCollectionImport(csv));
+});
+
+test('upload syntax identifies ignored columns and unsupported zones without dropping valid cards',()=>{
+  const csv=prepareCollectionUpload('Quantity,Name,Purchase Price,Tags\n1,Forest,5,mine');assert.deepEqual(csv.accepted,['Quantity','Name']);assert.deepEqual(csv.ignored,['Purchase Price','Tags']);assert.equal(csv.rows[0].qty,1);
+  const txt=prepareCollectionUpload('Main deck\n2 Sol Ring\nCommand zone\n1 Tatyova, Benthic Druid');assert.deepEqual(txt.skipped,['Main deck','Command zone']);assert.equal(txt.rows.length,2);
+});
+
+test('headerless CSV requires mapping and keeps the first card as data',()=>{
+  const text='1,"Aang, Air Nomad",Normal,NM\n2,Forest,Foil,LP';assert.equal(prepareCollectionUpload(text).needsMapping,true);
+  const result=prepareCollectionUpload(text,{header:false,columns:['Quantity','Name','Finish','Condition']});assert.equal(result.rows.length,2);assert.equal(result.rows[0].name,'Aang, Air Nomad');assert.equal(result.rows[1].finish,'foil');
+  assert.throws(()=>prepareCollectionUpload(text,{header:false,columns:['Name','Name','Finish','Condition']}));
 });

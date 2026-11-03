@@ -1,5 +1,9 @@
 # Changelog
 
+## Direct collection upload and table view - 2026-11-03
+
+- Validate TXT/CSV locally, map headerless CSV, confirm ignored columns/zone headings, then resolve and upload without a full card-list review. Reuse indexed local cards before lookup; record bulk-data research. Replace text layouts with one compact sortable table and consistent contained actions; distinguish examples and placeholders (PR #86).
+
 ## Large collection import pacing - 2026-11-03
 
 - Share conservative Scryfall request pacing and 429 cooldowns across endpoints. Reuse pending/finished lookups, retain import progress for explicit resume after cooldown, show review progress and skip redundant name batches for constrained CSV rows (PR #86).
