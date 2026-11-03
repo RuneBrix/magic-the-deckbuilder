@@ -1,5 +1,9 @@
 # Changelog
 
+## Collection workflow revisions - 2026-11-03
+
+- Add reviewed deck-syntax collection list imports, contains-name search after two characters, and a staged printing/finish/condition quantity editor. Expand Collection to page width with text/visual views, sorting and contained row actions ([PR #86](https://github.com/RuneBrix/magic-the-deckbuilder/pull/86)).
+
 ## Recognizable mana symbols - 2026-11-03
 
 - Use locally bundled Magic mana symbols for deck identity, statistics, text-card costs, details and guided filters (#56). Preserve accessible color names and literal generic/compound costs; no CDN or package dependency. Center glyphs in shared 16px circles and reduce the library/editor identity badges to match the filters.

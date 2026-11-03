@@ -1,5 +1,7 @@
 # Feature status
 
+Collection and ownership/budget planning are implemented in the current PR #86 checkout. The [collection workflow](COLLECTION_WORKFLOW.md) documents reviewed text imports, two-character contains search, staged printing/quantity edits, page-width views and sorting. Older planned entries below predate that implementation; developer inspection of the revised UI remains pending.
+
 This inventory describes what the app does today. GitHub Issues track future work; linked pull requests and commits record its implementation. Update this file when behavior changes.
 
 **Implemented** means available in the MVP, not exhaustively verified. **Partial** names a known ceiling. **Planned** means not implemented and not a delivery promise.

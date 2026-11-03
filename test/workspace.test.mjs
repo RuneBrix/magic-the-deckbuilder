@@ -1546,12 +1546,32 @@ test('version 2 browser storage renders collection and independent deck ownershi
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[owned])),initialView:null});
   assert.equal(vm.runInContext('collection[0].qty',w.context),1);
   vm.runInContext("view='collection';render()",w.context);
-  assert.match(w.node('#app').innerHTML,/Local inventory|1 owned copy/);assert.match(w.node('#app').innerHTML,/matched by rules identity|evaluated independently/i);
+  assert.match(w.node('#app').innerHTML,/1 owned copies/);assert.match(w.node('#app').innerHTML,/matched by rules identity|evaluated independently/i);
   vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
   const html=w.node('#app').innerHTML;
   assert.match(html,/Ownership & budget/);assert.match(html,/Owned applied<\/span><strong>1/);assert.match(html,/Missing<\/span><strong>2/);assert.match(html,/Unknown/);assert.match(html,/Maybeboard is excluded/);
   w.node('#deck-budget').change({target:{value:'12.34'}});
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.version,2);assert.equal(saved.decks[0].budgetCents,1234);assert.deepEqual(saved.collection,[owned]);
+});
+
+test('owned printing edits remain drafts until Update collection and use absolute quantities',()=>{
+  const card=editorCard('Owned'),lot={card,finish:'regular',qty:3};
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([], [lot]))});w.context.card=card;
+  w.node('#owned-finish').value='regular';w.node('#owned-condition').value='';
+  vm.runInContext('collectionLotDialog(card)',w.context);
+  w.node('#owned-plus').onclick();assert.equal(w.node('#owned-qty').value,4);
+  assert.equal(vm.runInContext('collection[0].qty',w.context),3);
+  w.node('#owned-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('collection[0].qty',w.context),4);
+  assert.equal(vm.runInContext('collection.length',w.context),1);
+});
+
+test('collection list import reviews shared deck syntax before adding owned copies',async()=>{
+  const w=workspace();formValues(w,{list:'Mainboard\n2 Forest\nSideboard\n1 Forest'});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
+  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),0);
+  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),3);
 });
 
 test('EUR refresh is atomic on failure and updates only stored regular prices after complete exact-id coverage',async()=>{
