@@ -286,6 +286,69 @@ export function parseImport(text) {
   return [...entries.values()];
 }
 // Names and face names must identify one rules card; never choose the first ambiguous match.
+export function readCollectionCsv(text) {
+  const rows=[];let row=[],field='',quoted=false,closed=false;
+  for(let i=0;i<=text.length;i++){
+    const ch=text[i];
+    if(quoted){if(ch===undefined)throw Error('Unclosed CSV quote.');if(ch==='"'){if(text[i+1]==='"'){field+='"';i++;}else{quoted=false;closed=true;}}else field+=ch;continue;}
+    if(ch==='"'){if(field||closed)throw Error('Unexpected CSV quote.');quoted=true;continue;}
+    if(ch===','||ch==='\n'||ch==='\r'||ch===undefined){row.push(field);field='';closed=false;if(ch!==','){if(row.some(value=>value.trim()))rows.push(row);row=[];if(ch==='\r'&&text[i+1]==='\n')i++;}continue;}
+    if(closed){if(ch===' '||ch==='\t')continue;throw Error('Unexpected text after CSV quote.');}field+=ch;
+  }
+  return rows;
+}
+export const COLLECTION_COLUMNS=['Quantity','Name','Finish','Condition','Language','Edition Name'];
+const collectionColumnGroups=[['quantity','qty'],['name','card name'],['finish','foil'],['condition'],['language','lang'],['edition name','set name','edition code','set code','edition','set']];
+export function prepareCollectionUpload(text,mapping=null) {
+  if(typeof text!=='string'||text.length>15_000_000)throw Error('Upload a text or CSV file up to 15 MB.');
+  const source=text.replace(/^\uFEFF/,'').trim();if(!source)throw Error('Choose a file or paste card data.');
+  const first=source.split(/\r?\n/,1)[0],csv=first.includes(',')&&!/^\d+x?\s+/.test(first);
+  if(!csv){
+    const rows=[],skipped=[];const lines=source.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);if(lines.length>5100)throw Error('Maximum 5000 card rows.');
+    for(const line of lines){try{if(/^(Main deck|Mainboard|Sideboard|Command zone|Commander|Maybeboard):?$/i.test(line))throw Error('Zone heading');rows.push(...parseCollectionImport(line));}catch{skipped.push(line);}}
+    if(!rows.length)throw Error('No valid card rows. Use a quantity followed by a card name.');
+    if(rows.length>5000)throw Error('Maximum 5000 card rows.');return {rows,skipped,accepted:['Quantity','Name'],ignored:[]};
+  }
+  const records=readCollectionCsv(source);if(records.length>5001)throw Error('Maximum 5000 card rows.');
+  const normalize=value=>value.trim().toLowerCase().replace(/[_-]/g,' ');
+  const headers=records[0]||[],hasHeaders=collectionColumnGroups.slice(0,2).every(group=>headers.some(h=>group.includes(normalize(h))));
+  if(!hasHeaders&&!mapping)return {needsMapping:true,preview:records.slice(0,3),width:headers.length,suggestHeaders:!/^\d+$/.test(headers[0]||'')};
+  const columns=mapping?mapping.columns:headers;
+  if(!Array.isArray(columns)||columns.length!==headers.length)throw Error('Map every CSV column.');
+  const actualHeaders=mapping?columns.map(value=>value||'Ignored'):headers;
+  if(!collectionColumnGroups.slice(0,2).every(group=>actualHeaders.some(h=>group.includes(normalize(h)))))throw Error('Assign one Quantity column and one Name column before checking syntax.');
+  const data=mapping&&!mapping.header?records:records.slice(1);
+  const encode=values=>values.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',');
+  const rows=parseCollectionImport([encode(actualHeaders),...data.map(encode)].join('\n'));
+  const accepted=actualHeaders.filter(h=>collectionColumnGroups.some(group=>group.includes(normalize(h))));
+  const ignored=actualHeaders.flatMap((h,i)=>collectionColumnGroups.some(group=>group.includes(normalize(h)))?[]:[mapping?(mapping.header?headers[i]:'Column '+(i+1)):h]);
+  return {rows,skipped:[],accepted,ignored};
+}
+export function parseCollectionImport(text) {
+  if(typeof text!=='string'||text.length>15_000_000)throw Error('Collection import exceeds 15 MB.');
+  const source=text.replace(/^\uFEFF/,'');
+  const header=source.split(/\r?\n/,1)[0];
+  if(!/(?:^|,)\s*"?(?:quantity|qty)"?\s*(?:,|$)/i.test(header)||!/(?:^|,)\s*"?(?:name|card name)"?\s*(?:,|$)/i.test(header))return parseImport(source).map(row=>({...row,finish:'regular'}));
+  const rows=readCollectionCsv(source);
+  const headers=rows.shift()?.map(value=>value.trim().toLowerCase().replace(/[_-]/g,' '));
+  if(!headers||!rows.length||rows.length>5000)throw Error('Import 1–5000 CSV rows.');
+  const column=(...names)=>headers.findIndex(h=>names.includes(h));
+  const cols={qty:column('quantity','qty'),name:column('name','card name'),finish:column('finish','foil'),condition:column('condition'),language:column('language','lang'),set:column('edition name','set name','edition code','set code','edition','set')};
+  if(cols.qty<0||cols.name<0)throw Error('CSV needs Quantity and Name columns.');
+  for(const names of [['quantity','qty'],['name','card name'],['finish','foil'],['condition'],['language','lang'],['edition name','set name','edition code','set code','edition','set']])if(headers.filter(h=>names.includes(h)).length>1)throw Error('Duplicate or conflicting CSV columns: '+names.join(' / '));
+  const finishes={normal:'regular',regular:'regular',nonfoil:'regular','non-foil':'regular',false:'regular',no:'regular','0':'regular',foil:'foil',true:'foil',yes:'foil','1':'foil',etched:'etched','etched foil':'etched','foil etched':'etched'};
+  const conditions={nm:'near_mint',mint:'near_mint','near mint':'near_mint',lp:'lightly_played','lightly played':'lightly_played',mp:'moderately_played','moderately played':'moderately_played',hp:'heavily_played','heavily played':'heavily_played',damaged:'damaged',dmg:'damaged',d:'damaged'};
+  const languages={english:'en',german:'de',french:'fr',italian:'it',spanish:'es',portuguese:'pt',japanese:'ja',korean:'ko',russian:'ru','simplified chinese':'zhs','traditional chinese':'zht',hebrew:'he',latin:'la',greek:'grc',arabic:'ar',sanskrit:'sa',phyrexian:'ph'};
+  return rows.map((values,index)=>{
+    const get=key=>cols[key]<0?'':(values[cols[key]]||'').trim(),label='CSV row '+(index+2)+': ';
+    if(values.length!==headers.length)throw Error(label+'column count differs from header.');
+    const qty=Number(get('qty')),name=get('name');if(!/^\d+$/.test(get('qty'))||!Number.isInteger(qty)||qty<1||qty>9999||!name)throw Error(label+'invalid quantity or name.');
+    const finish=finishes[get('finish').toLowerCase()||'normal'];if(!finish)throw Error(label+'unknown finish '+get('finish'));
+    const rawCondition=get('condition').toLowerCase().replace(/_/g,' '),condition=rawCondition?conditions[rawCondition]:undefined;if(rawCondition&&!condition)throw Error(label+'unknown condition '+get('condition'));
+    const rawLanguage=get('language').toLowerCase(),language=languages[rawLanguage]||rawLanguage;if(language&&!['en','de','fr','it','es','pt','ja','ko','ru','zhs','zht','he','la','grc','ar','sa','ph'].includes(language))throw Error(label+'unknown language '+get('language'));
+    return {name,qty,finish,...(condition?{condition}:{}),...(language?{language}:{}),...(get('set')?{set:get('set')}:{})};
+  });
+}
 export function resolveImport(parsed, cards) {
   const entries=[], problems=[];
   for (const p of parsed) {
@@ -302,6 +365,10 @@ export function validateBackup(data) {
   for (const d of data) {
     if (!d || typeof d.id !== 'string' || ids.has(d.id) || typeof d.name !== 'string' || d.name.length > 100 || !FORMATS.includes(d.format) || !Array.isArray(d.cards) || d.cards.length > 1000) throw new Error('Invalid deck backup.');
     if (d.bracket !== undefined && (!Number.isInteger(d.bracket) || !Object.hasOwn(BRACKETS,d.bracket))) throw Error('Invalid assigned Commander bracket.');
+    if (d.budgetCents !== undefined && (!Number.isInteger(d.budgetCents) || d.budgetCents < 0 || d.budgetCents > 100_000_000)) throw Error('Invalid deck budget.');
+    if (d.budgetBasis !== undefined && !['missing','full'].includes(d.budgetBasis)) throw Error('Invalid deck budget basis.');
+    if (d.ownershipMatch !== undefined && !['rules','printing'].includes(d.ownershipMatch)) throw Error('Invalid ownership match mode.');
+    if (d.priceUpdatedAt !== undefined && (typeof d.priceUpdatedAt !== 'string' || !Number.isFinite(Date.parse(d.priceUpdatedAt)))) throw Error('Invalid price refresh date.');
     ids.add(d.id);
     const cards = new Set();
     for (const e of d.cards) {
@@ -319,14 +386,63 @@ export function validateBackup(data) {
   return data;
 }
 
+const FINISHES = ['regular','foil','etched'];
+const CONDITIONS = ['near_mint','lightly_played','moderately_played','heavily_played','damaged'];
 
-export function workspaceFile(decks) {
-  return {format:'arcana-workspace',version:1,exportedAt:new Date().toISOString(),decks:validateBackup(decks)};
+export function rulesIdentity(card) {
+  if (typeof card?.oracle_id === 'string' && card.oracle_id) return card.oracle_id;
+  const ids = [...new Set((card?.card_faces || []).map(face=>face?.oracle_id).filter(id=>typeof id==='string'&&id))];
+  return ids.length===1 ? ids[0] : null;
+}
+
+export function validateCollection(data) {
+  if (!Array.isArray(data) || data.length > 5000) throw Error('Invalid collection.');
+  const keys=new Set();
+  for (const lot of data) {
+    if (!lot || !Number.isInteger(lot.qty) || lot.qty<1 || lot.qty>9999 || !FINISHES.includes(lot.finish) || (lot.condition!==undefined && !CONDITIONS.includes(lot.condition))) throw Error('Invalid collection lot.');
+    validateBackup([{id:'collection',name:'Collection',format:'commander',cards:[{card:lot.card,qty:1,tags:[],zone:'main'}]}]);
+    const key=[lot.card.id,lot.finish,lot.condition||''].join('|');
+    if (keys.has(key)) throw Error('Duplicate collection lot.');
+    keys.add(key);
+  }
+  return data;
+}
+
+export function parseEuroCents(value) {
+  if (typeof value !== 'string' || !/^\d+(?:[.,]\d{1,2})?$/.test(value.trim())) return null;
+  const [euros,cents=''] = value.trim().replace(',','.').split('.');
+  const result=Number(euros)*100+Number(cents.padEnd(2,'0'));
+  return Number.isSafeInteger(result) ? result : null;
+}
+
+export function collectionReport(deck, collection) {
+  validateBackup([deck]);validateCollection(collection);
+  const mode=deck.ownershipMatch||'rules', zoneOrder={main:0,command:1,sideboard:2};
+  const entries=deck.cards.filter(entry=>Object.hasOwn(zoneOrder,zoneFor(entry))).sort((a,b)=>zoneOrder[zoneFor(a)]-zoneOrder[zoneFor(b)]||a.card.id.localeCompare(b.card.id));
+  const matchKey=card=>mode==='printing'?card.id:rulesIdentity(card);
+  const available=new Map();
+  for(const lot of collection){const key=matchKey(lot.card);if(key)available.set(key,(available.get(key)||0)+lot.qty);}
+  let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0;
+  const rows=entries.map(entry=>{
+    const key=matchKey(entry.card),have=key?(available.get(key)||0):0,used=Math.min(entry.qty,have),needed=entry.qty-used,unitCents=parseEuroCents(entry.card.prices?.eur);
+    if(key)available.set(key,have-used);
+    demand+=entry.qty;owned+=used;missing+=needed;
+    if(unitCents===null){fullUnpriced+=entry.qty;missingUnpriced+=needed;}else{fullCents+=unitCents*entry.qty;missingCents+=unitCents*needed;}
+    return {entry,zone:zoneFor(entry),demand:entry.qty,owned:used,missing:needed,unitCents,identityResolved:Boolean(key)};
+  });
+  return {mode,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced,maybeboardExcluded:deck.cards.filter(entry=>zoneFor(entry)==='maybeboard').reduce((sum,entry)=>sum+entry.qty,0)};
+}
+
+
+export function workspaceFile(decks, collection=null) {
+  const file={format:'arcana-workspace',version:collection===null?1:2,exportedAt:new Date().toISOString(),decks:validateBackup(decks)};
+  if(collection!==null)file.collection=validateCollection(collection);
+  return file;
 }
 export function readWorkspaceFile(data) {
-  if (Array.isArray(data)) return validateBackup(data);
+  if (Array.isArray(data)) return {decks:validateBackup(data),collection:null};
   if (!data || data.format!=='arcana-workspace') throw Error('Choose an Arcana workspace JSON file or legacy backup.');
-  if (data.version!==1) throw Error('Unsupported workspace file version. Keep this file and open it with a compatible Arcana version.');
+  if (![1,2].includes(data.version)) throw Error('Unsupported workspace file version. Keep this file and open it with a compatible Arcana version.');
   if (typeof data.exportedAt!=='string' || !Number.isFinite(Date.parse(data.exportedAt))) throw Error('Invalid workspace export date.');
-  return validateBackup(data.decks);
+  return {decks:validateBackup(data.decks),collection:data.version===2?validateCollection(data.collection):null};
 }

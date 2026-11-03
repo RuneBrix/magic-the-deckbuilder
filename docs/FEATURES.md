@@ -1,5 +1,9 @@
 # Feature status
 
+Latest collection revision in PR #86: local TXT/CSV syntax checks enable direct Upload, ignored columns/skipped zone headings require confirmation, headerless CSV supports column mapping, and Text is one sortable table. Compatible stored cards are reused before network lookup; [efficiency research](COLLECTION_IMPORT_RESEARCH.md) records optional bulk-index tradeoffs. This supersedes the earlier resolved-card review flow.
+
+Collection and ownership/budget planning are implemented in the current PR #86 checkout. The [collection workflow](COLLECTION_WORKFLOW.md) documents reviewed text imports, two-character contains search, staged printing/quantity edits, page-width views and sorting. Older planned entries below predate that implementation; developer inspection of the revised UI remains pending.
+
 This inventory describes what the app does today. GitHub Issues track future work; linked pull requests and commits record its implementation. Update this file when behavior changes.
 
 **Implemented** means available in the MVP, not exhaustively verified. **Partial** names a known ceiling. **Planned** means not implemented and not a delivery promise.

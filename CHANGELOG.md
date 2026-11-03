@@ -1,5 +1,33 @@
 # Changelog
 
+## Collection card controls and reset - 2026-11-03
+
+- Give visual cards labeled table-equivalent details, aligned actions and inline Quantity controls. Widen the editor, reset dialog scroll, automatically load all available version pages, and add a typed-confirmation collection reset that preserves decks and persists before applying (PR #86).
+
+## Direct collection upload and table view - 2026-11-03
+
+- Validate TXT/CSV locally, map headerless CSV, confirm ignored columns/zone headings, then resolve and upload without a full card-list review. Reuse indexed local cards before lookup; record bulk-data research. Replace text layouts with one compact sortable table and consistent contained actions; distinguish examples and placeholders (PR #86).
+
+## Large collection import pacing - 2026-11-03
+
+- Share conservative Scryfall request pacing and 429 cooldowns across endpoints. Reuse pending/finished lookups, retain import progress for explicit resume after cooldown, show review progress and skip redundant name batches for constrained CSV rows (PR #86).
+
+## Collection finish lookup fix - 2026-11-03
+
+- Map regular finish to Scryfall nonfoil, search compatible alternate printings when the default is foil-only, and resolve full double-faced CSV names through a validated front-face fallback. Verified the supplied three-card Aang CSV against the running localhost proxy (PR #86).
+
+## Archidekt collection CSV - 2026-11-03
+
+- Import pasted or selected CSV with quantity, quoted card names, finish/foil, condition, language and set/edition fields. Ignore unrelated metadata, preview resolved lots and combine matching duplicates after review. Reject unresolved set/language constraints without applying partial data (PR #86).
+
+## Collection browsing refinements - 2026-11-03
+
+- Anchor one-character literal-prefix search suggestions to the add-card input. Add compact View/Group by/Sort by/Filter controls, fixed-width visual cards, compact text rows, remembered preferences and date/color/EUR-price sorting (PR #86).
+
+## Collection workflow revisions - 2026-11-03
+
+- Add reviewed deck-syntax collection list imports, contains-name search after two characters, and a staged printing/finish/condition quantity editor. Expand Collection to page width with text/visual views, sorting and contained row actions ([PR #86](https://github.com/RuneBrix/magic-the-deckbuilder/pull/86)).
+
 ## Recognizable mana symbols - 2026-11-03
 
 - Use locally bundled Magic mana symbols for deck identity, statistics, text-card costs, details and guided filters (#56). Preserve accessible color names and literal generic/compound costs; no CDN or package dependency. Center glyphs in shared 16px circles and reduce the library/editor identity badges to match the filters.
