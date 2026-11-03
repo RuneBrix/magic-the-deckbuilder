@@ -1581,6 +1581,28 @@ test('owned printing edits remain drafts until Update collection and use absolut
   assert.equal(vm.runInContext('collection.length',w.context),1);
 });
 
+test('inline collection quantity validates changes and zero requests removal confirmation',()=>{
+  const d=editorDeck(),lot={card:editorCard('Forest'),qty:2,finish:'regular'},w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[lot]))});
+  vm.runInContext('updateOwnedQuantity(0,5)',w.context);assert.equal(vm.runInContext('collection[0].qty',w.context),5);
+  vm.runInContext('updateOwnedQuantity(0,1.5)',w.context);assert.equal(vm.runInContext('collection[0].qty',w.context),5);
+  vm.runInContext('updateOwnedQuantity(0,0)',w.context);assert.equal(vm.runInContext('collection[0].qty',w.context),5);assert.match(w.node('#dialog').innerHTML,/Remove owned lot/);
+});
+
+test('collection deletion requires typed confirmation, persists first and preserves decks',()=>{
+  const d=editorDeck(),lot={card:editorCard('Forest'),qty:2,finish:'regular'},w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[lot]))});
+  vm.runInContext('clearCollection()',w.context);w.node('#clear-collection-apply').onclick();assert.equal(vm.runInContext('collection.length',w.context),1);
+  w.node('#clear-collection-confirm').value='DELETE';const persist=w.context.localStorage.setItem;w.context.localStorage.setItem=()=>{throw Error('Quota');};w.node('#clear-collection-apply').onclick();assert.equal(vm.runInContext('collection.length',w.context),1);
+  w.context.localStorage.setItem=persist;w.node('#clear-collection-apply').onclick();assert.equal(vm.runInContext('collection.length',w.context),0);
+  const saved=JSON.parse(w.writes.at(-1)[1]);assert.deepEqual(saved.decks,[d]);assert.deepEqual(saved.collection,[]);
+});
+
+test('owned versions load all pages automatically and never request beyond the final page',async()=>{
+  const card=editorCard('Forest'),w=workspace();w.context.card=card;w.node('#owned-finish').value='regular';w.node('#owned-condition').value='';const pages=[];
+  w.context.fetch=async url=>{const page=Number(new URLSearchParams(url.split('?')[1]).get('page'));pages.push(page);return {ok:true,json:async()=>({data:[{...card,id:'print-'+page}],has_more:page===1})};};
+  vm.runInContext('collectionLotDialog(card)',w.context);for(let i=0;i<12;i++)await Promise.resolve();
+  assert.deepEqual(pages,[1,2]);await w.node('#owned-load').onclick();assert.deepEqual(pages,[1,2]);assert.match(w.node('#owned-version').innerHTML,/print-2/);
+});
+
 test('collection TXT reports zones and uploads valid cards after skip confirmation',async()=>{
   const w=workspace();formValues(w,{list:'Mainboard\n2 Forest\nSideboard\n1 Forest'});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});

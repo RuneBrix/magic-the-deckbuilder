@@ -28,4 +28,10 @@ Group by offers none/type/color/set. Filter matches required terms in name/type/
 
 Add owned card searches after one literal prefix character in an anchored dropdown. Arrow keys and Enter select results. Its staged editor shows artwork, paginated printing choices, finish, condition and absolute quantity. Plus/minus/direct entry change drafts. Update collection applies them; Cancel/Escape/X discard them. Zero removes the selected lot.
 
+Visual cards use a distinct title and compact labeled fields for every Text-table value. Quantity is edited inline with minus, number entry and plus; valid changes autosave, while zero requests removal confirmation. The wide collection editor automatically fetches printing pages into one Version dropdown and stops at the API's final page. No manual Load more action is needed; failures preserve loaded versions and expose a retry.
+
+Delete entire collection is available in the Collection header. It offers a workspace backup and requires typing DELETE. It saves the empty inventory before changing the live view; a failed save retains the collection. Decks and deck budgets are preserved. There is no in-app undo; previously downloaded workspace copies remain available for restoration.
+
+Collection data lives in browser localStorage for the exact app origin (normally http://localhost:3000), in the `collection` property of the `arcana.workspace.v2` JSON value. This same value contains decks, so do not remove the whole key to reset inventory. It belongs to the current browser profile, not a file in the repository; exported workspace JSON files are separate snapshots. localhost and 127.0.0.1 use separate browser storage.
+
 Workspace v2 retains collection and deck planning. Each deck independently allocates ownership across Main/Command/Sideboard, excluding Maybeboard. No cloud account or global deck reservation is introduced.

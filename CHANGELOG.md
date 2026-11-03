@@ -1,5 +1,9 @@
 # Changelog
 
+## Collection card controls and reset - 2026-11-03
+
+- Give visual cards labeled table-equivalent details, aligned actions and inline Quantity controls. Widen the editor, reset dialog scroll, automatically load all available version pages, and add a typed-confirmation collection reset that preserves decks and persists before applying (PR #86).
+
 ## Direct collection upload and table view - 2026-11-03
 
 - Validate TXT/CSV locally, map headerless CSV, confirm ignored columns/zone headings, then resolve and upload without a full card-list review. Reuse indexed local cards before lookup; record bulk-data research. Replace text layouts with one compact sortable table and consistent contained actions; distinguish examples and placeholders (PR #86).
