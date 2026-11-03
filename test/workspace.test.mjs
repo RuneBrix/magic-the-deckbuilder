@@ -1554,6 +1554,21 @@ test('version 2 browser storage renders collection and independent deck ownershi
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.version,2);assert.equal(saved.decks[0].budgetCents,1234);assert.deepEqual(saved.collection,[owned]);
 });
 
+test('collection defaults and saved controls preserve stable added dates and sorting',()=>{
+  const w=workspace();assert.equal(vm.runInContext('collectionOptions.group',w.context),'none');assert.equal(vm.runInContext('collectionOptions.sort',w.context),'added');
+  vm.runInContext("view='collection';render()",w.context);
+  w.node('#collection-group').change({target:{value:'color'}});w.node('#collection-sort').change({target:{value:'updated'}});
+  const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.group,'color');assert.equal(saved.sort,'updated');
+  assert.equal(w.writes.at(-1)[0],'arcana.collection-view.v1');
+});
+
+test('owned search opens an anchored combobox after one literal character with no placeholder result',async()=>{
+  const w=workspace();let query='';w.context.fetch=async url=>{query=new URLSearchParams(url.split('?')[1]).get('q');return {ok:true,json:async()=>({data:[editorCard('Alpha') ]})};};
+  vm.runInContext('collectionLotDialog()',w.context);assert.match(w.node('#dialog').innerHTML,/role="combobox"/);assert.doesNotMatch(w.node('#dialog').innerHTML,/Choose a card|size="8"/);
+  w.node('#owned-search').value='A';w.node('#owned-search').oninput();await w.timers.at(-1).fn();
+  assert.equal(query,'game:paper name:/^A/');assert.match(w.node('#owned-matches').innerHTML,/role="option"/);
+});
+
 test('owned printing edits remain drafts until Update collection and use absolute quantities',()=>{
   const card=editorCard('Owned'),lot={card,finish:'regular',qty:3};
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([], [lot]))});w.context.card=card;
