@@ -1,5 +1,9 @@
 # Changelog
 
+## Collection finish lookup fix - 2026-11-03
+
+- Map regular finish to Scryfall nonfoil, search compatible alternate printings when the default is foil-only, and resolve full double-faced CSV names through a validated front-face fallback. Verified the supplied three-card Aang CSV against the running localhost proxy (PR #86).
+
 ## Archidekt collection CSV - 2026-11-03
 
 - Import pasted or selected CSV with quantity, quoted card names, finish/foil, condition, language and set/edition fields. Ignore unrelated metadata, preview resolved lots and combine matching duplicates after review. Reject unresolved set/language constraints without applying partial data (PR #86).

@@ -1598,6 +1598,29 @@ test('collection CSV import merges matching finish and condition only after revi
   assert.equal(vm.runInContext('collection[0].qty',w.context),3);assert.equal(vm.runInContext('collection[1].finish',w.context),'foil');assert.equal(vm.runInContext('collection[1].condition',w.context),'lightly_played');
 });
 
+test('Archidekt Normal rows accept Scryfall nonfoil finish for the reported three-card CSV',async()=>{
+  const names=['Aang, Air Nomad',"Aang, Swift Savior // Aang and La, Ocean's Fury",'Abandoned Air Temple'];
+  const csv='Quantity,Name,Finish,Condition\n1,"Aang, Air Nomad",Normal,NM\n1,"Aang, Swift Savior // Aang and La, Ocean\'s Fury",Normal,NM\n1,Abandoned Air Temple,Normal,NM';
+  const w=workspace();formValues(w,{list:csv});w.context.fetch=async()=>({ok:true,json:async()=>({data:names.map(name=>({...editorCard(name),finishes:['nonfoil','foil']})),not_found:[]})});
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await form.onsubmit({preventDefault(){}});
+  assert.equal(w.node('#collection-import-error').textContent||'','');assert.match(w.node('#collection-import-preview').innerHTML,/3 copies resolved/);
+  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),3);assert.equal(vm.runInContext("collection.every(l=>l.finish==='regular'&&l.condition==='near_mint')",w.context),true);
+});
+
+test('CSV falls back from a foil-only default and a missing double-faced lookup to compatible printings',async()=>{
+  const w=workspace(),name='Aang, Air Nomad',double="Aang, Swift Savior // Aang and La, Ocean's Fury";formValues(w,{list:'Quantity,Name,Finish,Condition\n1,"'+name+'",Normal,NM\n1,"'+double+'",Normal,NM'});
+  w.context.fetch=async url=>({ok:true,json:async()=>url==='/api/collection'?{data:[{...editorCard(name),finishes:['foil']}],not_found:[{name:double}]}:{data:[{...editorCard(url.includes('Swift')?double:name),id:url.includes('Swift')?'double-nonfoil':'air-nonfoil',finishes:['nonfoil']}],has_more:false}});
+  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});assert.equal(w.node('#collection-import-error').textContent||'','');assert.match(w.node('#collection-import-preview').innerHTML,/2 copies resolved/);
+});
+
+test('live localhost review resolves the reported Archidekt three-card CSV', {skip:process.env.ARCANA_LIVE_CSV!=='1'},async()=>{
+  const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition\n1,"Aang, Air Nomad",Normal,NM\n1,"Aang, Swift Savior // Aang and La, Ocean\'s Fury",Normal,NM\n1,Abandoned Air Temple,Normal,NM'});
+  w.context.fetch=(url,options)=>fetch('http://localhost:3000'+url,options);
+  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(w.node('#collection-import-error').textContent||'','');assert.match(w.node('#collection-import-preview').innerHTML,/3 copies resolved/);
+  assert.equal(vm.runInContext('collection.length',w.context),0);
+});
+
 test('CSV set and language constraints reject mismatches before any collection write',async()=>{
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition,Language,Edition Name\n1,Forest,Normal,NM,Japanese,Example Set'});
   const wrong={...editorCard('Forest'),lang:'en',set_name:'Other Set',set:'oth'};

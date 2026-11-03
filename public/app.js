@@ -256,15 +256,28 @@ function collectionImport(){
             const quote=value=>'"'+value.replace(/["\\]/g,'\\$&')+'"';
             const q='game:paper !'+quote(row.name)+(row.set?' set:'+quote(row.set):'')+(row.language?' lang:'+row.language:'')+' unique:prints';
             const result=await api('/api/search?'+new URLSearchParams({q,order:'name'}));
-            const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(value=>value?.toLowerCase()===row.set.toLowerCase()))&&(!c.finishes||c.finishes.includes(row.finish)));
+            const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(value=>value?.toLowerCase()===row.set.toLowerCase()))&&(!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)));
             if(result.has_more||candidates.length!==1)throw Error(row.name+': set/language does not identify one supported printing. Refine the CSV set or add this printing manually.');
             card=candidates[0];cache.set(cacheKey,card);
           }
         }else{
           const result=resolveImport([{name:row.name,qty:1}],cards);
-          if(result.problems.length)throw Error(row.name+': '+result.problems[0].reason);
-          card=result.entries[0].card;
-          if(card.finishes&&!card.finishes.includes(row.finish))throw Error(row.name+': resolved printing does not support '+row.finish+'. Specify a set or add this printing manually.');
+          card=result.entries[0]?.card;
+          if(!card||card.finishes&&!card.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)){
+            const cacheKey=JSON.stringify([row.name,row.finish]);
+            if(cache.has(cacheKey))card=cache.get(cacheKey);else{
+              const front=row.name.split(' // ')[0],quoted='"'+front.replace(/["\\]/g,'\\$&')+'"';
+              let chosen=null;
+              for(let page=1;page<=20;page++){
+                const data=await api('/api/search?'+new URLSearchParams({q:'game:paper !'+quoted+' unique:prints',order:'name',page}));
+                const matches=data.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish));
+                const identities=new Set(matches.map(c=>c.oracle_id||c.id));if(identities.size>1)throw Error(row.name+': ambiguous rules identity. Specify a set.');
+                if(matches.length){chosen=matches[0];break;}if(!data.has_more)break;
+              }
+              if(!chosen)throw Error(row.name+': no compatible '+row.finish+' printing found. Specify a set or add manually.');
+              card=chosen;cache.set(cacheKey,card);
+            }
+          }
         }
         resolved.push({card,qty:row.qty,finish:row.finish,...(row.condition?{condition:row.condition}:{})});
       }
