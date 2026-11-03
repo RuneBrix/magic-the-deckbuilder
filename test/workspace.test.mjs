@@ -1629,6 +1629,16 @@ test('CSV set and language constraints reject mismatches before any collection w
   assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/set\/language/);
 });
 
+test('large collection review resumes after cooldown without repeating completed 75-name batches',async()=>{
+  const w=workspace(),names=Array.from({length:80},(_,i)=>'Card '+i);formValues(w,{list:'Quantity,Name\n'+names.map(n=>'1,'+n).join('\n')});let calls=0,time=Date.now();
+  w.context.Date=class extends Date{static now(){return time;}};
+  w.context.fetch=async(_url,options)=>{calls++;if(calls===2)return {ok:false,status:429,json:async()=>({error:'Paused',retryAfter:60})};return {ok:true,json:async()=>({data:JSON.parse(options.body).names.map(n=>editorCard(n)),not_found:[]})};};
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await form.onsubmit({preventDefault(){}});
+  assert.equal(calls,2);assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(form.querySelector('button').disabled,true);
+  await form.onsubmit({preventDefault(){}});assert.equal(calls,2);
+  time+=61_000;await form.onsubmit({preventDefault(){}});assert.equal(calls,3);assert.match(w.node('#collection-import-preview').innerHTML,/80 copies resolved/);
+});
+
 test('EUR refresh is atomic on failure and updates only stored regular prices after complete exact-id coverage',async()=>{
   const d=editorDeck();for(const entry of d.cards)entry.card.prices={eur:'1.00',usd:'9.99'};
   const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);

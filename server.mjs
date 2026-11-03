@@ -2,30 +2,10 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { createScryfallClient } from './scryfall-client.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('./public/', import.meta.url)));
-const cache = new Map();
-let queue = Promise.resolve();
-// Every request, including imports and refreshes, shares Scryfall's rate limit.
-function scryfall(route, body) {
-  const key = route + JSON.stringify(body ?? '');
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.time < 300_000) return Promise.resolve(hit.data);
-  const task = queue.then(async () => {
-    const response = await fetch('https://api.scryfall.com' + route, {
-      headers: { 'User-Agent': 'ArcanaDeckbuilder/0.1 (local deckbuilding app)', Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
-      method: body ? 'POST' : 'GET', body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(20_000),
-    });
-    const data = await response.json();
-    if (!response.ok) throw Object.assign(new Error(data.details || 'Scryfall is unavailable.'), { status: response.status });
-    cache.set(key, { time: Date.now(), data });
-    if (cache.size > 100) cache.delete(cache.keys().next().value);
-    return data;
-  });
-  queue = task.catch(() => {}).then(() => new Promise(resolve => setTimeout(resolve, 120)));
-  return task;
-}
+const scryfall = createScryfallClient();
 
 export const server = createServer(async (req, res) => {
   try {
@@ -62,7 +42,8 @@ export const server = createServer(async (req, res) => {
     res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.ttf': 'font/ttf' })[path.extname(file)] || 'application/octet-stream');
     res.end(req.method === 'HEAD' ? undefined : content);
   } catch (error) {
+    if(error.retryAfter)res.setHeader('Retry-After',String(error.retryAfter));
     res.writeHead(error.status || (error.code === 'ENOENT' ? 404 : 502), { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: error.message === 'fetch failed' ? 'Cannot reach Scryfall. Check your internet connection, then try again.' : error.message }));
+    res.end(JSON.stringify({ error: error.message === 'fetch failed' ? 'Cannot reach Scryfall. Check your internet connection, then try again.' : error.message,...(error.retryAfter?{retryAfter:error.retryAfter}:{}) }));
   }
 }).listen(Number(process.env.PORT || 3000), '127.0.0.1', () => console.log('Arcana is ready at http://localhost:' + server.address().port));

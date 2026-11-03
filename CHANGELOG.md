@@ -1,5 +1,9 @@
 # Changelog
 
+## Large collection import pacing - 2026-11-03
+
+- Share conservative Scryfall request pacing and 429 cooldowns across endpoints. Reuse pending/finished lookups, retain import progress for explicit resume after cooldown, show review progress and skip redundant name batches for constrained CSV rows (PR #86).
+
 ## Collection finish lookup fix - 2026-11-03
 
 - Map regular finish to Scryfall nonfoil, search compatible alternate printings when the default is foil-only, and resolve full double-faced CSV names through a validated front-face fallback. Verified the supplied three-card Aang CSV against the running localhost proxy (PR #86).

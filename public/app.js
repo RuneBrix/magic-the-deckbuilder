@@ -239,13 +239,20 @@ function collectionLotDialog(card=null,index=null){
 }
 function collectionImport(){
   showDialog('<h2>Import cards to collection</h2><p>Paste a card list or open an Archidekt CSV. Quantity, Name, Finish/Foil, Condition, Language and Edition Name/Code are supported. Other columns are ignored. Missing finish defaults to regular; missing condition stays unrecorded. Without a set or language, the resolved default printing is shown in review.</p><form id="collection-import"><label>CSV file<input id="collection-csv-file" type="file" accept=".csv,text/csv"></label><label>Card list or CSV<textarea name="list" rows="10" required placeholder="Quantity,Name,Finish,Condition&#10;1,Sol Ring,Normal,NM"></textarea></label><p id="collection-import-error" role="alert"></p><div id="collection-import-preview"></div><button class="primary">Review import</button></form>');
-  const form=$('#collection-import'),button=form.querySelector('button');let review=null,revision=0,pending=false;
+  const form=$('#collection-import'),button=form.querySelector('button'),responses=new Map(),cache=new Map();let review=null,revision=0,pending=false,cooldownUntil=0;
+  const lookup=async(url,options)=>{const key=url+(options?.body||'');if(responses.has(key))return responses.get(key);const data=await api(url,options);responses.set(key,data);return data;};
+  const progress=message=>{if(form.isConnected)$('#collection-import-preview').textContent=message;};
   form.oninput=()=>{revision++;review=null;$('#collection-import-preview').innerHTML='';button.textContent='Review import';};
   $('#collection-csv-file').onchange=async e=>{form.oninput();const version=revision,file=e.target.files[0];if(!file)return;try{if(file.size>15_000_000)throw Error('CSV exceeds 15 MB.');const text=await file.text();if(form.isConnected&&revision===version){form.querySelector('textarea').value=text;}}catch(error){if(form.isConnected)$('#collection-import-error').textContent=error.message;}};
-  form.onsubmit=async e=>{e.preventDefault();if(pending)return;pending=true;button.disabled=true;try{
+  form.onsubmit=async e=>{e.preventDefault();if(pending||Date.now()<cooldownUntil)return;pending=true;button.disabled=true;try{
     if(!review){
       const version=revision,parsed=parseCollectionImport(new FormData(form).get('list'));
-      const {cards}=await fetchCollection([...new Set(parsed.map(p=>p.name))]),resolved=[],cache=new Map();
+      const names=[...new Set(parsed.filter(row=>!row.set&&!row.language).map(p=>p.name))],cards=[],resolved=[];
+      for(let i=0;i<names.length;i+=75){
+        if(!form.isConnected||$('#dialog').open===false)return;if(version!==revision)throw Error('List changed; review it again.');
+        progress('Looking up names '+(i+1)+'–'+Math.min(i+75,names.length)+' of '+names.length+'. Completed lookups are retained for retry.');
+        const data=await lookup('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})});cards.push(...data.data);
+      }
       for(const row of parsed){
         if(!form.isConnected||$('#dialog').open===false)return;
         if(version!==revision)throw Error('List changed; review it again.');
@@ -255,7 +262,7 @@ function collectionImport(){
           if(cache.has(cacheKey))card=cache.get(cacheKey);else{
             const quote=value=>'"'+value.replace(/["\\]/g,'\\$&')+'"';
             const q='game:paper !'+quote(row.name)+(row.set?' set:'+quote(row.set):'')+(row.language?' lang:'+row.language:'')+' unique:prints';
-            const result=await api('/api/search?'+new URLSearchParams({q,order:'name'}));
+            const result=await lookup('/api/search?'+new URLSearchParams({q,order:'name'}));
             const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(value=>value?.toLowerCase()===row.set.toLowerCase()))&&(!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)));
             if(result.has_more||candidates.length!==1)throw Error(row.name+': set/language does not identify one supported printing. Refine the CSV set or add this printing manually.');
             card=candidates[0];cache.set(cacheKey,card);
@@ -269,7 +276,7 @@ function collectionImport(){
               const front=row.name.split(' // ')[0],quoted='"'+front.replace(/["\\]/g,'\\$&')+'"';
               let chosen=null;
               for(let page=1;page<=20;page++){
-                const data=await api('/api/search?'+new URLSearchParams({q:'game:paper !'+quoted+' unique:prints',order:'name',page}));
+                const data=await lookup('/api/search?'+new URLSearchParams({q:'game:paper !'+quoted+' unique:prints',order:'name',page}));
                 const matches=data.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish));
                 const identities=new Set(matches.map(c=>c.oracle_id||c.id));if(identities.size>1)throw Error(row.name+': ambiguous rules identity. Specify a set.');
                 if(matches.length){chosen=matches[0];break;}if(!data.has_more)break;
@@ -288,7 +295,7 @@ function collectionImport(){
     const next=structuredClone(collection);
     for(const e of review){const found=next.find(l=>l.card.id===e.card.id&&l.finish===e.finish&&(l.condition||'')===(e.condition||''));if(found){found.qty+=e.qty;found.updatedAt=new Date().toISOString();}else next.push({...e,addedAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}
     validateCollection(next);collection=next;save();closeDialog();render();toast(storageError?'Imported copies kept for this session. Save a workspace copy.':'Reviewed copies imported.');
-  }catch(error){if(form.isConnected)$('#collection-import-error').textContent=error.message;}finally{pending=false;button.disabled=false;}};
+  }catch(error){if(form.isConnected){$('#collection-import-error').textContent=error.message;if(error.status===429){cooldownUntil=Date.now()+Math.max(60,Number(error.retryAfter)||60)*1000;const tick=()=>{if(!form.isConnected)return;const left=Math.max(0,Math.ceil((cooldownUntil-Date.now())/1000));button.disabled=left>0;button.textContent=left?'Paused · '+left+'s remaining':'Resume review';progress('Rate limit reached. No cards imported. Completed lookups are retained in this window.');if(left)setTimeout(tick,1000);};tick();}else button.textContent=review?'Import reviewed copies':'Retry review';}}finally{pending=false;if(Date.now()>=cooldownUntil)button.disabled=false;}};
 }
 function removeCollectionLot(index){
   const lot=collection[index];if(!lot)return;
@@ -798,7 +805,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='import-collection')collectionImport();
   if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Match all” narrows your results; “Match any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Starting points and their descriptions are curated. Search names and aliases across the bundled Scryfall Oracle Tags snapshot; use the arrow beside a tag to browse its recorded broader and narrower relationships. The snapshot date is shown because live Tagger can change. Use Enter an existing Scryfall tag for newer or other known tags. This searches existing tags; it does not create tagging data.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Inspect a card to choose its deck zone or assign personal role tags. These role tags power deck statistics and are separate from Scryfall’s tags.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander coverage remains partial; review paired commanders and companions manually.</p>`);
 });
-async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw new Error(data.error || 'Request failed.');return data; }
+async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Object.assign(new Error(data.error || 'Request failed.'),{status:r.status,retryAfter:data.retryAfter});return data; }
 async function search(append=false,keepBroadening=false) {
   if(filters.error){error=filters.error;loading=false;render();return;}
   if(!filters.query.trim())filters=parseQuery('game:paper');
