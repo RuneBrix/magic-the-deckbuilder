@@ -1,6 +1,6 @@
 # Combined collection and budget workflow (D07)
 
-On 1 November 2026 the user chose **collection ownership and budget planning together** for [#7](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7). This PR resolves the decision and scopes implementation; it does not ship inventory, budget totals or missing-card estimates.
+On 1 November 2026 the user chose **collection ownership and budget planning together** for [#7](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7). This document records the original scope/defaults. Merged [PR #86](https://github.com/RuneBrix/magic-the-deckbuilder/pull/86) implements local inventory, budgets and missing-copy estimates; [COLLECTION_WORKFLOW.md](COLLECTION_WORKFLOW.md) owns current interaction/upload behavior. Read historical proposals below against that implementation rather than treating them as unimplemented prerequisites.
 
 ## Selected workflow and working defaults
 
@@ -40,6 +40,6 @@ External collection imports/updates are scoped separately from manual ownership 
 - [#71: combined budget and missing-copy estimates](https://github.com/RuneBrix/magic-the-deckbuilder/issues/71), delivered with #70 for the combined workflow.
 - [#72: collection interchange](https://github.com/RuneBrix/magic-the-deckbuilder/issues/72), dependent on real selected-format examples and explicit duplicate/update policies.
 
-No implementation or live-price validation is claimed here. Decision/document review and link/diff checks are the validation for this PR.
+No implementation or live-price validation is claimed here. Decision/document review and link/diff checks were the validation for the linked decision PR.
 
 Decision review: [PR #73](https://github.com/RuneBrix/magic-the-deckbuilder/pull/73).
