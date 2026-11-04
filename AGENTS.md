@@ -1,8 +1,10 @@
 # Project instructions
 
-- Use GitHub Issues and pull requests in `RuneBrix/magic-the-deckbuilder` for planning, progress and implementation history. Do not use Linear for this project unless the user explicitly changes this preference.
-- Read `docs/FEATURES.md`, `docs/ROADMAP.md` and `docs/DEVELOPMENT.md` before substantial work. Search existing GitHub issues before creating duplicates.
-- Keep the feature inventory accurate: implemented, partial and planned are distinct. Link work to real issues/PRs; never invent numbers or mark unverified work complete.
-- Update `CHANGELOG.md` for completed user-facing behavior changes. Keep future proposals in issues and the roadmap.
-- Follow the existing dependency-free Node/browser implementation unless an actual requirement warrants a change. Run checks appropriate to the change and record what was tested.
-- Preserve deck data. Do not commit browser storage dumps, personal backups, credentials or collection exports.
+- Start in `F:/Magic The Deckbuilder`: check `git status --short --branch` and `git log -3 --oneline`; preserve existing edits. Read `PRODUCT.md` and `docs/DEVELOPMENT.md` once per session, then load only the task-specific sources they identify. Use `.codex/local/PROJECT_GUIDE.md` when present; local overrides and `.codex/local/` stay out of commits.
+- Use GitHub Issues/PRs in `RuneBrix/magic-the-deckbuilder`. Read selected criteria/discussions; search for duplicates before creating issues. Use `docs/FEATURES.md` for capability-wide questions and `docs/ROADMAP.md` for direction/selection, rather than loading both for every implementation.
+- Follow the dependency-free Node/browser architecture. Preserve decks, collection, printings, functions, browser storage and credentials. Keep personal exports/backups out of Git.
+- Deliver authorized, testable changes in this primary checkout on a focused `codex/` branch with a linked PR. Keep unrelated edits out of commits. The developer tests at `http://localhost:3000/` in the existing browser/profile; preserve that origin and the developer's server.
+- When asked to find issues to solve, implement at least two compatible issues in one PR, preferably three. Batch by shared workflow/checks; honor named or narrower scope. Explain concrete exceptions using `docs/DEVELOPMENT.md#issue-batching`.
+- Use focused checks during development and one final full suite for code PRs; follow the change-specific verification table in `docs/DEVELOPMENT.md`. Prefer `npm run test:agent` for compact results with full logs. Update affected contracts and changelog when behavior changes.
+- Hand off with actual checks, remaining gaps and localhost inspection steps: refresh for frontend changes, restart the CMD server here and refresh for server changes. Revisions stay in the same PR. Merge only after explicit developer approval of the current changes; tests and PR readiness do not supply approval.
+- Load task-relevant skills via `docs/AGENT_SKILLS.md` when implementing, reviewing or designing. UI work also reads `DESIGN.md` and `.impeccable/surface.md`. Do not delegate or create other chats without current-session authorization.

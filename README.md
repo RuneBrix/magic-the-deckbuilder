@@ -16,6 +16,8 @@ Open http://127.0.0.1:3000 in your browser. No npm install, API key, account, or
 npm test
 ```
 
+For compact agent output, use `npm run test:agent`. It runs the same suite, keeps full logs in ignored `test-results/agent-tests.log` and reports failures with a nonzero exit status. [Focused commands and verification scope](docs/DEVELOPMENT.md#verification-and-data).
+
 ## Included
 
 - Create, rename, delete, and switch decks; seven format presets.
@@ -47,7 +49,7 @@ Legality is **partial**, not tournament certification. Modern main/sideboard con
 
 Data and complete card images: [Scryfall](https://scryfall.com/docs/api). Function tag syntax: [Scryfall search reference](https://scryfall.com/docs/syntax). Magic: The Gathering and card artwork © Wizards of the Coast and their respective artists. This is an independent, unofficial project.
 
-Future feedback: live tag updates, automatic synergy ranking, cloud sync, deeper format rules, price tracking, collection tracking, native packaging.
+See [the roadmap](docs/ROADMAP.md) for future direction and deferred decisions. Local collection ownership and EUR deck planning are implemented; see [Collection workflow](docs/COLLECTION_WORKFLOW.md). Cloud sync and native packaging are deferred.
 
 ## Platform verification (D05 / #5)
 
