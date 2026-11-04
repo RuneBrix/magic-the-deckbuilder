@@ -14,7 +14,7 @@ test('search disclosures start closed and preserve the opened state and selected
   const html = w.node('#app').innerHTML;
   assert.match(html, /id="search-filters"[^>]*\bopen\b/);
   assert.match(html, /id="function-tags"[^>]*\bopen\b/);
-  assert.match(html, /name="oracle" value="draw a card"/);
+  assert.match(html, /name="oracle-0" value="draw a card"/);
   assert.match(html, /aria-label="Remove ramp filter"/);
   assert.doesNotMatch(html, /data-action="backup"|data-action="restore"/);
 });

@@ -115,15 +115,19 @@ function render() {
   if(focusSelector) {const target=document.querySelector(focusSelector)||document.querySelector('.deck-tabs [aria-selected="true"]');target?.focus({preventScroll:true});}
 }
 function queryNotes() {
-  return `${filters.error?`<p class="query-error" role="alert">${esc(filters.error)} Guided edits are paused; your query is unchanged.</p>`:''}${filters.opaque.length&&!filters.error?`<details class="query-help"><summary>Query-only expressions · ${filters.opaque.length}</summary><p>These expressions stay verbatim in the search. Complex or unsupported expressions cannot be edited with guided controls${filters.locked.length?'; affected controls are disabled':''}.</p>${filters.opaque.map(text=>`<code>${esc(text)}</code>`).join('')}<p>Supported controls cover positive type/tag groups, two mana-value comparisons, color modes, symbol minimums, one name/Oracle phrase and one format. Edit other expressions directly above.</p></details>`:''}`;
+  return `${filters.error?`<p class="query-error" role="alert">${esc(filters.error)} Guided edits are paused; your query is unchanged.</p>`:''}${filters.opaque.length&&!filters.error?`<details class="query-help"><summary>Query-only expressions · ${filters.opaque.length}</summary><p>These expressions stay verbatim in the search. Complex or unsupported expressions cannot be edited with guided controls${filters.locked.length?'; affected controls are disabled':''}.</p>${filters.opaque.map(text=>`<code>${esc(text)}</code>`).join('')}<p>Supported controls cover positive type/tag groups, mana-value comparisons, color modes, symbol minimums, Oracle/full-Oracle phrases, one name and one format. Edit other expressions directly above.</p></details>`:''}`;
 }
 function guidedControls() {
   const selected=(value,current)=>value===current?'selected':'';
-  const mode=(name,current,options)=>`<select name="${name}" aria-label="${({'type-match':'Combine types','value-match':'Combine mana-value comparisons','color-mode':'Card color matching','identity-mode':'Color identity matching','mv-op-0':'Mana-value comparison 1','mv-op-1':'Mana-value comparison 2'})[name]}">${options.map(([v,l])=>`<option value="${v}" ${selected(v,current)}>${l}</option>`).join('')}</select>`;
-  const match=(name,current)=>mode(name,current,[['all','Match all (AND)'],['any','Match any (OR)']]);
+  const mode=(name,current,options,label='')=>`<select name="${name}" ${label?`aria-label="${label}"`: ''}>${options.map(([v,l])=>`<option value="${v}" ${selected(v,current)}>${l}</option>`).join('')}</select>`;
+  const match=(name,current)=>mode(name,current,[['all','Matching all (AND)'],['any','Matching any (OR)']]);
   const field=(family,title,content)=>`<fieldset data-family="${family}" ${filters.locked.includes(family)?'disabled':''}><legend>${title}</legend>${content}${filters.locked.includes(family)?'<p class="hint">Edit this condition in the query above.</p>':''}</fieldset>`;
+  const removeRow=(family,i,total)=>`<button type="button" class="remove-filter-row" data-remove-filter="${family}" data-filter-index="${i}" aria-label="Remove ${family==='mv'?'mana value':'oracle'} filter ${i+1}" title="Remove ${family==='mv'?'mana value':'oracle'} filter ${i+1}" ${total===1?'disabled':''}>${icon('close',16)}</button>`;
+  const values=filters.values.length?filters.values:[{op:'>=',value:''}],phrases=filters.oracle.length?filters.oracle:[{mode:'o',text:''}];
+  const valueRows=`<div class="filter-rows" role="region" aria-label="Mana-value comparisons" tabindex="0"><div class="filter-column-head mana-columns" aria-hidden="true"><span>Comparison</span><span>Mana value</span><span></span></div>${values.map((row,i)=>`<div class="repeatable-filter-row mana-columns">${mode('mv-op-'+i,row.op,[['<=','At most (≤)'],['<','Less than (<)'],['=','Exactly (=)'],['>=','At least (≥)'],['>','More than (>)'],['!=','Not equal (≠)']],'Comparison '+(i+1))}<input type="number" min="0" step="any" name="mv-${i}" value="${esc(row.value)}" aria-label="Mana value ${i+1}" placeholder="Any">${removeRow('mv',i,values.length)}</div>`).join('')}</div>`;
+  const oracleRows=`<div class="filter-rows" role="region" aria-label="Oracle phrases" tabindex="0"><div class="filter-column-head oracle-columns" aria-hidden="true"><span>Text source</span><span>Rules-text phrase</span><span></span></div>${phrases.map((row,i)=>`<div class="repeatable-filter-row oracle-columns">${mode('oracle-mode-'+i,row.mode,[['o','Oracle'],['fo','Full oracle']],'Text source '+(i+1))}<input name="oracle-${i}" value="${esc(row.text)}" aria-label="Rules-text phrase ${i+1}" maxlength="300" placeholder="e.g. whenever ~ attacks">${removeRow('oracle',i,phrases.length)}</div>`).join('')}</div><p class="hint">Full oracle includes reminder text.</p>`;
   const color=(family,title)=>field(family,title,`<label>Matching mode${mode(family+'-mode',filters[family].mode,[['all','Contains all selected colors'],['any','Contains any selected color'],['exact','Exactly the selected colors'],['subset','Only these colors, including colorless'],['multi','Multicolor only'],['colorless','Colorless only']])}</label><div class="guided-colors">${[...'WUBRG'].map(c=>`<label><input type="checkbox" name="${family}-${c}" ${filters[family].values.includes(c)?'checked':''} ${['multi','colorless'].includes(filters[family].mode)?'disabled':''}>${mana('{'+c+'}',true)} ${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[c]}</label>`).join('')}</div><p class="hint">Select colors for all/any/exact/only matching. Multicolor and colorless use no color selection.</p>`);
-  return `<form id="guided-form"><div class="guided-grid">${field('type','Card types and subtypes',`<label>Type names, separated by commas<input name="types" value="${esc(filters.types.join(', '))}" placeholder="e.g. instant, sorcery" maxlength="200"></label><label>Combine types${match('type-match',filters.typeMatch)}</label><p class="hint">Use all for Artifact + Creature; any for Instant OR Sorcery. Subtypes such as Elf work here too.</p>`)}${field('mv','Mana value',`<label>Combine comparisons${match('value-match',filters.valueMatch)}</label>${[0,1].map(i=>`<div class="mana-comparison"><label>Comparison ${i+1}${mode('mv-op-'+i,filters.values[i]?.op|| (i?'<=':'>='),[['<=','At most (≤)'],['<','Less than (<)'],['=','Exactly (=)'],['>=','At least (≥)'],['>','More than (>)'],['!=','Not equal (≠)']])}</label><label>Mana value ${i+1}<input type="number" min="0" step="any" name="mv-${i}" value="${esc(filters.values[i]?.value??'')}" placeholder="Any"></label></div>`).join('')}<p class="hint">All combines a range; any combines alternatives. Blank values add no restriction.</p>`)}${color('color','Card color')}${color('identity','Color identity')}${field('name','Card name',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`)}${field('oracle','Oracle text',`<label>Rules-text phrase<input name="oracle" value="${esc(filters.oracle)}" maxlength="300" placeholder="e.g. whenever a creature dies"></label>`)}${field('cost','Mana cost contains',`<label>Mana symbols<input name="cost" value="${esc(filters.cost)}" maxlength="100" placeholder="e.g. {1}{G}"></label><p class="hint">{C} is colorless mana; {1} is generic mana. Hybrid symbols such as {U/B} stay distinct.</p>`)}${field('symbols','Minimum mana-symbol counts',`<div class="symbol-minimums">${[...'WUBRGC'].map(c=>`<label>${mana('{'+c+'}',true)} ${c==='C'?'Colorless {C}':({W:'White {W}',U:'Blue {U}',B:'Black {B}',R:'Red {R}',G:'Green {G}'})[c]}<input type="number" name="symbol-${c}" min="0" max="20" step="1" value="${filters.symbols[c]||''}" placeholder="0"></label>`).join('')}</div><p class="hint">Each count means at least that many of the exact symbol, all required. Colorless {C} does not mean generic mana.</p>`)}${field('legal','Format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('')}</select></label><p class="hint">Chosen independently of the tracked deck.</p>`)}</div><p id="guided-error" role="alert"></p><button class="secondary" type="submit">Search with these filters</button></form>`;
+  return `<form id="guided-form"><div class="guided-grid">${field('type','Card types and subtypes',`<label>Type names, separated by commas<input name="types" value="${esc(filters.types.join(', '))}" placeholder="e.g. instant, sorcery" maxlength="200"></label><label>Combine types${match('type-match',filters.typeMatch)}</label><p class="hint">Use all for Artifact + Creature; any for Instant OR Sorcery. Subtypes such as Elf work here too.</p>`)}${field('mv','Mana value',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}${color('color','Card color')}${color('identity','Color identity')}${field('name','Card name',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`)}${field('oracle','Oracle text',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}${field('cost','Mana cost contains',`<label>Mana symbols<input name="cost" value="${esc(filters.cost)}" maxlength="100" placeholder="e.g. {1}{G}"></label><p class="hint">{C} is colorless mana; {1} is generic mana. Hybrid symbols such as {U/B} stay distinct.</p>`)}${field('symbols','Minimum mana-symbol counts',`<div class="symbol-minimums">${[...'WUBRGC'].map(c=>`<label>${mana('{'+c+'}',true)} ${c==='C'?'Colorless {C}':({W:'White {W}',U:'Blue {U}',B:'Black {B}',R:'Red {R}',G:'Green {G}'})[c]}<input type="number" name="symbol-${c}" min="0" max="20" step="1" value="${filters.symbols[c]||''}" placeholder="0"></label>`).join('')}</div><p class="hint">Each count means at least that many of the exact symbol, all required. Colorless {C} does not mean generic mana.</p>`)}${field('legal','Format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('')}</select></label><p class="hint">Chosen independently of the tracked deck.</p>`)}</div><p id="guided-error" role="alert"></p><button class="secondary" type="submit">Search with these filters</button></form>`;
 }
 function uniqueFormats(){return [...new Set([...FORMATS,...(filters.legal?[filters.legal]:[])])];}
 function selectedFunctions() {
@@ -675,8 +679,8 @@ function readFilters() {
   const input=$('#raw');if(view==='explore'&&typeof input?.value==='string'&&input.value!==filters.query)filters=parseQuery(input.value);
 }
 function resetResults(){++requestId;loading=false;results=[];total=0;more=false;searched=false;error='';resultContext=null;broadening=null;}
-function runGuidedSearch(){if(!filters.query.trim()){resetResults();render();}else search();}
-function setCondition(family,model,run=true){
+function runGuidedSearch(keepForm=false){if(!filters.query.trim()){resetResults();renderSearchState(keepForm);}else search(false,false,keepForm);}
+function setCondition(family,model,run=true,keepForm=false){
   try{
     const previous=filters,clause=conditionQuery(model,family);filters=replaceCondition(filters,family,clause);
     // One operand cannot encode AND versus OR; retain the player's equivalent guided intent.
@@ -684,27 +688,28 @@ function setCondition(family,model,run=true){
     for(const key of SEARCH_FAMILIES){
       if(filters.locked.includes(key))continue;
       const source=family===key?model:previous;
-      const fields=key==='type'?['types','typeMatch']:key==='mv'?['values','valueMatch']:key==='tags'?['tags','match']:[key];
+      const fields=key==='type'?['types','typeMatch']:key==='mv'?['values','valueMatch']:key==='oracle'?['oracle','oracleMatch']:key==='tags'?['tags','match']:[key];
       for(const field of fields)filters[field]=source[field];
     }
-    if(run)runGuidedSearch();
-    else{if(!filters.query.trim())resetResults();++requestId;loading=false;error='';broadening=null;$('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();$('#results-area').outerHTML=searchResults();$('#broadening-tools').outerHTML=broadeningTools();$('#broadening-tools')?.addEventListener('toggle',e=>{broadeningOpen=e.target.open;});bindSort();}
+    if(run)runGuidedSearch(keepForm);
+    else{if(!filters.query.trim())resetResults();++requestId;loading=false;error='';broadening=null;renderSearchState(true);}
     return true;
   }
   catch(error){const node=$('#guided-error');if(node)node.textContent=error.message;toast(error.message);return false;}
 }
-function applyGuided(family,run=true){
+function applyGuided(family,run=true,keepForm=false){
   const data=new FormData($('#guided-form')),model=structuredClone(filters);
-  if(['name','oracle','cost','legal'].includes(family))model[family]=String(data.get(family)||'');
+  if(['name','cost','legal'].includes(family))model[family]=String(data.get(family)||'');
+  if(family==='oracle'){model.oracle=Array.from({length:Math.max(1,filters.oracle.length)},(_,i)=>({mode:String(data.get('oracle-mode-'+i)),text:String(data.get('oracle-'+i)||'')}));model.oracleMatch=String(data.get('oracle-match'));}
   if(family==='type'){model.types=[...new Set(String(data.get('types')||'').split(',').map(t=>t.trim().toLowerCase()).filter(Boolean))];model.typeMatch=String(data.get('type-match'));}
-  if(family==='mv'){model.values=[0,1].map(i=>({op:String(data.get('mv-op-'+i)),value:String(data.get('mv-'+i)||'')}));model.valueMatch=String(data.get('value-match'));}
+  if(family==='mv'){model.values=Array.from({length:Math.max(1,filters.values.length)},(_,i)=>({op:String(data.get('mv-op-'+i)),value:String(data.get('mv-'+i)||'')}));model.valueMatch=String(data.get('value-match'));}
   if(family==='color'||family==='identity')model[family]={mode:String(data.get(family+'-mode')),values:[...'WUBRG'].filter(c=>data.get(family+'-'+c))};
   if(family==='symbols')model.symbols=Object.fromEntries([...'WUBRGC'].map(c=>[c,Number(data.get('symbol-'+c)||0)]));
-  return setCondition(family,model,run);
+  return setCondition(family,model,run,keepForm);
 }
 function bindGuided(){
   $('#guided-form')?.addEventListener('input',e=>{const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,false);});
-  $('#guided-form')?.addEventListener('change',e=>{const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family);});
+  $('#guided-form')?.addEventListener('change',e=>{const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,e.target.tagName==='INPUT');});
   $('#guided-form')?.addEventListener('submit',e=>{e.preventDefault();const family=document.activeElement?.closest('[data-family]')?.dataset.family;if(family)applyGuided(family);else search();});
   $('#tag-match')?.addEventListener('change',e=>{const model={...filters,match:e.target.value};setCondition('tags',model);});
 }
@@ -777,6 +782,23 @@ $('#app').addEventListener('change',e=>{
 $('#app').addEventListener('click',async e=>{
   if(e.detail>0 && suppressCardClick){suppressCardClick=false;e.preventDefault();return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;readFilters();
+  if(button.dataset.removeFilter){
+    const family=button.dataset.removeFilter,key=family==='mv'?'values':'oracle',index=Number(button.dataset.filterIndex);
+    if(filters.locked.includes(family)||!Number.isInteger(index)||index<0||filters[key].length<2||index>=filters[key].length)return;
+    const model=structuredClone(filters),previousQuery=filters.query;model[key].splice(index,1);
+    if(setCondition(family,model,false)){
+      render();$('#guided-form [name="'+(family==='mv'?'mv-':'oracle-')+Math.min(index,model[key].length-1)+'"]')?.focus();
+      if(filters.query!==previousQuery)runGuidedSearch(true);
+    }
+    return;
+  }
+  if(button.dataset.addFilter){
+    const family=button.dataset.addFilter,key=family==='mv'?'values':'oracle';
+    if(filters.locked.includes(family))return;
+    if(!filters[key].length)filters[key].push(family==='mv'?{op:'>=',value:''}:{mode:'o',text:''});
+    filters[key].push(family==='mv'?{op:'>=',value:''}:{mode:'o',text:''});
+    render();$('#guided-form [name="'+(family==='mv'?'mv-':'oracle-')+(filters[key].length-1)+'"]')?.focus();return;
+  }
   if(button.dataset.collectionSort){const key=button.dataset.collectionSort,current=collectionOptions.sort.replace(/-(asc|desc)$/,'');collectionOptions.sort=current!==key?key:collectionOptions.sort===key?key+(['added','updated','quantity'].includes(key)?'-asc':'-desc'):key;saveCollectionOptions();render();return;}
   if(button.dataset.view){e.preventDefault?.();view=button.dataset.view;render();if(view==='decks')$('#library-title')?.focus();else if(view==='collection')$('#collection-title')?.focus();else $('#raw')?.focus();return;}
   if(button.dataset.editOwned!==undefined){collectionLotDialog(null,Number(button.dataset.editOwned));return;}
@@ -824,16 +846,24 @@ $('#app').addEventListener('click',async e=>{
   if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Matching all” narrows your results; “Matching any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Starting points and their descriptions are curated. Search names and aliases across the bundled Scryfall Oracle Tags snapshot; use the arrow beside a tag to browse its recorded broader and narrower relationships. The snapshot date is shown because live Tagger can change. Use Enter an existing Scryfall tag for newer or other known tags. This searches existing tags; it does not create tagging data.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Inspect a card to choose its deck zone or assign personal role tags. These role tags power deck statistics and are separate from Scryfall’s tags.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander coverage remains partial; review paired commanders and companions manually.</p>`);
 });
 async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Object.assign(new Error(data.error || 'Request failed.'),{status:r.status,retryAfter:data.retryAfter});return data; }
-async function search(append=false,keepBroadening=false) {
-  if(filters.error){error=filters.error;loading=false;render();return;}
+// Input blur may happen while the next row is receiving focus. Keep that form in place
+// during its search, including when the response arrives after the next keystroke.
+function renderSearchState(keepForm=false){
+  if(!keepForm||view!=='explore'){render();return;}
+  $('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();
+  $('#results-area').outerHTML=searchResults();$('#broadening-tools').outerHTML=broadeningTools();
+  $('#broadening-tools')?.addEventListener('toggle',e=>{broadeningOpen=e.target.open;});bindSort();
+}
+async function search(append=false,keepBroadening=false,keepForm=false) {
+  if(filters.error){error=filters.error;loading=false;renderSearchState(keepForm);return;}
   if(!filters.query.trim())filters=parseQuery('game:paper');
   if(!append && (!keepBroadening || (broadening && queryFor(filters,current())!==broadening.query)))broadening=null;
-  if(append && visibleLimit < results.length){visibleLimit+=24;render();return;}
+  if(append && visibleLimit < results.length){visibleLimit+=24;renderSearchState(keepForm);return;}
   const context=append&&resultContext ? resultContext : {query:queryFor(filters,current())};
-  const id=++requestId;loading=true;error='';if(!append){page=1;results=[];visibleLimit=24;}else{visibleLimit+=24;}const requestedPage=append?page+1:1;render();
+  const id=++requestId;loading=true;error='';if(!append){page=1;results=[];visibleLimit=24;}else{visibleLimit+=24;}const requestedPage=append?page+1:1;renderSearchState(keepForm);
   try {const data=await api('/api/search?'+new URLSearchParams({q:context.query,page:requestedPage,order}));if(id!==requestId)return;results=append?[...results,...data.data]:data.data;resultContext=context;total=data.total_cards;more=data.has_more;page=requestedPage;}
   catch(e){if(id!==requestId)return;error=/0 cards|No cards|didn.t match any cards/i.test(e.message)?'No cards matched these filters. A custom tag may be unsupported. Remove a tag, switch to Match any, or broaden your Oracle text.':e.message;more=false;}
-  finally{if(id===requestId){loading=false;searched=true;render();}}
+  finally{if(id===requestId){loading=false;searched=true;renderSearchState(keepForm);}}
 }
 function findCard(id) {return results.find(c=>c.id===id)||current()?.cards.find(e=>e.card.id===id)?.card;}
 function addLabel(c) {
