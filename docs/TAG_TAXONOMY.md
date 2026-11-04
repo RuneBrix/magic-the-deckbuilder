@@ -17,7 +17,7 @@ The generated file contains source URL, upstream timestamp and stable upstream U
 ## User behavior and limits
 
 - Search names, upstream aliases and curated starting labels/descriptions. Spaces and hyphens are interchangeable; exact matches appear first. Results are shown in batches of 30 with a match count and Show more control; Browse all traverses the full snapshot.
-- Use a tag's arrow to see its recorded broader and narrower tags, aliases and original Tagger page. Browse links change the detail view without changing card filters. Add/remove buttons update filters; selected chips survive closing the browser.
+- Use a tag's arrow to see its recorded broader and narrower tags, aliases and original Tagger page. Browse links change the detail view without changing card filters. Add/remove buttons update filters; selected chips sit inside Browse by function, immediately below Combine functions by. Closing the disclosure hides chips and matching controls without removing active filters from the main query.
 - Custom tag accepts names or known aliases. Known aliases resolve to canonical slugs. Unknown names remain usable and are explicitly identified as outside the snapshot; this is not proof of invalidity. Scryfall may reject them or return no cards. Raw advanced syntax remains available.
-- Match all sends space-separated `otag:` terms; Match any joins them with `OR`. The existing View Scryfall query disclosure shows the exact composed query. Other filters are retained.
+- Matching all (AND) sends space-separated `otag:` terms; Matching any (OR) joins them with `OR`. The existing View Scryfall query disclosure shows the exact composed query. Other filters are retained.
 - Discovery itself works without upstream access because the catalog ships with the app. Card results still require internet access. There is no live taxonomy synchronization, fuzzy semantic ranking, or inferred relationship graph.

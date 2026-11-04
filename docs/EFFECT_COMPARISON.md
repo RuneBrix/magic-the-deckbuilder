@@ -4,7 +4,7 @@
 
 ## Broadening and restoration
 
-Broaden this search is a separate secondary disclosure after results. Ignore removes one supported independent condition while retaining every other source expression. The complete all/any function-tag group is removed together, because removing one OR operand could narrow results. Original/current queries and the ignored condition remain visible; Return to original search restores the exact source query, including after an upstream error. Further choices always start from the same original. Sorting retains broadening; applying other search controls begins a new search.
+Broaden this search is a separate secondary disclosure after results, shown only when a supported condition or active broadening exists. The long Ignore one condition / Restore original / No guided condition instruction block is removed; active controls and query explanations remain. Ignore removes one supported independent condition while retaining every other source expression. The complete all/any function-tag group is removed together, because removing one OR operand could narrow results. Original/current queries and the ignored condition remain visible; Return to original search restores the exact source query, including after an upstream error. Further choices always start from the same original. Sorting retains broadening; applying other search controls begins a new search.
 
 Advanced/complex source expressions remain intact and locked conditions are not offered for relaxation. Removing color or legality criteria may expose unsuitable cards, and loaded result pages are not exhaustive. See [Unified search](UNIFIED_SEARCH.md) for projection boundaries.
 

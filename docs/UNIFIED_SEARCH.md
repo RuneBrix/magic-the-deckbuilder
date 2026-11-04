@@ -4,6 +4,8 @@ Issues [#21](https://github.com/RuneBrix/magic-the-deckbuilder/issues/21), [#22]
 
 ## One query
 
+Selected removable function chips and Combine functions by (Matching all / Matching any) live near the top inside Browse by function. Collapsing that disclosure hides its controls while preserving the active query.
+
 The primary search bar contains the effective editable query. Typing projects supported conditions into guided controls and selected function chips without replacing the focused input or changing its cursor. Guided text/number input updates the query while typing; changed controls and form submission run the search. Existing matching choices survive selecting a mode before its first value.
 
 Typing invalidates pending requests. Previously completed results retain their original query context and are labeled when the query has changed; Search updates them. Pagination continues the displayed result query. Clear search and filters, or removing the final guided restriction, returns to the initial state and invalidates old responses. An explicit Search on a blank bar visibly becomes `game:paper`, preserving deliberate broad searches.

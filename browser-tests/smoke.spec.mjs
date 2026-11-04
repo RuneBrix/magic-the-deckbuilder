@@ -65,3 +65,52 @@ test('collection table and staged editor cancel preserve quantities', async ({ p
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('arcana.workspace.v2')).collection[0].qty)).toBe(3);
   await expect(page.locator('.collection-table tbody tr')).toHaveCount(1);
 });
+
+test('Explore fills available width and keeps selected functions inside their disclosure', async ({ page }, testInfo) => {
+  await page.route('**/api/search?**', route => route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } }));
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await expect(page.locator('#results-area')).toBeHidden();
+  await expect(page.locator('#broadening-tools')).toBeHidden();
+  await expect(page.getByText('Discover cards', { exact: true })).toHaveCount(0);
+  await page.locator('#raw').fill('t:creature (otag:ramp OR otag:draw)');
+  await page.locator('#search-form').getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page.locator('.card-tile')).toHaveCount(12);
+  const functions = page.locator('#function-tags');
+  const chips = functions.locator('#selected-functions');
+  await expect(chips).toBeHidden();
+  const summary = functions.locator(':scope > summary');
+  await summary.focus();
+  await page.keyboard.press('Space');
+  await expect(chips).toBeVisible();
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('explore-functions.png') });
+  await expect(chips.getByLabel('Combine functions by')).toHaveValue('any');
+  await chips.getByLabel('Combine functions by').selectOption('all');
+  await expect(page.locator('#raw')).toHaveValue('t:creature (otag:ramp otag:draw)');
+  await chips.getByRole('button', { name: 'Remove ramp filter', exact: true }).click();
+  await expect(page.locator('#raw')).toHaveValue('t:creature otag:draw');
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(chips).toBeHidden();
+  await expect(page.locator('#raw')).toHaveValue('t:creature otag:draw');
+  await noPageOverflow(page);
+  const columns = () => page.locator('.card-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+  if (testInfo.project.name.startsWith('desktop')) {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.locator('#tracked-deck').selectOption('');
+    expect((await page.locator('.explorer').boundingBox()).width).toBe(1920);
+    const fullColumns = await columns();
+    await page.screenshot({ path: testInfo.outputPath('explore-wide.png') });
+    await page.locator('#tracked-deck').selectOption('smoke-deck');
+    expect(await columns()).toBeLessThan(fullColumns);
+    await expect(page.locator('#deck-tracker')).toBeVisible();
+    await noPageOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath('explore-tracker.png') });
+  } else {
+    expect(await columns()).toBe(2);
+    await page.screenshot({ path: testInfo.outputPath('explore-phone.png') });
+  }
+  await page.getByRole('button', { name: 'Clear search and filters', exact: true }).click();
+  await expect(page.locator('#results-area')).toBeHidden();
+  await expect(page.locator('#broadening-tools')).toBeHidden();
+});
