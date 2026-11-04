@@ -63,7 +63,7 @@ main{min-width:0}
 .breadcrumb{margin:0 12px;color:var(--line)}
 .topbar-right{display:flex;align-items:center;font-size:12px;gap:4px}
 .topbar-right button{margin-left:14px}
-.explorer{padding:36px 30px 0;max-width:1260px;margin:auto}
+.explorer{padding:36px 30px 0;width:100%;min-width:0}
 .page-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:28px}
 .page-heading p{color:var(--muted);font-size:12px;margin-top:9px}
 .edition{font-size:12px;color:var(--muted);letter-spacing:1.4px;white-space:nowrap;display:none}
@@ -663,7 +663,7 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .tag-info{font-size:12px;flex-basis:100%;margin:4px 0 12px}
 .tag-info summary{font-size:12px;font-weight:400;min-height:36px;width:max-content;gap:12px;color:var(--muted)}
 .tag-info p{font-size:12px;max-width:70ch;margin:8px 0}
-.selected-functions{margin:18px 0;padding:16px 0;border-bottom:1px solid var(--line)}
+.selected-functions{margin:0 0 18px;padding:0 0 12px;border-bottom:1px solid var(--line)}
 .selected-functions-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
 .selected-functions-heading h3{font-size:13px;font-weight:600}
 .selected-functions-heading label{display:flex;align-items:center;gap:8px}
@@ -695,10 +695,6 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .results-controls{flex-direction:row}
 .results-controls label{font-size:12px;color:var(--muted)}
 .results-controls select{margin-top:6px;text-transform:none;max-width:160px}
-.search-starts{padding:0 0 28px}
-.search-starts>p{font-size:13px;color:var(--muted);margin-bottom:12px}
-.search-starts>div{display:flex;gap:8px;flex-wrap:wrap}
-.search-starts button{min-height:44px}
 .choose-deck{font-size:12px;min-height:36px;margin-right:12px}
 .add-button{min-width:36px;min-height:36px}
 #deck-tracker .panel-title{justify-content:space-between;flex-shrink:0}
@@ -954,3 +950,7 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 @media(max-width:600px){.collection-page{padding:24px 16px 50px}.collection-page .page-heading,.planning-heading{flex-direction:column;align-items:stretch}.collection-row{grid-template-columns:minmax(0,1fr) auto;gap:10px}.collection-row>span{grid-column:1}.collection-row>.row-actions{grid-column:2;grid-row:1/3;flex-direction:column}.planning-totals{grid-template-columns:minmax(0,1fr)}}
 dialog:has(.owned-editor){width:900px;max-width:calc(100vw - 32px);padding:28px}.owned-editor{grid-template-columns:minmax(220px,300px) minmax(300px,1fr);align-items:start;gap:28px}.owned-editor h3{font-size:20px;line-height:1.3}.owned-editor #owned-art{position:sticky;top:0}.owned-editor .settings-actions{flex-wrap:wrap}#owned-load[hidden]{display:none!important}.collection-visual-info{display:flex;flex-direction:column;gap:10px;padding:2px 0 8px;min-width:0}.collection-visual-info h3{font-size:15px;line-height:1.35;margin:0;min-height:40px}.collection-visual-info h3 button{text-align:left;padding:0;overflow-wrap:anywhere}.collection-facts{display:grid;gap:3px;margin:0;font-size:11px;line-height:1.45}.collection-facts>div{display:grid;grid-template-columns:58px minmax(0,1fr);gap:6px}.collection-facts dt{color:var(--muted)}.collection-facts dd{margin:0;overflow-wrap:anywhere}.collection-quantity label{font-size:11px;display:block;margin-bottom:4px}.collection-quantity>div{display:flex;align-items:center;gap:4px}.collection-quantity button{display:grid;place-items:center;width:32px;min-height:32px;border:1px solid var(--line);border-radius:3px}.collection-quantity input{width:66px;min-width:0;padding:6px;text-align:center;border:1px solid var(--line);border-radius:3px;background:var(--surface);color:var(--ink)}.collection-visual-info .collection-actions{border-top:1px solid var(--line);padding-top:6px;justify-content:space-between}.collection-visual-info .collection-actions button{padding:4px 8px}.collection-page .collection-view-visual{align-items:stretch}.collection-page .collection-view-visual .collection-row{height:100%}.collection-page .collection-view-visual .collection-visual-info{flex:1}.collection-visual-info .collection-quantity{margin-top:auto}@media(max-width:700px){dialog:has(.owned-editor){padding:22px}.owned-editor{grid-template-columns:minmax(0,1fr);gap:20px}.owned-editor #owned-art{position:static;max-width:240px;margin:auto}.collection-quantity button{min-height:40px}}
 .owned-editor form{gap:12px;margin-top:0}.owned-editor label{margin:0}.owned-editor p{margin:2px 0}.owned-editor{margin-top:20px}
+
+/* Explore results adapt to their available column, including a visible tracker. */
+.explorer .card-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr))}
+@media(max-width:600px){.explorer .card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

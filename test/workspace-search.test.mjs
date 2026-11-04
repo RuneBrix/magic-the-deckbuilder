@@ -30,7 +30,7 @@ test('tag discovery renders aliases, verified relationships, limits and custom t
   assert.match(html, /data-browse-tag="flicker-creature"/);
   assert.match(html, /outside this snapshot/);
   assert.match(html, /Snapshot \d{4}-\d{2}-\d{2}/);
-  assert.match(html, /All selected functions \(AND\)/);
+  assert.match(html, /Matching all \(AND\)/);
   assert.match(html, /otag:unknown-arcana-tag/);
   vm.runInContext("tagSearch = 'unknown-arcana-tag'; render()", w.context);
   assert.match(w.node('#app').innerHTML, /No matching name or alias/);
@@ -288,13 +288,15 @@ test('deleting the tracked deck clears only that preference, and blocked prefere
 test('exploration separates initial/loading/no-match/error/results and ignores cleared pending searches',async()=>{
   const w=workspace();
   assert.match(w.node('#app').innerHTML,/data-state="initial"/);
-  assert.doesNotMatch(w.node('#app').innerHTML,/id="sort"|What does your deck need/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/id="sort"|Discover cards|search-starts|No guided condition to relax/);
+  assert.match(w.node('#app').innerHTML, /id="results-area"[^>]*hidden/);
+  assert.match(w.node('#app').innerHTML, /id="broadening-tools"[^>]*hidden/);
   let complete;
   w.context.fetch=()=>new Promise(resolve=>complete=resolve);
   const pending=vm.runInContext("filters=parseQuery('otag:ramp'); search()",w.context);
   assert.match(w.node('#app').innerHTML,/data-state="loading"/);
   vm.runInContext("setCondition('tags',{...filters,tags:[]},false)",w.context);
-  assert.match(w.node('#results-area').outerHTML,/data-state="initial"/);
+  assert.match(w.node('#results-area').outerHTML,/data-state="initial" hidden/);
   complete({ok:true,json:async()=>({data:[editorCard('Obsolete')],total_cards:1,has_more:false})});
   await pending;assert.equal(vm.runInContext('results.length',w.context),0);
   w.context.fetch=async()=>({ok:false,json:async()=>({error:'No cards'})});
@@ -354,4 +356,20 @@ test('exploration destination chooser adds directly to Maybeboard without changi
   w.node('#add-destination').value='editor';w.node('#add-zone').value='maybeboard';w.node('#add-destination-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[0].cards.at(-1).zone',w.context),'maybeboard');assert.equal(vm.runInContext('tracker.id',w.context),'');assert.equal(vm.runInContext('stats(decks[0]).total',w.context),3);
   assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
+});
+
+
+test('function matching precedes removable chips inside the disclosure without changing the query on collapse', () => {
+  const w=workspace();
+  vm.runInContext("filters=parseQuery('t:instant (otag:ramp OR otag:draw)'); render()",w.context);
+  const html=w.node('#app').innerHTML;
+  const panel=html.slice(html.indexOf('<details id="function-tags"'),html.indexOf('<section id="results-area"'));
+  assert.match(panel, /id="selected-functions"[\s\S]*Combine functions by[\s\S]*Matching any \(OR\)[\s\S]*Remove ramp filter[\s\S]*for="tag-search"/);
+  const query=vm.runInContext('filters.query',w.context);
+  w.node('#function-tags').toggle({target:{open:false}});
+  assert.equal(vm.runInContext('filters.query',w.context),query);
+  vm.runInContext("setCondition('tags',{...filters,tags:['draw']},false)",w.context);
+  assert.match(vm.runInContext('filters.query',w.context),/t:instant/);
+  assert.doesNotMatch(vm.runInContext('filters.query',w.context),/ramp/);
+  assert.doesNotMatch(vm.runInContext('broadeningTools()',w.context), /Ignore one condition;|No guided condition to relax/);
 });

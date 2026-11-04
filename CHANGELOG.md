@@ -1,5 +1,11 @@
 # Changelog
 
+## Explore width and function-filter placement - 2026-11-04
+
+- Use available Explore width and adaptive result columns while retaining the optional tracker and two-column phone view (#115).
+- Remove initial Discover cards starters and unused conditional regions; retain reversible broadening without the redundant instructions (#118).
+- Keep selected function chips inside Browse by function beneath Matching all / Matching any controls; collapsing preserves the active query (#129).
+
 ## Collection card controls and reset - 2026-11-03
 
 - Give visual cards labeled table-equivalent details, aligned actions and inline Quantity controls. Widen the editor, reset dialog scroll, automatically load all available version pages, and add a typed-confirmation collection reset that preserves decks and persists before applying (PR #86).
