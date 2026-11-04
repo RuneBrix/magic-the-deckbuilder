@@ -27,3 +27,24 @@ jobs:
       - name: Record environment
         run: node -p 'JSON.stringify({node:process.version, platform:process.platform, arch:process.arch})'
       - run: npm test
+  browser:
+    name: Chromium smoke / desktop and phone / light and dark
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: browser-smoke-failure
+          path: test-results/browser/
+          retention-days: 7

@@ -18,6 +18,8 @@ npm test
 
 For compact agent output, use `npm run test:agent`. It runs the same suite, keeps full logs in ignored `test-results/agent-tests.log` and reports failures with a nonzero exit status. [Focused commands and verification scope](docs/DEVELOPMENT.md#verification-and-data).
 
+Optional browser smoke checks use a development-only Playwright dependency: `npm ci`, `npx playwright install chromium`, then `npm run test:browser`. They run with synthetic data in an isolated browser/server on port 4173. [Setup, coverage and limits](docs/BROWSER_TESTING.md).
+
 ## Included
 
 - Create, rename, delete, and switch decks; seven format presets.
@@ -53,7 +55,7 @@ See [the roadmap](docs/ROADMAP.md) for future direction and deferred decisions. 
 
 ## Platform verification (D05 / #5)
 
-[Tests](https://github.com/RuneBrix/magic-the-deckbuilder/actions/workflows/test.yml) runs the native Node suite on Windows, macOS and Linux with Node 22 and 24 for every pull request and main-branch push. Logs record the exact Node version, platform and architecture. No install step or live Scryfall access is required by the suite. A configured matrix is not evidence of a passing run; inspect the run for the commit being reviewed.
+[Tests](https://github.com/RuneBrix/magic-the-deckbuilder/actions/workflows/test.yml) runs the native Node suite on Windows, macOS and Linux with Node 22 and 24 for every pull request and main-branch push. Logs record the exact Node version, platform and architecture. No install step or live Scryfall access is required by the native suite. A separate Chromium smoke job installs the pinned development dependency/browser and uses mocked responses; see [browser checks](docs/BROWSER_TESTING.md). A configured matrix is not evidence of a passing run; inspect the run for the commit being reviewed.
 
 Direct local automated check: Windows, Node v24.14.1, 1 November 2026. Browser checks recorded in DESIGN.md were on Windows; their browser versions were not recorded, so they do not establish a specific supported browser version. macOS/Safari manual checks remain outstanding and #5 remains open.
 

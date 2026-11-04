@@ -26,10 +26,10 @@ Keep status updates and PR descriptions concise. Run independent reads together;
 
 ## Verification and data
 
-`package.json` owns commands. `npm run test:agent` runs the full native suite, prints a summary on success and full output on failure, and writes the latest complete output to ignored `test-results/agent-tests.log`. Exit status is preserved. `npm test` remains unchanged for humans/CI. Pass focused selectors after `--`, for example:
+`package.json` owns commands. `npm run test:agent` runs the full native suite, prints a summary on success and full output on failure, and writes the latest complete output to ignored `test-results/agent-tests.log`. Exit status is preserved. `npm test` remains unchanged for humans/CI and needs no installed packages. Browser smoke is separate: `npm run test:browser` after its development-only setup; see [BROWSER_TESTING.md](BROWSER_TESTING.md). Pass focused selectors after `--`, for example:
 
 ```sh
-npm run test:agent -- --test-name-pattern="optional viewing zones" test/workspace.test.mjs
+npm run test:agent -- --test-name-pattern="optional viewing zones" test/workspace-deck.test.mjs
 ```
 
 | Change | Development checks | Before PR handoff |
@@ -40,7 +40,7 @@ npm run test:agent -- --test-name-pattern="optional viewing zones" test/workspac
 | Storage, backup/import, shared navigation/theme or server | Focused failure/data-preservation checks | One full suite; broader checks across affected surfaces/appearances and request/storage boundaries |
 | Revision after a checked PR | Recheck changed behavior | Repeat affected checks; rerun full suite when shared logic, new failures or integration risk warrants it |
 
-Add tests for meaningful changed behavior/risk; wording-only edits need no new implementation-mirroring assertions. Pure CSS geometry requires browser inspection; markup tests alone cannot establish it. Share browser checks across related issues. Record actual automated/manual results and untested platforms separately. The final full suite remains required for code PRs. Use `git diff --check` on the intended changes.
+Add tests for meaningful changed behavior/risk; wording-only edits need no new implementation-mirroring assertions. Pure CSS geometry requires browser inspection; markup tests alone cannot establish it. Run the relevant automated browser smoke flows when touching their modules or shared layout, then inspect changed visual details that the assertions do not cover. Share browser checks across related issues. Record actual automated/manual results and untested platforms separately. The final full suite remains required for code PRs. Use `git diff --check` on the intended changes.
 
 Loopback EACCES is an environment restriction, not a passing test or evidence of an app regression. Resolve permitted loopback access once before repeating server/launcher checks; report a remaining block accurately. Keep live-network tests opt-in. Use synthetic fixtures/disposable browser data. Preserve the player's origin/storage/server; localhost, 127.0.0.1 and different ports have separate storage. Never clear personal data to test.
 
@@ -50,12 +50,12 @@ Feature contracts own behavior and preservation rules; FEATURES summarizes imple
 
 For interrupted work, use the local TASK_TEMPLATE handoff and selected issue/PR for durable status. Retain unique uncommitted work; remove temporary worktrees only after authorized changes reach the primary checkout. Native packaging/cloud sync and account/model/plugin settings are separate decisions.
 
+Pure rendering/import modules, feature-grouped workspace tests and isolated Chromium smoke automation were authorized and added in PR #133. Extend these along cohesive features rather than replacing the whole app.
+
 ## Options left for developer decision
 
 | Option | Benefit | Cost / decision |
 | --- | --- | --- |
-| Extract cohesive app modules and split workspace tests | Smaller files to inspect; clearer ownership/test selection | Changes imports and the shared VM harness. Prefer one boundary during related feature work over a whole-app refactor. |
-| Automate repeatable browser smoke flows | Fewer manual clicks for geometry, dialogs and navigation checks | Adds tooling, fixtures and maintenance. Choose representative flows and acceptable dependency/setup cost first. |
 | Adjust model, reasoning and unused tool connections | May reduce session usage | Changes account/client workflow and quality tradeoffs. No settings change is part of this repository work. |
 | Use a fresh chat for each coherent implementation batch | Reduces unrelated conversation history | Requires a concise issue/PR handoff; keep revisions in the same implementation chat. The developer chooses when to start a chat. |
 | Compare usage across three similar batches | Reveals whether changes reduce actual allowance consumption | Record elapsed time and token/account usage only where available, plus retries and check counts. No telemetry or token-saving percentage is promised by this PR. |

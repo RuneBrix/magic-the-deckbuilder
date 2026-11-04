@@ -3,7 +3,7 @@
 ## Platform
 web
 ## Stack
-Native browser modules, CSS and a Node.js 22+ standard-library server. No install dependencies, authentication or cloud synchronization. Windows local development; README.md records automated cross-platform coverage and manual verification limits.
+Native browser modules, CSS and a Node.js 22+ standard-library server. No runtime install dependencies, authentication or cloud synchronization. Optional automated browser checks use a pinned Playwright development dependency. Windows local development; README.md records automated cross-platform coverage and manual verification limits.
 ## Users and purpose
 Magic players building decks and exploring cards who currently move between Scryfall, Tagger and Archidekt. Bring discovery, deck editing, statistics and bounded format feedback into one local workspace.
 ## Capabilities and constraints
