@@ -114,3 +114,51 @@ test('Explore fills available width and keeps selected functions inside their di
   await expect(page.locator('#results-area')).toBeHidden();
   await expect(page.locator('#broadening-tools')).toBeHidden();
 });
+
+test('repeatable mana and Oracle filters synchronize, scroll locally and preserve advanced syntax', async ({ page }, testInfo) => {
+  const queries=[];
+  page.on('request', request => {const url=new URL(request.url());if(url.pathname==='/api/search')queries.push(url.searchParams.get('q'));});
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.locator('#tracked-deck').selectOption('');
+  await page.locator('#search-filters > summary').click();
+  const mv=page.locator('[data-family="mv"]'), oracle=page.locator('[data-family="oracle"]');
+  await expect(mv.locator('input')).toHaveCount(1);
+  await expect(oracle.locator('input')).toHaveCount(1);
+  await mv.getByLabel('Combine mana value filter by').selectOption('any');
+  const requestsBeforeAdd=queries.length;
+  for(let i=0;i<5;i++){
+    await mv.getByRole('button',{name:'Add additional mana value filter',exact:true}).focus();
+    await page.keyboard.press('Enter');
+    await expect(mv.locator(`[name="mv-${i+1}"]`)).toBeFocused();
+  }
+  expect(queries.length).toBe(requestsBeforeAdd);
+  await mv.locator('[name="mv-0"]').fill('1');
+  await mv.locator('[name="mv-1"]').fill('2');
+  await mv.locator('[name="mv-5"]').fill('6');
+  await oracle.getByLabel('Combine oracle filter by').selectOption('any');
+  await oracle.getByRole('button',{name:'Add additional oracle filter',exact:true}).click();
+  await expect(oracle.locator('[name="oracle-1"]')).toBeFocused();
+  await oracle.locator('[name="oracle-mode-1"]').selectOption('fo');
+  await oracle.locator('[name="oracle-0"]').fill('Whenever ~ attacks');
+  await oracle.locator('[name="oracle-1"]').fill('flying');
+  await page.locator('#guided-form').getByRole('button',{name:'Search with these filters',exact:true}).click();
+  const expected='(mv>=1 OR mv>=2 OR mv>=6) (o:"Whenever ~ attacks" OR fo:"flying")';
+  await expect(page.locator('#raw')).toHaveValue(expected);
+  await expect.poll(()=>queries.at(-1)).toBe(expected);
+  expect(await mv.locator('.filter-rows').evaluate(el=>el.clientHeight<=244&&el.scrollHeight>el.clientHeight)).toBe(true);
+  await noPageOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('repeatable-filters.png'),fullPage:true});
+  await page.locator('#raw').fill(expected+' usd<5');
+  await expect(mv.locator('input')).toHaveCount(3);
+  await expect(oracle.locator('input')).toHaveCount(2);
+  await oracle.locator('[name="oracle-1"]').fill('haste');
+  await expect(page.locator('#raw')).toHaveValue('(mv>=1 OR mv>=2 OR mv>=6) (o:"Whenever ~ attacks" OR fo:"haste") usd<5');
+  await page.locator('#raw').fill('fo:/draw (one|two)/ mv>=1 mv<=5 mv!=3');
+  await expect(oracle.locator('input')).toBeDisabled();
+  await expect(mv.locator('input')).toHaveCount(3);
+  await mv.locator('[name="mv-2"]').fill('4');
+  await expect(page.locator('#raw')).toHaveValue('fo:/draw (one|two)/ (mv>=1 mv<=5 mv!=4)');
+  await page.getByRole('button',{name:'Clear search and filters',exact:true}).click();
+  await expect(mv.locator('input')).toHaveCount(1);
+  await expect(oracle.locator('input')).toHaveCount(1);
+});

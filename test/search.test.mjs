@@ -74,3 +74,34 @@ test('relaxation uses recognized query conditions and restores original query ex
   assert.deepEqual(searchOptions(f).map(o=>o.key),['mv','tags']);
   const r=relaxSearch(f,null,'tags');assert.equal(r.original.query,query);assert.equal(r.query,'usd<5 mv<=3');assert.deepEqual(r.filters.tags,[]);
 });
+
+test('repeatable mana values preserve every comparison and reject mixed Boolean edits',()=>{
+  const values=[{op:'>=',value:'1'},{op:'<=',value:'5'},{op:'!=',value:'3'},{op:'=',value:''}];
+  for(const valueMatch of ['all','any']){
+    const next=edit('usd<5','mv',{values,valueMatch});
+    assert.deepEqual(next.values,values.slice(0,3));assert.equal(next.valueMatch,valueMatch);
+    assert.equal(next.locked.length,0);assert.ok(next.query.includes('usd<5'));
+    assert.equal(edit(next.query,'legal',{legal:'modern'}).values.length,3);
+  }
+  const query='mv>=1 (mv=2 OR mv=4)';
+  assert.ok(parseQuery(query).locked.includes('mv'));
+  assert.ok(edit(query,'legal',{legal:'modern'}).query.includes(query));
+});
+
+test('Oracle and full-Oracle rows retain text, operators, matching and advanced expressions',()=>{
+  const oracle=[{mode:'o',text:'Whenever ~ attacks'},{mode:'fo',text:'A "quote" and \\ slash'}];
+  for(const oracleMatch of ['all','any']){
+    const next=edit('usd<5','oracle',{oracle,oracleMatch});
+    assert.deepEqual(next.oracle,oracle);assert.equal(next.oracleMatch,oracleMatch);
+    assert.equal(next.locked.length,0);
+    assert.deepEqual(edit(next.query,'mv',{values:[{op:'<',value:'5'}]}).oracle,oracle);
+  }
+  assert.deepEqual(parseQuery('oracle:draw fulloracle:flying').oracle,[{mode:'o',text:'draw'},{mode:'fo',text:'flying'}]);
+  assert.equal(edit('','oracle',{oracle:[{mode:'fo',text:''}]}).query,'');
+  for(const query of ['fo:/draw (one|two)/','-fulloracle:flying','o:draw (fo:flying OR o:haste)']){
+    const state=parseQuery(query);assert.ok(state.locked.includes('oracle'),query);
+    assert.ok(edit(query,'legal',{legal:'modern'}).query.includes(query));
+  }
+  for(const query of ['fo:','fulloracle:','fo:"unfinished'])assert.ok(parseQuery(query).error);
+  assert.throws(()=>conditionQuery({...parseQuery(''),oracle:[{mode:'invalid',text:'draw'}]},'oracle'));
+});

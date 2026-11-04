@@ -1,5 +1,10 @@
 # Changelog
 
+## Repeatable search filters - 2026-11-04
+
+- Start mana-value filtering with one comparison, add more as needed and keep longer lists locally scrollable with all/any matching (#121).
+- Add repeatable Oracle/full-Oracle phrase rows with all/any matching, reminder-text guidance and preserved advanced query expressions (#123).
+
 ## Explore width and function-filter placement - 2026-11-04
 
 - Use available Explore width and adaptive result columns while retaining the optional tracker and two-column phone view (#115).

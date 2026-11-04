@@ -2,7 +2,7 @@
 // Unknown expressions retain their source text; mixed Boolean groups lock affected controls.
 export const SEARCH_FAMILIES = ['name','oracle','type','mv','color','identity','cost','symbols','legal','tags'];
 const emptyColor = () => ({ mode: 'all', values: [] });
-const defaults = () => ({ name:'', oracle:'', types:[], typeMatch:'all', values:[], valueMatch:'all', color:emptyColor(), identity:emptyColor(), cost:'', symbols:{}, legal:'', tags:[], match:'all' });
+const defaults = () => ({ name:'', oracle:[], oracleMatch:'all', types:[], typeMatch:'all', values:[], valueMatch:'all', color:emptyColor(), identity:emptyColor(), cost:'', symbols:{}, legal:'', tags:[], match:'all' });
 const unwrap = node => node?.kind === 'group' ? unwrap(node.child) : node;
 const unique = values => [...new Set(values)];
 const quote = value => JSON.stringify(value);
@@ -24,7 +24,7 @@ function tokenize(source) {
     }
     if(quoted||regex)throw Error('Finish the quoted text or regular expression before searching.');
     const text=source.slice(start,i);
-    if(/^(?:name|n|o|oracle|t|type|otag|f|format|c|color|id|identity|m|mana):$/i.test(text)||/^(?:mv|cmc|manavalue)[<>=!:]+$/i.test(text))throw Error('Finish the search condition before searching.');
+    if(/^(?:name|n|o|oracle|fo|fulloracle|t|type|otag|f|format|c|color|id|identity|m|mana):$/i.test(text)||/^(?:mv|cmc|manavalue)[<>=!:]+$/i.test(text))throw Error('Finish the search condition before searching.');
     tokens.push({text,start,end:i});
   }
   return tokens;
@@ -46,9 +46,10 @@ function parse(source) {
 function textValue(value){if(value.startsWith('"')){try{return JSON.parse(value);}catch{return null;}}return /["/]/.test(value)?null:value;}
 function term(text){
   let m;
-  if((m=text.match(/^(name|n|o|oracle|t|type|otag|f|format):(.+)$/i))){
+  if((m=text.match(/^(name|n|o|oracle|fo|fulloracle|t|type|otag|f|format):(.+)$/i))){
     const value=textValue(m[2]);if(value===null||!value.trim())return null;
-    const family=({n:'name',o:'oracle',t:'type',type:'type',otag:'tags',f:'legal',format:'legal'})[m[1].toLowerCase()]||m[1].toLowerCase();
+    const family=({n:'name',o:'oracle',fo:'oracle',fulloracle:'oracle',t:'type',type:'type',otag:'tags',f:'legal',format:'legal'})[m[1].toLowerCase()]||m[1].toLowerCase();
+    if(family==='oracle')return {family,mode:'all',values:[{mode:/^(fo|fulloracle)$/i.test(m[1])?'fo':'o',text:value}]};
     if(family==='tags'&&!/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(value))return null;
     if(family==='type'&&!/^[a-z0-9][a-z0-9 '\-]*$/i.test(value))return null;
     return {family,mode:'all',values:[family==='tags'||family==='type'||family==='legal'?value.toLowerCase():value]};
@@ -71,7 +72,7 @@ function classify(node){
   const parts=node.children.map(classify);if(parts.some(p=>!p)||parts.some(p=>p.family!==parts[0].family))return null;
   const family=parts[0].family,mode=node.kind==='or'?'any':'all';
   if(family==='symbols')return mode==='all'?{family,mode,values:[...'WUBRGC'].flatMap(s=>Array(Math.max(...parts.map(p=>p.values.filter(x=>x===s).length))).fill(s))}:null;
-  if(['name','oracle','legal','cost'].includes(family))return null;
+  if(['name','legal','cost'].includes(family))return null;
   if(['color','identity'].includes(family)){
     if(parts.some(p=>p.mode!=='all'||(mode==='any'&&p.values.length!==1)))return null;
     return {family,mode,values:unique(parts.flatMap(p=>p.values))};
@@ -83,9 +84,9 @@ function affected(node){
   if(node.kind==='term'){
     const text=node.text.replace(/^[-!]/,'');
     const known=term(text);if(known)return [known.family];
-    const m=text.match(/^(name|n|o|oracle|t|type|otag|f|format|legal|c|color|id|identity|m|mana|mv|cmc|manavalue)(?:[<>=!:])/i);
+    const m=text.match(/^(name|n|o|oracle|fo|fulloracle|t|type|otag|f|format|legal|c|color|id|identity|m|mana|mv|cmc|manavalue)(?:[<>=!:])/i);
     if(!m)return [];
-    const key=m[1].toLowerCase();return /^(m|mana)$/.test(key)?['cost','symbols']:[({n:'name',o:'oracle',t:'type',otag:'tags',f:'legal',format:'legal',c:'color',id:'identity',mana:'cost',cmc:'mv',manavalue:'mv'})[key]||key];
+    const key=m[1].toLowerCase();return /^(m|mana)$/.test(key)?['cost','symbols']:[({n:'name',o:'oracle',fo:'oracle',fulloracle:'oracle',t:'type',otag:'tags',f:'legal',format:'legal',c:'color',id:'identity',mana:'cost',cmc:'mv',manavalue:'mv'})[key]||key];
   }
   return unique((node.children||[node.child]).filter(Boolean).flatMap(affected));
 }
@@ -102,11 +103,12 @@ export function parseQuery(query='') {
     for(const [family,parts] of groups){
       let values=parts.flatMap(p=>p.values);const mode=parts.length===1?parts[0].mode:'all';
       const multiple=parts.length>1;
-      if((multiple&&(!['type','tags','mv','symbols','color','identity'].includes(family)||parts.some(p=>p.mode!=='all')))||(family==='mv'&&values.length>2)){result.locked.push(family);continue;}
+      if(multiple&&(!['type','tags','mv','oracle','symbols','color','identity'].includes(family)||parts.some(p=>p.mode!=='all'))){result.locked.push(family);continue;}
       if(family==='symbols'&&multiple)values=[...'WUBRGC'].flatMap(s=>Array(Math.max(...parts.map(p=>p.values.filter(x=>x===s).length))).fill(s));
       if(family==='type'){result.types=unique(values);result.typeMatch=mode;}
       else if(family==='tags'){result.tags=unique(values);result.match=mode;}
       else if(family==='mv'){result.values=values;result.valueMatch=mode;}
+      else if(family==='oracle'){result.oracle=values;result.oracleMatch=mode;}
       else if(family==='color'||family==='identity')result[family]={mode,values};
       else if(family==='symbols'){result.symbols=Object.fromEntries(unique(values).map(s=>[s,values.filter(x=>x===s).length]));if(Object.values(result.symbols).some(n=>n>20))result.locked.push(family);}
       else result[family]=values[0];
@@ -134,7 +136,11 @@ export function conditionQuery(state,family){
   if(family==='mv'&&state.values.some(v=>v.value!==''&&(!Number.isFinite(Number(v.value))||Number(v.value)<0||!['<','>','<=','>=','=','!='].includes(v.op))))throw Error('Use a nonnegative mana value and a supported comparison.');
   if(family==='symbols'&&Object.values(state.symbols).some(n=>!Number.isInteger(n)||n<0||n>20))throw Error('Use whole symbol counts from 0 to 20.');
   if(family==='cost'&&state.cost.trim()&&!/^(?:\{[a-z0-9/]+\}|[a-z0-9])+$/i.test(state.cost.trim()))throw Error('Use mana symbols such as {1}{G} or {U/B}, without spaces.');
-  if(family==='name'||family==='oracle')return state[family].trim()?(family==='name'?'name:':'o:')+quote(state[family].trim()):'';
+  if(family==='name')return state.name.trim()?'name:'+quote(state.name.trim()):'';
+  if(family==='oracle'){
+    if(state.oracle.some(row=>!['o','fo'].includes(row.mode)))throw Error('Choose Oracle or Full oracle for each phrase.');
+    return combine(state.oracle.filter(row=>row.text.trim()).map(row=>row.mode+':'+quote(row.text.trim())),state.oracleMatch);
+  }
   if(family==='type')return combine(state.types.map(t=>'t:'+quote(t)),state.typeMatch);
   if(family==='tags')return combine(state.tags.map(t=>'otag:'+t),state.match);
   if(family==='mv')return combine(state.values.filter(v=>v.value!=='').map(v=>'mv'+v.op+Number(v.value)),state.valueMatch);
