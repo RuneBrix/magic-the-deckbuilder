@@ -162,3 +162,32 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
   await expect(mv.locator('input')).toHaveCount(1);
   await expect(oracle.locator('input')).toHaveCount(1);
 });
+
+test('additional mana and Oracle rows can be removed by keyboard without changing other filters', async ({ page }, testInfo) => {
+  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.locator('#raw').fill('(mv=1 OR mv=2 OR mv=3) (o:"draw" fo:"flying" o:"~ attacks") usd<5');
+  await page.locator('#search-filters > summary').click();
+  const mv=page.locator('[data-family="mv"]'),oracle=page.locator('[data-family="oracle"]');
+  await mv.getByRole('button',{name:'Remove mana value filter 2',exact:true}).focus();
+  await page.keyboard.press('Enter');
+  await expect(mv.locator('input')).toHaveCount(2);
+  await expect(mv.locator('[name="mv-1"]')).toBeFocused();
+  await expect(mv.locator('[name="mv-1"]')).toHaveValue('3');
+  await expect(page.locator('#raw')).toHaveValue('(mv=1 OR mv=3) (o:"draw" fo:"flying" o:"~ attacks") usd<5');
+  await oracle.getByRole('button',{name:'Remove oracle filter 3',exact:true}).click();
+  await expect(oracle.locator('[name="oracle-1"]')).toBeFocused();
+  await expect(oracle.locator('[name="oracle-mode-1"]')).toHaveValue('fo');
+  await expect(page.locator('#raw')).toHaveValue('(mv=1 OR mv=3) (o:"draw" fo:"flying") usd<5');
+  await noPageOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('remove-filters.png'),fullPage:true});
+  await mv.getByRole('button',{name:'Remove mana value filter 2',exact:true}).click();
+  await expect(mv.locator('[name="mv-0"]')).toBeFocused();
+  await oracle.getByRole('button',{name:'Remove oracle filter 2',exact:true}).click();
+  await expect(oracle.locator('[name="oracle-0"]')).toBeFocused();
+  await expect(page.locator('#raw')).toHaveValue('mv=1 o:"draw" usd<5');
+  await expect(page.locator('[data-remove-filter]')).toHaveCount(0);
+  await oracle.getByRole('button',{name:'Add additional oracle filter',exact:true}).click();
+  await oracle.getByRole('button',{name:'Remove oracle filter 2',exact:true}).click();
+  await expect(oracle.locator('input')).toHaveCount(1);
+  await expect(page.locator('#raw')).toHaveValue('mv=1 o:"draw" usd<5');
+});
