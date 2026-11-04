@@ -4,7 +4,7 @@
 
 - Start mana-value filtering with one comparison, add more as needed and keep longer lists locally scrollable with all/any matching (#121).
 - Add repeatable Oracle/full-Oracle phrase rows with all/any matching, reminder-text guidance and preserved advanced query expressions (#123).
-- Remove individual additional mana-value and Oracle rows while retaining the first row, other filters and keyboard focus.
+- Align mana-value and Oracle filters in evenly spaced rows under shared column headers, with square cross controls. Any row can be removed when multiple exist; preserve one remaining row, other filters and keyboard focus.
 
 ## Explore width and function-filter placement - 2026-11-04
 

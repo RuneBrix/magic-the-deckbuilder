@@ -168,6 +168,19 @@ test('additional mana and Oracle rows can be removed by keyboard without changin
   await page.locator('#raw').fill('(mv=1 OR mv=2 OR mv=3) (o:"draw" fo:"flying" o:"~ attacks") usd<5');
   await page.locator('#search-filters > summary').click();
   const mv=page.locator('[data-family="mv"]'),oracle=page.locator('[data-family="oracle"]');
+  for(const section of [mv,oracle]){
+    await expect(section.locator('.filter-column-head')).toHaveCount(1);
+    await expect(section.locator('[data-remove-filter]:enabled')).toHaveCount(3);
+    expect(await section.locator('.repeatable-filter-row').evaluateAll(rows=>{
+      const boxes=rows.map(row=>row.getBoundingClientRect());
+      return Math.abs((boxes[1].top-boxes[0].bottom)-(boxes[2].top-boxes[1].bottom))<1 && rows.every(row=>{
+        const controls=[...row.children].map(el=>el.getBoundingClientRect());
+        return controls.every(box=>Math.abs(box.top-controls[0].top)<1)&&Math.abs(controls[2].width-controls[2].height)<1;
+      });
+    })).toBe(true);
+  }
+  await expect(oracle.getByText('Text source',{exact:true})).toHaveCount(1);
+  await expect(oracle.getByText('Rules-text phrase',{exact:true})).toHaveCount(1);
   await mv.getByRole('button',{name:'Remove mana value filter 2',exact:true}).focus();
   await page.keyboard.press('Enter');
   await expect(mv.locator('input')).toHaveCount(2);
@@ -185,9 +198,20 @@ test('additional mana and Oracle rows can be removed by keyboard without changin
   await oracle.getByRole('button',{name:'Remove oracle filter 2',exact:true}).click();
   await expect(oracle.locator('[name="oracle-0"]')).toBeFocused();
   await expect(page.locator('#raw')).toHaveValue('mv=1 o:"draw" usd<5');
-  await expect(page.locator('[data-remove-filter]')).toHaveCount(0);
+  await expect(mv.locator('[data-remove-filter]')).toBeDisabled();
+  await expect(oracle.locator('[data-remove-filter]')).toBeDisabled();
   await oracle.getByRole('button',{name:'Add additional oracle filter',exact:true}).click();
   await oracle.getByRole('button',{name:'Remove oracle filter 2',exact:true}).click();
   await expect(oracle.locator('input')).toHaveCount(1);
   await expect(page.locator('#raw')).toHaveValue('mv=1 o:"draw" usd<5');
+  for(const [section,family] of [[oracle,'oracle'],[mv,'mana value']]){
+    await section.getByRole('button',{name:family==='oracle'?'Add additional oracle filter':'Add additional mana value filter',exact:true}).click();
+    await section.getByRole('button',{name:'Remove '+family+' filter 1',exact:true}).focus();
+    await page.keyboard.press('Enter');
+    await expect(section.locator('input')).toHaveCount(1);
+    await expect(section.locator('input')).toBeFocused();
+    await expect(section.locator('input')).toHaveValue('');
+    await expect(section.locator('[data-remove-filter]')).toBeDisabled();
+  }
+  await expect(page.locator('#raw')).toHaveValue('usd<5');
 });
