@@ -33,6 +33,26 @@ test('zone row quantity buttons target only their entry and sideboard does not i
   assert.match(w.node('#app').innerHTML,/Sideboard has 16/);
 });
 
+test('only removing the last command-zone copy asks first and confirms for that entry alone',async()=>{
+  const d=editorDeck(),leader=d.cards[0];leader.qty=2;
+  d.cards.push({...leader,zone:'main'}, {card:editorCard('Partner'),qty:1,tags:[],zone:'command'});
+  const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});
+  vm.runInContext("openDeck('editor')",w.context);
+  const dialog=w.node('#commander-removal');let openCount=0;
+  dialog.showModal=()=>{openCount++;};
+  const clickMinus=()=>w.node('#app').click({target:{closest:()=>({dataset:{zoneMinus:core.entryKey(leader)}})}});
+  await clickMinus();
+  assert.equal(vm.runInContext('decks[0].cards[0].qty',w.context),1);
+  assert.equal(openCount,0);
+  const writes=w.writes.length;
+  await clickMinus();
+  assert.equal(openCount,1);
+  assert.match(w.node('#commander-removal-title').textContent,/Remove Leader/);
+  assert.equal(w.writes.length,writes);
+  w.node('#confirm-commander-removal').onclick();
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards)',w.context)),d.cards.slice(1));
+});
+
 test('the full deck editor can return to the current search with its deck tracked',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("filters=parseQuery('draw')",w.context);
   const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});

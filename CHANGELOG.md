@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck card controls
+
+- Give visual plus, minus and options buttons solid, palette-aware surfaces so they stay readable over light and dark art (#91).
+- Ask before the minus button removes a command-zone entry. Keep the other entries and any copies in other zones (#96).
+- Show only actions inside the Function and Move to flyouts (#98).
+
 ## Ownership and budget estimates
 
 - Choose which deck zones contribute to ownership and cost estimates while keeping all cards visible (#107).

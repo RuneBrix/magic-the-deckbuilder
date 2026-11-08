@@ -42,7 +42,7 @@ test('card action menu scopes moves and details to the chosen entry and supports
   vm.runInContext('openCardActions(key,trigger)',w.context);
   await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'move-menu'}})}});
   assert.match(w.node('#card-submenu').innerHTML,/Maybeboard/);
-  assert.doesNotMatch(w.node('#card-submenu').innerHTML,/>Main deck</);
+  assert.doesNotMatch(w.node('#card-submenu').innerHTML,/>Main deck<|<p\b/);
   await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'move:maybeboard'}})}});
   assert.equal(vm.runInContext('decks[0].cards[1].zone',w.context),'maybeboard');assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards[1].tags)',w.context)),['Removal','Ramp']);
@@ -61,7 +61,7 @@ test('function submenu lists only the named deck labels, assigns a primary witho
   assert.match(html,/data-function="Draw"/);assert.match(html,/data-function="Ramp"/);
   assert.match(html,/data-function="Removal"[^>]*aria-checked="true"/);
   assert.match(html,/role="menuitemradio"/);
-  assert.doesNotMatch(html,/Other deck only/);
+  assert.doesNotMatch(html,/Other deck only|<p\b/);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
   await click({cardAction:'assign-function',function:'Draw'});
   assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Draw,Removal,Ramp');
@@ -138,7 +138,7 @@ test('function submenu handles empty decks, escapes labels, and rejects stale se
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor')",w.context);
   w.context.key=core.entryKey(d.cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};
   vm.runInContext("openCardActions(key,trigger);closeCardSubmenu();showCardSubmenu('function')",w.context);
-  assert.match(w.node('#card-submenu').innerHTML,/No functions in this deck yet/);
+  assert.doesNotMatch(w.node('#card-submenu').innerHTML,/<p\b/);
   assert.match(w.node('#card-submenu').innerHTML,/Add new function/);
   vm.runInContext(`decks[0].cards[0].tags=['<Draw & "ramp">'];closeCardSubmenu();showCardSubmenu('function')`,w.context);
   assert.match(w.node('#card-submenu').innerHTML,/&lt;Draw &amp; &quot;ramp&quot;&gt;/);

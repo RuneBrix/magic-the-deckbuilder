@@ -132,6 +132,14 @@ test('card menus keep deletion available by keyboard and touch', async ({ page, 
   const action = page.getByRole('button', { name: 'Card actions for Smoke Card 1 in Command zone', exact: true });
   if (isMobile) await action.tap();
   else await action.press('Enter');
+  const move = page.getByRole('menuitem', { name: 'Move to…', exact: true });
+  if (isMobile) await move.tap();
+  else await move.press('ArrowRight');
+  const destinations = page.getByRole('menu', { name: 'Move destinations for Smoke Card 1 in Smoke Garden · Command zone' });
+  await expect(destinations.getByRole('menuitem')).toHaveText(['Main deck', 'Sideboard', 'Maybeboard']);
+  await expect(destinations).not.toContainText('Move all entry copies');
+  await page.keyboard.press('Escape');
+  await expect(move).toBeFocused();
   const remove = page.getByRole('menuitem', { name: 'Delete card', exact: true });
   if (isMobile) await remove.tap();
   else await remove.press('Enter');
@@ -140,6 +148,72 @@ test('card menus keep deletion available by keyboard and touch', async ({ page, 
   await expect(keep).toBeFocused();
   await keep.click();
   await expect(action).toBeVisible();
+});
+
+test('commander minus confirms from the deck, tracker and card details', async ({ page, isMobile }) => {
+  const activate = button => isMobile ? button.tap() : button.press('Enter');
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  const minus = page.getByRole('button', { name: 'Remove one Smoke Card 1 from Command zone', exact: true });
+  const confirmation = page.getByRole('dialog', { name: 'Remove Smoke Card 1?', exact: true });
+  const keep = confirmation.getByRole('button', { name: 'Keep commander', exact: true });
+  const storedDeck = () => page.evaluate(() => JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0]);
+  const original = await storedDeck();
+  await activate(minus);
+  await expect(confirmation).toContainText('Command zone in Smoke Garden');
+  await expect(keep).toBeFocused();
+  await activate(keep);
+  await expect(minus).toBeFocused();
+  expect(await storedDeck()).toEqual(original);
+
+  await page.getByRole('button', { name: 'Find cards to add', exact: true }).click();
+  await activate(minus);
+  await expect(keep).toBeFocused();
+  await activate(keep);
+  await expect(minus).toBeFocused();
+  expect(await storedDeck()).toEqual(original);
+  await page.getByRole('button', { name: 'Open full deck', exact: true }).click();
+
+  await activate(page.getByRole('button', { name: 'Inspect Smoke Card 1 in Command zone', exact: true }));
+  const details = page.locator('#dialog');
+  const detailMinus = details.getByRole('button', { name: 'Remove one Smoke Card 1 from Smoke Garden · Command zone' });
+  await activate(detailMinus);
+  await expect(keep).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(detailMinus).toBeFocused();
+  expect(await storedDeck()).toEqual(original);
+  await activate(detailMinus);
+  await activate(confirmation.getByRole('button', { name: 'Remove commander', exact: true }));
+  await expect(details.locator('#detail-quantity')).toHaveText('0');
+  await expect(details.locator('#detail-add')).toBeFocused();
+  expect((await storedDeck()).cards).toEqual(original.cards.slice(1));
+});
+
+test('visual card controls use opaque high-contrast surfaces in all palettes', async ({ page, isMobile }) => {
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  const controls = page.getByRole('article', { name: /Smoke Card 1 · Command zone/ }).locator('.card-side-controls button');
+  await expect(controls).toHaveCount(3);
+  for (const [theme, palette] of [['light', 'green'], ['dark', 'green'], ['dark', 'blue'], ['dark', 'white'], ['dark', 'orange']]) {
+    await page.evaluate(({ theme, palette }) => Object.assign(document.documentElement.dataset, { theme, palette }), { theme, palette });
+    const styles = await controls.evaluateAll(buttons => {
+      const luminance = color => color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(value => Number(value) / 255)
+        .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+        .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+      return buttons.map(button => {
+        const style = getComputedStyle(button), { width, height } = button.getBoundingClientRect();
+        const [dark, light] = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => a - b);
+        return { width, height, opaque: style.backgroundColor.startsWith('rgb('), ratio: (light + .05) / (dark + .05) };
+      });
+    });
+    for (const { width, height, opaque, ratio } of styles) {
+      expect(opaque, `${theme}/${palette}`).toBe(true);
+      expect(ratio, `${theme}/${palette}`).toBeGreaterThanOrEqual(4.5);
+      expect(width).toBe(isMobile ? 44 : 36);
+      expect(height).toBe(width);
+    }
+  }
+  await controls.first().press('Tab');
+  await expect(controls.nth(1)).toBeFocused();
+  await expect(controls.nth(1)).toHaveCSS('outline-style', 'solid');
 });
 
 test('search, printing dialog, keyboard dismissal and reload retain deck data', async ({ page }) => {
