@@ -549,9 +549,9 @@ function showCardSubmenu(type,focus=false) {
     let items;
     if(type==='function') {
       const functions=[...new Set(d.cards.flatMap(e=>e.tags))].sort((a,b)=>a.localeCompare(b));
-      items='<p class="card-submenu-title">Primary function</p>'+(functions.length?functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join(''):'<p class="hint">No functions in this deck yet.</p>')+action('new-function','Add new function…');
+      items=functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join('')+action('new-function','Add new function…');
     } else {
-      items='<p class="card-submenu-title">Move all entry copies to</p>'+Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
+      items=Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
     }
     sub.innerHTML=items;sub.scrollTop=0;
     sub.setAttribute('aria-label',`${type==='function'?'Functions':'Move destinations'} for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
@@ -600,6 +600,21 @@ function removeCopiesDialog(d,key) {
   showDialog(`<h2>Delete ${esc(entry.card.name)}?</h2><p>Remove ${total} ${total===1?'copy':'copies'} from ${esc(d.name)} across all zones, including Maybeboard.</p><p>${matches.map(e=>`${ZONES[zoneFor(e)]}: ${e.qty}`).join(' · ')}</p><div class="workspace-actions"><button id="keep-copies" class="secondary">Keep cards</button><button id="remove-copies" class="danger">Delete ${total} ${total===1?'copy':'copies'}</button></div><p id="remove-copies-error" role="alert"></p>`);
   $('#keep-copies').onclick=()=>$('#dialog').close();$('#keep-copies').focus();
   $('#remove-copies').onclick=()=>{try{changeNamedDeck(d,deck=>removeCardCopies(deck,key));$('#dialog').close();$('#deck-title')?.focus();toast('All copies removed from '+d.name);}catch(error){$('#remove-copies-error').textContent=error.message;}};
+}
+function confirmCommanderRemoval(d,entry,remove) {
+  if(zoneFor(entry)!=='command'||entry.qty!==1)return false;
+  const dialog=$('#commander-removal'),error=$('#commander-removal-error');
+  $('#commander-removal-title').textContent=`Remove ${entry.card.name}?`;
+  $('#commander-removal-description').textContent=`This removes the last copy of this commander from the Command zone in ${d.name}.`;
+  error.hidden=true;error.textContent='';
+  $('#confirm-commander-removal').onclick=()=>{
+    if(!decks.includes(d)||!d.cards.includes(entry)||zoneFor(entry)!=='command'||entry.qty!==1){
+      error.hidden=false;error.textContent='This commander entry changed. Close this dialog and review the deck.';return;
+    }
+    dialog.close();remove();
+  };
+  dialog.showModal();
+  return true;
 }
 $('#card-actions').addEventListener('click',async e=>{
   const button=e.target.closest('[data-card-action]');if(!button){if(!$('#card-submenu').contains(e.target))closeCardSubmenu();return;}if(button.disabled)return;
@@ -852,7 +867,20 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.inspect){inspect(button.dataset.inspect,button.dataset.entry);return;}
   if(button.dataset.chooseAdd){chooseDestination(button.dataset.chooseAdd);return;}
   if(button.dataset.add){addCard(button.dataset.add);return;}
-  if(button.dataset.zoneMinus || button.dataset.zonePlus){const key=button.dataset.zoneMinus || button.dataset.zonePlus;changeDeck(d=>{const e=d.cards.find(x=>entryKey(x)===key);if(!e)return;if(button.dataset.zonePlus){if(e.qty<500)e.qty++;}else if(--e.qty===0)d.cards=d.cards.filter(x=>x!==e);});return;}
+  if(button.dataset.zoneMinus || button.dataset.zonePlus){
+    const d=current(),key=button.dataset.zoneMinus||button.dataset.zonePlus,entry=d?.cards.find(e=>entryKey(e)===key);
+    if(!entry)return;
+    if(button.dataset.zonePlus){
+      if(entry.qty<500)changeNamedDeck(d,()=>{entry.qty++;});
+    }else{
+      const remove=()=>{
+        changeNamedDeck(d,()=>{if(--entry.qty===0)d.cards=d.cards.filter(e=>e!==entry);});
+        if(entry.qty===0&&view==='explore')$('#tracker-heading')?.focus({preventScroll:true});
+      };
+      if(!confirmCommanderRemoval(d,entry,remove))remove();
+    }
+    return;
+  }
   const action=button.dataset.action;
   if(action==='bracket-guidance'){e.preventDefault();deckTab='checks';render();const section=$('#bracket-discussion');section?.scrollIntoView({block:'start'});section?.focus({preventScroll:true});return;}
   if(action==='clear-deck-filters'){editorOptions.search='';render();}
@@ -1038,10 +1066,13 @@ function renderDetailDeck() {
     try {
       if(!decks.includes(d))throw Error('This deck no longer exists.');
       const currentEntry=detailEntry(s);if(!currentEntry)return;
-      if(--currentEntry.qty===0){d.cards=d.cards.filter(e=>e!==currentEntry);s.key=null;}
-      d.updated=new Date().toISOString();save();render();renderDetailDeck();renderDetailRoles();
-      detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Removed one copy from '+context,Boolean(storageError));
-      $(s.key?'#detail-remove':'#detail-add').focus();
+      const remove=()=>{
+        if(--currentEntry.qty===0){d.cards=d.cards.filter(e=>e!==currentEntry);s.key=null;}
+        d.updated=new Date().toISOString();save();render();renderDetailDeck();renderDetailRoles();
+        detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Removed one copy from '+context,Boolean(storageError));
+        $(s.key?'#detail-remove':'#detail-add').focus();
+      };
+      if(!confirmCommanderRemoval(d,currentEntry,remove))remove();
     }catch(error){detailMessage(error.message,true);}
   };
   $('#apply-printing')?.addEventListener('click',()=>{
