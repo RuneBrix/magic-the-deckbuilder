@@ -30,7 +30,16 @@ test('collection planning allocates deterministically and keeps unknown EUR pric
     {card:{...priced,id:'maybe'},qty:4,tags:[],zone:'maybeboard'},
   ]};
   const report=collectionReport(planned,[{card:{...priced,id:'owned-print'},finish:'regular',qty:3}]);
-  assert.deepEqual(report.rows.map(row=>[row.zone,row.owned,row.missing]),[['main',2,0],['sideboard',1,1]]);
-  assert.equal(report.demand,4);assert.equal(report.owned,3);assert.equal(report.missing,1);assert.equal(report.fullCents,250);assert.equal(report.fullUnpriced,2);assert.equal(report.missingUnpriced,1);assert.equal(report.maybeboardExcluded,4);
+  assert.deepEqual(report.rows.map(row=>[row.zone,row.included,row.owned,row.missing]),[['main',true,2,0],['sideboard',true,1,1],['maybeboard',false,null,null]]);
+  assert.equal(report.demand,4);assert.equal(report.owned,3);assert.equal(report.missing,1);assert.equal(report.fullCents,250);assert.equal(report.fullUnpriced,2);assert.equal(report.missingUnpriced,1);
+  const scoped={...planned,budgetZones:['sideboard','maybeboard']};
+  const inventory=[{card:priced,finish:'regular',qty:3}];
+  const adjusted=collectionReport(scoped,inventory);
+  assert.deepEqual(adjusted.rows.map(row=>[row.zone,row.included,row.owned,row.missing]),[['main',false,null,null],['sideboard',true,2,0],['maybeboard',true,1,3]]);
+  assert.equal(adjusted.demand,6);assert.equal(adjusted.owned,3);assert.equal(adjusted.missingCents,375);assert.equal(adjusted.fullUnpriced,2);assert.equal(adjusted.missingUnpriced,0);
+  const empty=collectionReport({...scoped,budgetZones:[]},inventory);
+  assert.equal(empty.demand,0);assert.equal(empty.rows.length,3);
+  assert.deepEqual(readWorkspaceFile(workspaceFile([scoped],inventory)).decks,[scoped]);
+  for(const budgetZones of [null,'main',['main','main'],['unknown'],['__proto__']])assert.throws(()=>workspaceFile([{...planned,budgetZones}]),/Invalid budget zones/);
   assert.equal(parseEuroCents('12.3'),1230);assert.equal(parseEuroCents('12,30'),1230);assert.equal(parseEuroCents('0.01'),1);assert.equal(parseEuroCents('12.345'),null);assert.equal(parseEuroCents(null),null);
 });

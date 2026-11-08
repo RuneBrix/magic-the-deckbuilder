@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 import { esc, mana, printingLabel } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { statPanel } from './statistics-view.js';
@@ -773,6 +773,12 @@ function bind() {
   $('#editor-search')?.addEventListener('input',e=>{editorOptions.search=e.target.value;const d=current();if(view==='deck' && d)$('#editor-card-area').outerHTML=deckCards(d);});
   $('#deck-budget')?.addEventListener('change',e=>{const d=current();if(!d)return;const value=e.target.value.trim();if(!value)delete d.budgetCents;else{const cents=parseEuroCents(value);if(cents===null){toast('Enter a EUR amount with at most two decimals.');render();return;}d.budgetCents=cents;}d.updated=new Date().toISOString();save();render();});
   $('#budget-basis')?.addEventListener('change',e=>{const d=current();if(!d)return;d.budgetBasis=e.target.value;d.updated=new Date().toISOString();save();render();});
+  for(const zone of Object.keys(ZONES))$('#budget-zone-'+zone)?.addEventListener('change',e=>{
+    const d=current();if(!d)return;
+    const zones=new Set(d.budgetZones??DEFAULT_BUDGET_ZONES);
+    if(e.target.checked)zones.add(zone);else zones.delete(zone);
+    d.budgetZones=[...zones];d.updated=new Date().toISOString();save();render();
+  });
   $('#ownership-match')?.addEventListener('change',e=>{const d=current();if(!d)return;d.ownershipMatch=e.target.value;d.updated=new Date().toISOString();save();render();});
   $('#search-filters')?.addEventListener('toggle',e=>{if(e.target.isConnected)filtersOpen=e.target.open;});
   $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected)tagsOpen=e.target.open;});
@@ -1087,7 +1093,8 @@ async function fetchCollection(values,key='names') {const cards=[],missing=[];fo
 async function refreshPrices(d=current()){
   if(!d)return;
   if(priceStates.get(d.id)?.status==='refreshing')return;
-  const entries=d.cards.filter(entry=>['main','command','sideboard'].includes(zoneFor(entry))).map(entry=>({entry,id:entry.card.id})),ids=[...new Set(entries.map(snapshot=>snapshot.id))];
+  const zones=d.budgetZones??DEFAULT_BUDGET_ZONES;
+  const entries=d.cards.filter(entry=>zones.includes(zoneFor(entry))).map(entry=>({entry,id:entry.card.id})),ids=[...new Set(entries.map(snapshot=>snapshot.id))];
   if(!ids.length){toast('No scoped cards to refresh.');return;}
   priceStates.set(d.id,{status:'refreshing'});render();
   try{

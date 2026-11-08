@@ -1,5 +1,11 @@
 # Changelog
 
+## Ownership and budget estimates
+
+- Choose which deck zones contribute to ownership and cost estimates while keeping all cards visible (#107).
+- Use a compact summary with matching labels for deck estimates, collection coverage and the cost to buy remaining copies (#108).
+- Compare budgets against known EUR costs and show how many copies are unpriced (#110).
+
 ## Deck drag destinations
 
 - Give Add to new function the same size as zone destinations in the drag strip (#92).

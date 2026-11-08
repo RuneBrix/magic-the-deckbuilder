@@ -32,6 +32,46 @@ test('deck navigation, sticky header, statistics and budget fit the viewport', a
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
 });
 
+test('budget zones keep every card visible and compare known costs across scope and basis changes', async ({ page }) => {
+  await page.evaluate(() => {
+    const key = 'arcana.workspace.v2';
+    const data = JSON.parse(localStorage.getItem(key));
+    const [commander, main, maybe] = data.decks[0].cards;
+    commander.card.prices.eur = null;
+    maybe.zone = 'maybeboard';
+    data.decks[0].cards = [commander, main, maybe];
+    data.decks[0].budgetCents = 100;
+    localStorage.setItem(key, JSON.stringify(data));
+  });
+  await page.reload();
+  const openBudget = async () => {
+    await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+    await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
+  };
+  await openBudget();
+  const maybe = page.getByRole('checkbox', { name: 'Maybeboard' });
+  const maybeRow = page.getByRole('row').filter({ hasText: 'Smoke Card 3' });
+  const comparison = page.locator('.budget-comparison');
+  await expect(maybe).not.toBeChecked();
+  await expect(maybeRow).toContainText('Outside estimate');
+  await expect(comparison).toContainText('left after known costs');
+  await page.getByLabel('Compare budget against').selectOption('full');
+  await expect(comparison).toContainText('over budget from known costs alone');
+  await page.getByLabel('Compare budget against').selectOption('missing');
+  await maybe.focus();
+  await page.keyboard.press('Space');
+  await expect(maybe).toBeChecked();
+  await expect(maybe).toBeFocused();
+  await expect(maybeRow).not.toContainText('Outside estimate');
+  await expect(comparison).toContainText('over budget from known costs alone');
+  await noPageOverflow(page);
+  await page.reload();
+  await openBudget();
+  await expect(maybe).toBeChecked();
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(4);
+  await expect(comparison).toContainText('over budget from known costs alone');
+});
+
 test('deck drag destinations stay still across gaps and let the page scroll outside', async ({ page, isMobile }, testInfo) => {
   test.skip(isMobile, 'Direct dragging uses a desktop pointer');
   if (testInfo.project.name === 'desktop-dark') await page.setViewportSize({ width: 760, height: 720 });

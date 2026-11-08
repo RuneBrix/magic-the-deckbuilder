@@ -13,9 +13,13 @@ test('version 2 browser storage renders collection and independent deck ownershi
   assert.match(w.node('#app').innerHTML,/1 owned copies/);assert.match(w.node('#app').innerHTML,/matched by rules identity|evaluated independently/i);
   vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
   const html=w.node('#app').innerHTML;
-  assert.match(html,/Ownership & budget/);assert.match(html,/Owned applied<\/span><strong>1/);assert.match(html,/Missing<\/span><strong>2/);assert.match(html,/Unknown/);assert.match(html,/Maybeboard is excluded/);
+  assert.match(html,/Ownership & budget/);assert.match(html,/Covered by collection<\/dt>\s*<dd>1/);assert.match(html,/Copies to buy<\/dt>\s*<dd>2/);assert.match(html,/Unknown/);
   w.node('#deck-budget').change({target:{value:'12.34'}});
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.version,2);assert.equal(saved.decks[0].budgetCents,1234);assert.deepEqual(saved.collection,[owned]);
+  assert.match(w.node('#app').innerHTML,/left after known costs/);
+  assert.match(w.node('#app').innerHTML,/1 unpriced copy/);
+  w.node('#deck-budget').change({target:{value:'1.00'}});
+  assert.match(w.node('#app').innerHTML,/over budget from known costs alone/);
 });
 
 test('collection defaults and saved controls preserve stable added dates and sorting',()=>{
@@ -149,13 +153,17 @@ test('large collection review resumes after cooldown without repeating completed
 
 test('EUR refresh is atomic on failure and updates only stored regular prices after complete exact-id coverage',async()=>{
   const d=editorDeck();for(const entry of d.cards)entry.card.prices={eur:'1.00',usd:'9.99'};
+  d.budgetZones=['maybeboard'];d.cards.push({card:{...editorCard('idea'),prices:{eur:null,usd:'9.99'}},qty:1,tags:[],zone:'maybeboard'});
   const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
   w.context.fetch=async()=>{throw Error('Offline');};
   await vm.runInContext('refreshPrices()',w.context);
-  assert.equal(vm.runInContext("decks.every(d=>d.cards.every(e=>e.card.prices.eur==='1.00'))",w.context),true);assert.match(w.node('#app').innerHTML,/last usable prices were retained/i);
-  w.context.fetch=async(_url,options)=>{const ids=JSON.parse(options.body).ids;return {ok:true,json:async()=>({data:ids.map(id=>({...editorCard(id),prices:{eur:'2.50',usd:'0.01'}})),not_found:[]})};};
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards)',w.context)),d.cards);
+  assert.match(w.node('#app').innerHTML,/last usable prices were retained/i);
+  const requests=[];
+  w.context.fetch=async(_url,options)=>{const ids=JSON.parse(options.body).ids;requests.push(ids);return {ok:true,json:async()=>({data:ids.map(id=>({...editorCard(id),prices:{eur:'2.50',usd:'0.01'}})),not_found:[]})};};
   await vm.runInContext('refreshPrices()',w.context);
-  assert.equal(vm.runInContext("decks.every(d=>d.cards.every(e=>e.card.prices.eur==='2.50'&&e.card.prices.usd==='9.99'))",w.context),true);
+  assert.deepEqual(requests,[['idea']]);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.map(e=>e.card.prices))',w.context)),[{eur:'1.00',usd:'9.99'},{eur:'1.00',usd:'9.99'},{eur:'2.50',usd:'9.99'}]);
   assert.equal(typeof vm.runInContext('decks[0].priceUpdatedAt',w.context),'string');
 });
 
