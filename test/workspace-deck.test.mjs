@@ -33,7 +33,7 @@ test('zone row quantity buttons target only their entry and sideboard does not i
   assert.match(w.node('#app').innerHTML,/Sideboard has 16/);
 });
 
-test('top navigation opens a full deck destination and retains the explorer search',async()=>{
+test('the full deck editor can return to the current search with its deck tracked',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("filters=parseQuery('draw')",w.context);
   const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
   await click({view:'decks'});
@@ -49,7 +49,9 @@ test('top navigation opens a full deck destination and retains the explorer sear
   assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
   await click({tab:'checks'});assert.match(w.node('#app').innerHTML,/Manual review/);
   await click({tab:'stats'});assert.match(w.node('#app').innerHTML,/Mana curve/);
-  await click({view:'explore'});assert.equal(vm.runInContext('filters.query',w.context),'draw');
+  await click({action:'find-cards'});
+  assert.equal(vm.runInContext('filters.query',w.context),'draw');
+  assert.equal(vm.runInContext('tracker.id',w.context),'editor');
 });
 
 test('duplicate is a deep independent backup-compatible copy; delete requires explicit confirmation',()=>{

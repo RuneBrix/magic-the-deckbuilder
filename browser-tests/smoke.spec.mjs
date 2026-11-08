@@ -66,11 +66,51 @@ test('collection table and staged editor cancel preserve quantities', async ({ p
   await expect(page.locator('.collection-table tbody tr')).toHaveCount(1);
 });
 
+test('Explore navigation starts fresh and tracker guidance follows the selector', async ({ page }, testInfo) => {
+  const explore = page.getByRole('button', { name: 'Explore cards', exact: true });
+  const track = page.getByRole('combobox', { name: 'Track deck', exact: true });
+  const raw = page.locator('#raw');
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.getByRole('button', { name: 'Find cards to add', exact: true }).click();
+  await expect(track).toHaveValue('smoke-deck');
+  await expect(raw).toBeFocused();
+  await expect(raw).toHaveValue('');
+  const target = page.locator('.exploration-target');
+  await expect(target.getByText('Quick add: Smoke Garden · Main deck')).toBeVisible();
+  const hide = target.getByRole('button', { name: 'Hide tracker' });
+  await hide.focus();
+  await hide.press('Enter');
+  const show = target.getByRole('button', { name: 'Show tracker' });
+  await expect(show).toBeFocused();
+  await show.press('Enter');
+  await expect(page.locator('#deck-tracker')).toBeVisible();
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('explore-with-tracker.png') });
+
+  await raw.fill('t:creature otag:ramp');
+  await raw.press('Enter');
+  await expect(page.locator('.card-tile')).toHaveCount(3);
+  await page.getByRole('button', { name: 'My decks', exact: true }).click();
+  await explore.focus();
+  await explore.press('Enter');
+  await expect(raw).toBeFocused();
+  await expect(raw).toHaveValue('');
+  await expect(track).toHaveValue('');
+  await expect(page.locator('#search-output')).toBeEmpty();
+  const hint = target.getByText('Browse freely. Choose a destination when adding a card.', { exact: true });
+  await expect(track).toHaveAccessibleDescription(await hint.textContent());
+  const selectorBox = await track.boundingBox();
+  const hintBox = await hint.boundingBox();
+  expect(hintBox.y).toBeGreaterThanOrEqual(selectorBox.y + selectorBox.height);
+  expect(hintBox.x).toBeCloseTo(selectorBox.x, 0);
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('explore-fresh.png') });
+});
+
 test('Explore fills available width and keeps selected functions inside their disclosure', async ({ page }, testInfo) => {
   await page.route('**/api/search?**', route => route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } }));
   await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
-  await expect(page.locator('#results-area')).toBeHidden();
-  await expect(page.locator('#broadening-tools')).toBeHidden();
+  await expect(page.locator('#search-output')).toBeEmpty();
   await expect(page.getByText('Discover cards', { exact: true })).toHaveCount(0);
   await page.locator('#raw').fill('t:creature (otag:ramp OR otag:draw)');
   await page.locator('#search-form').getByRole('button', { name: 'Search', exact: true }).click();
@@ -111,8 +151,7 @@ test('Explore fills available width and keeps selected functions inside their di
     await page.screenshot({ path: testInfo.outputPath('explore-phone.png') });
   }
   await page.getByRole('button', { name: 'Clear search and filters', exact: true }).click();
-  await expect(page.locator('#results-area')).toBeHidden();
-  await expect(page.locator('#broadening-tools')).toBeHidden();
+  await expect(page.locator('#search-output')).toBeEmpty();
 });
 
 test('repeatable mana and Oracle filters synchronize, scroll locally and preserve advanced syntax', async ({ page }, testInfo) => {

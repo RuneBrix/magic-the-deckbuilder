@@ -135,10 +135,10 @@ function selectedFunctions() {
 }
 function explorer() {
   const d=current();
-  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck"><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Quick add: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<span>Browse freely. Choose a destination when adding a card.</span>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div><details id="search-filters" class="search-disclosure" ${filtersOpen?'open':''}><summary>Filters</summary><div id="guided-controls">${guidedControls()}</div></details><details id="function-tags" class="tag-browser" ${tagsOpen?'open':''}><summary>Browse by function <span>Find existing Scryfall tags</span></summary><div class="tag-browser-content"><div id="selected-functions">${selectedFunctions()}</div><label class="tag-search-label" for="tag-search">Find a function</label><div class="tag-search"><input id="tag-search" value="${esc(tagSearch)}" placeholder="e.g. ramp or removal" aria-label="Find function tags"></div><div id="tag-options">${tagOptions()}</div><div class="tag-footer"><button class="text-button" data-action="custom-tag">Enter an existing Scryfall tag…</button><details class="tag-info"><summary>About this tag catalog</summary><p>${TAG_CATALOG.tags.length.toLocaleString()} tags from <a href="https://scryfall.com/docs/api/tags" target="_blank" rel="noreferrer">Scryfall Tagger</a> · Snapshot ${esc(TAG_CATALOG.updated.slice(0,10))}. May lag behind live tags. This bundled catalog does not update live. Entering a tag searches existing Scryfall tagging; it does not create tags.</p></details></div></div></details>${searchResults()}${broadeningTools()}</div>`;
+  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Quick add: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div><details id="search-filters" class="search-disclosure" ${filtersOpen?'open':''}><summary>Filters</summary><div id="guided-controls">${guidedControls()}</div></details><details id="function-tags" class="tag-browser" ${tagsOpen?'open':''}><summary>Browse by function <span>Find existing Scryfall tags</span></summary><div class="tag-browser-content"><div id="selected-functions">${selectedFunctions()}</div><label class="tag-search-label" for="tag-search">Find a function</label><div class="tag-search"><input id="tag-search" value="${esc(tagSearch)}" placeholder="e.g. ramp or removal" aria-label="Find function tags"></div><div id="tag-options">${tagOptions()}</div><div class="tag-footer"><button class="text-button" data-action="custom-tag">Enter an existing Scryfall tag…</button><details class="tag-info"><summary>About this tag catalog</summary><p>${TAG_CATALOG.tags.length.toLocaleString()} tags from <a href="https://scryfall.com/docs/api/tags" target="_blank" rel="noreferrer">Scryfall Tagger</a> · Snapshot ${esc(TAG_CATALOG.updated.slice(0,10))}. May lag behind live tags. This bundled catalog does not update live. Entering a tag searches existing Scryfall tagging; it does not create tags.</p></details></div></div></details><div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
 }
 function searchResults(){
-  if(!searched&&!loading&&!error)return '<section id="results-area" data-state="initial" hidden></section>';
+  if(!searched&&!loading&&!error)return '';
   const noMatch=Boolean(error)&&error.startsWith('No cards');
   const status=loading?'Searching Scryfall…':error?(noMatch?'0 cards found':'Search failed'):total.toLocaleString()+(total===1?' card found':' cards found');
   return `<section id="results-area" aria-labelledby="result-heading" data-state="${loading?'loading':error?(noMatch?'no-match':'error'):searched?'populated':'initial'}"><div class="results-heading"><div><h2 id="result-heading" tabindex="-1">Cards</h2><span id="result-count" role="status" aria-live="polite">${status}</span></div>${searched||loading||error?`<div class="results-controls"><label>Sort results<select id="sort" aria-label="Sort cards">${[['edhrec','Popular first'],['cmc','Mana value'],['name','Name A–Z'],['usd','Price: low first']].map(([v,l])=>`<option value="${v}" ${order===v?'selected':''}>${l}</option>`).join('')}</select></label></div>`:''}</div>
@@ -155,7 +155,7 @@ function tagOptions() {
 }
 function broadeningTools() {
   const options=relaxationOptions(broadening?.original || filters,current());
-  if(!options.length&&!broadening)return '<details id="broadening-tools" hidden></details>';
+  if(!options.length&&!broadening)return '';
   return `<details id="broadening-tools" class="search-disclosure" ${broadeningOpen?'open':''}><summary>Broaden this search</summary><div class="broadening-content">
     ${options.length ? `<div class="relax-options">${options.map(o => `<button class="secondary" data-relax="${esc(o.key)}" ${broadening?.label === o.label ? 'disabled' : ''}>Ignore ${esc(o.label)}</button>`).join('')}</div>` : ''}
     ${broadening ? `<div class="broadening-note" role="status"><p><strong>Why these results:</strong> Ignored ${esc(broadening.label)}. Other original conditions were retained. A match does not guarantee the same effect.</p><p>Original query: <code>${esc(broadening.originalQuery)}</code></p><p>Alternative query: <code>${esc(broadening.query)}</code></p><button class="secondary" data-action="restore-search">Return to original search</button><p class="hint">Applying other search controls starts a new search.</p></div>` : ''}
@@ -679,6 +679,22 @@ function readFilters() {
   const input=$('#raw');if(view==='explore'&&typeof input?.value==='string'&&input.value!==filters.query)filters=parseQuery(input.value);
 }
 function resetResults(){++requestId;loading=false;results=[];total=0;more=false;searched=false;error='';resultContext=null;broadening=null;}
+function clearSearch(){
+  filters=parseQuery('');
+  tagSearch='';
+  resetResults();
+}
+function resetExplore(){
+  clearSearch();
+  tracker.id='';
+  filtersOpen=tagsOpen=broadeningOpen=false;
+  browsedTag='';
+  allTags=false;
+  tagLimit=30;
+  page=1;
+  visibleLimit=24;
+  order='edhrec';
+}
 function runGuidedSearch(keepForm=false){if(!filters.query.trim()){resetResults();renderSearchState(keepForm);}else search(false,false,keepForm);}
 function setCondition(family,model,run=true,keepForm=false){
   try{
@@ -715,10 +731,17 @@ function bindGuided(){
 }
 function refreshSearchTools(){
   $('#query-notes').innerHTML=queryNotes();$('#guided-controls').innerHTML=guidedControls();$('#selected-functions').innerHTML=selectedFunctions();$('#tag-options').innerHTML=tagOptions();
-  $('#broadening-tools').outerHTML=broadeningTools();$('#broadening-tools')?.addEventListener('toggle',e=>{broadeningOpen=e.target.open;});
-  $('#results-area').outerHTML=searchResults();bindGuided();bindSort();
+  refreshSearchOutput();
+  bindGuided();
 }
-function bindSort(){$('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true);});}
+function refreshSearchOutput(){
+  $('#search-output').innerHTML=searchResults()+broadeningTools();
+  bindSearchOutput();
+}
+function bindSearchOutput(){
+  $('#broadening-tools')?.addEventListener('toggle',e=>{if(e.target.isConnected)broadeningOpen=e.target.open;});
+  $('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true);});
+}
 function resizeTracker(width) {
   tracker.width = Math.round(Math.max(280,Math.min(480,width)));
   $('#app').style.setProperty('--tracker-width',tracker.width+'px');
@@ -751,13 +774,12 @@ function bind() {
   $('#deck-budget')?.addEventListener('change',e=>{const d=current();if(!d)return;const value=e.target.value.trim();if(!value)delete d.budgetCents;else{const cents=parseEuroCents(value);if(cents===null){toast('Enter a EUR amount with at most two decimals.');render();return;}d.budgetCents=cents;}d.updated=new Date().toISOString();save();render();});
   $('#budget-basis')?.addEventListener('change',e=>{const d=current();if(!d)return;d.budgetBasis=e.target.value;d.updated=new Date().toISOString();save();render();});
   $('#ownership-match')?.addEventListener('change',e=>{const d=current();if(!d)return;d.ownershipMatch=e.target.value;d.updated=new Date().toISOString();save();render();});
-  $('#broadening-tools')?.addEventListener('toggle',e=>{broadeningOpen=e.target.open;});
-  $('#search-filters')?.addEventListener('toggle',e=>{filtersOpen=e.target.open;});
-  $('#function-tags')?.addEventListener('toggle',e=>{tagsOpen=e.target.open;});
+  $('#search-filters')?.addEventListener('toggle',e=>{if(e.target.isConnected)filtersOpen=e.target.open;});
+  $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected)tagsOpen=e.target.open;});
   $('#search-form')?.addEventListener('submit',e=>{e.preventDefault();readFilters();search();});
   $('#raw')?.addEventListener('input',e=>{filters=parseQuery(e.target.value);++requestId;loading=false;error='';broadening=null;if(!filters.query.trim())resetResults();refreshSearchTools();});
   $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagLimit=30;$('#tag-options').innerHTML=tagOptions();});
-  bindGuided();bindSort();
+  bindGuided();bindSearchOutput();
 }
 addEventListener('click',e=>{
   for(const menu of document.querySelectorAll('.deck-menu[open]'))if(!menu.contains(e.target))menu.open=false;
@@ -800,7 +822,16 @@ $('#app').addEventListener('click',async e=>{
     render();$('#guided-form [name="'+(family==='mv'?'mv-':'oracle-')+(filters[key].length-1)+'"]')?.focus();return;
   }
   if(button.dataset.collectionSort){const key=button.dataset.collectionSort,current=collectionOptions.sort.replace(/-(asc|desc)$/,'');collectionOptions.sort=current!==key?key:collectionOptions.sort===key?key+(['added','updated','quantity'].includes(key)?'-asc':'-desc'):key;saveCollectionOptions();render();return;}
-  if(button.dataset.view){e.preventDefault?.();view=button.dataset.view;render();if(view==='decks')$('#library-title')?.focus();else if(view==='collection')$('#collection-title')?.focus();else $('#raw')?.focus();return;}
+  if(button.dataset.view){
+    e.preventDefault?.();
+    view=button.dataset.view;
+    if(view==='explore')resetExplore();
+    render();
+    if(view==='decks')$('#library-title')?.focus();
+    else if(view==='collection')$('#collection-title')?.focus();
+    else $('#raw')?.focus();
+    return;
+  }
   if(button.dataset.editOwned!==undefined){collectionLotDialog(null,Number(button.dataset.editOwned));return;}
   if(button.dataset.ownedMinus!==undefined||button.dataset.ownedPlus!==undefined){const index=Number(button.dataset.ownedMinus??button.dataset.ownedPlus),lot=collection[index];if(lot)updateOwnedQuantity(index,lot.qty+(button.dataset.ownedPlus!==undefined?1:-1));return;}
   if(button.dataset.removeOwned!==undefined){removeCollectionLot(Number(button.dataset.removeOwned));return;}
@@ -826,7 +857,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='edit'&&current()) openDeck(current().id);
   if(action==='rename') deckForm(current());
   if(action==='settings')settings();
-  if(action==='reset'){filters=parseQuery('');tagSearch='';resetResults();render();$('#raw')?.focus();}
+  if(action==='reset'){clearSearch();render();$('#raw')?.focus();}
   if(action==='retry')search(false,true);
   if(action==='restore-search')await restoreSearch();
   if(action==='more')search(true);
@@ -851,8 +882,7 @@ async function api(url, options) { const r=await fetch(url,options);const data=a
 function renderSearchState(keepForm=false){
   if(!keepForm||view!=='explore'){render();return;}
   $('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();
-  $('#results-area').outerHTML=searchResults();$('#broadening-tools').outerHTML=broadeningTools();
-  $('#broadening-tools')?.addEventListener('toggle',e=>{broadeningOpen=e.target.open;});bindSort();
+  refreshSearchOutput();
 }
 async function search(append=false,keepBroadening=false,keepForm=false) {
   if(filters.error){error=filters.error;loading=false;renderSearchState(keepForm);return;}

@@ -8,8 +8,8 @@ test('search disclosures start closed and preserve the opened state and selected
   const w = workspace();
   assert.doesNotMatch(w.node('#app').innerHTML, /id="search-filters"[^>]*\bopen\b/);
   assert.doesNotMatch(w.node('#app').innerHTML, /id="function-tags"[^>]*\bopen\b/);
-  w.node('#search-filters').toggle({ target: { open: true } });
-  w.node('#function-tags').toggle({ target: { open: true } });
+  w.node('#search-filters').toggle({ target: { open: true, isConnected: true } });
+  w.node('#function-tags').toggle({ target: { open: true, isConnected: true } });
   vm.runInContext("filters=parseQuery('o:\"draw a card\" otag:ramp'); render()", w.context);
   const html = w.node('#app').innerHTML;
   assert.match(html, /id="search-filters"[^>]*\bopen\b/);
@@ -198,9 +198,7 @@ test('tracker visibility and selection preserve the search, editor destination a
   assert.doesNotMatch(w.node('#app').innerHTML,/<aside|data-action="jump-deck"/);
   await click({deck:'second'});
   assert.equal(vm.runInContext('current().id',w.context),'second');
-  await click({view:'explore'});
-  assert.equal(vm.runInContext('current()',w.context),undefined);
-  await click({deck:'second'});await click({action:'find-cards'});
+  await click({action:'find-cards'});
   assert.equal(vm.runInContext('tracker.id',w.context),'second');
   assert.equal(vm.runInContext('filters.query',w.context),'otag:ramp f:modern');
   assert.equal(vm.runInContext('results[0].name',w.context),'Result');
@@ -287,16 +285,13 @@ test('deleting the tracked deck clears only that preference, and blocked prefere
 
 test('exploration separates initial/loading/no-match/error/results and ignores cleared pending searches',async()=>{
   const w=workspace();
-  assert.match(w.node('#app').innerHTML,/data-state="initial"/);
-  assert.doesNotMatch(w.node('#app').innerHTML,/id="sort"|Discover cards|search-starts|No guided condition to relax/);
-  assert.match(w.node('#app').innerHTML, /id="results-area"[^>]*hidden/);
-  assert.match(w.node('#app').innerHTML, /id="broadening-tools"[^>]*hidden/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/id="results-area"|id="broadening-tools"|Discover cards|search-starts/);
   let complete;
   w.context.fetch=()=>new Promise(resolve=>complete=resolve);
   const pending=vm.runInContext("filters=parseQuery('otag:ramp'); search()",w.context);
   assert.match(w.node('#app').innerHTML,/data-state="loading"/);
   vm.runInContext("setCondition('tags',{...filters,tags:[]},false)",w.context);
-  assert.match(w.node('#results-area').outerHTML,/data-state="initial" hidden/);
+  assert.equal(w.node('#search-output').innerHTML,'');
   complete({ok:true,json:async()=>({data:[editorCard('Obsolete')],total_cards:1,has_more:false})});
   await pending;assert.equal(vm.runInContext('results.length',w.context),0);
   w.context.fetch=async()=>({ok:false,json:async()=>({error:'No cards'})});
@@ -313,23 +308,34 @@ test('exploration separates initial/loading/no-match/error/results and ignores c
   assert.match(w.node('#app').innerHTML,/Sort results/);
 });
 
-test('home navigation preserves exploration results, filters, ordering, pagination and broadening', async () => {
+test('top-navigation Explore starts fresh and invalidates a pending result page', async () => {
   const w=workspace({savedDecks:JSON.stringify([editorDeck()]),initialView:null});
-  const navigate=async view=>w.node('#app').click({preventDefault(){},target:{closest:()=>({dataset:{view}})}});
-  await navigate('explore');
+  const click=dataset=>w.node('#app').click({preventDefault(){},target:{closest:()=>({dataset})}});
+  const storedDecks=vm.runInContext('JSON.stringify(decks)',w.context);
+  await click({deck:'editor'});
+  await click({action:'find-cards'});
+  assert.equal(vm.runInContext('tracker.id',w.context),'editor');
+  assert.equal(vm.runInContext('filters.query',w.context),'');
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Found')],total_cards:100,has_more:true})});
-  vm.runInContext("filters=parseQuery('t:instant mv<=3');order='name';filtersOpen=true;tagsOpen=true",w.context);
+  vm.runInContext("filters=parseQuery('t:instant mv<=3 otag:ramp');order='name';filtersOpen=true;tagsOpen=true;tagSearch='ramp'",w.context);
   await vm.runInContext("broaden('mv')",w.context);
-  vm.runInContext('page=2;visibleLimit=48',w.context);
-  const before=vm.runInContext('JSON.stringify({filters,results,resultContext,page,more,order,visibleLimit,broadening,tracker})',w.context);
-  await navigate('decks');
+  let complete;
+  w.context.fetch=()=>new Promise(resolve=>complete=resolve);
+  const pending=vm.runInContext('search(true)',w.context);
+  await click({view:'decks'});
   assert.match(w.node('#app').innerHTML,/id="library-title"/);
-  await navigate('explore');
-  assert.equal(vm.runInContext('JSON.stringify({filters,results,resultContext,page,more,order,visibleLimit,broadening,tracker})',w.context),before);
-  assert.match(w.node('#app').innerHTML,/Ignored Mana values/);
-  assert.match(w.node('#app').innerHTML,/id="search-filters"[^>]*open/);
-  assert.match(w.node('#app').innerHTML,/id="function-tags"[^>]*open/);
-  assert.equal(w.writes.length,0);
+  await click({view:'explore'});
+  complete({ok:true,json:async()=>({data:[editorCard('Obsolete')],total_cards:100,has_more:false})});
+  await pending;
+  assert.equal(vm.runInContext('filters.query',w.context),'');
+  assert.equal(vm.runInContext('filters.tags.length',w.context),0);
+  assert.equal(vm.runInContext('filters.types.length',w.context),0);
+  assert.equal(vm.runInContext('tracker.id',w.context),'');
+  assert.equal(vm.runInContext('results.length',w.context),0);
+  assert.equal(vm.runInContext('broadening',w.context),null);
+  assert.doesNotMatch(w.node('#app').innerHTML,/id="results-area"|id="broadening-tools"|id="(?:search-filters|function-tags)"[^>]*open/);
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),storedDecks);
+  assert.deepEqual(w.writes.map(([key])=>key),['arcana.explorer.v1']);
 });
 
 test('results, details and help expose ordinary card actions without candidate or pair controls', async () => {
@@ -363,10 +369,10 @@ test('function matching precedes removable chips inside the disclosure without c
   const w=workspace();
   vm.runInContext("filters=parseQuery('t:instant (otag:ramp OR otag:draw)'); render()",w.context);
   const html=w.node('#app').innerHTML;
-  const panel=html.slice(html.indexOf('<details id="function-tags"'),html.indexOf('<section id="results-area"'));
+  const panel=html.slice(html.indexOf('<details id="function-tags"'),html.indexOf('<div id="search-output"'));
   assert.match(panel, /id="selected-functions"[\s\S]*Combine functions by[\s\S]*Matching any \(OR\)[\s\S]*Remove ramp filter[\s\S]*for="tag-search"/);
   const query=vm.runInContext('filters.query',w.context);
-  w.node('#function-tags').toggle({target:{open:false}});
+  w.node('#function-tags').toggle({target:{open:false,isConnected:true}});
   assert.equal(vm.runInContext('filters.query',w.context),query);
   vm.runInContext("setCondition('tags',{...filters,tags:['draw']},false)",w.context);
   assert.match(vm.runInContext('filters.query',w.context),/t:instant/);
