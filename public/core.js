@@ -36,6 +36,8 @@ export function resolveTag(value) {
 }
 export const count = deck => deck.cards.reduce((sum, e) => sum + e.qty, 0);
 export const ZONES = { main: 'Main deck', sideboard: 'Sideboard', command: 'Command zone', maybeboard: 'Maybeboard' };
+export const DEFAULT_BUDGET_ZONES = Object.freeze(['main','command','sideboard']);
+const BUDGET_ZONE_ORDER = [...DEFAULT_BUDGET_ZONES,'maybeboard'];
 export const zoneFor = entry => entry.zone ?? (entry.commander ? 'command' : 'main');
 export const entryKey = entry => JSON.stringify([entry.card.oracle_id || entry.card.id, zoneFor(entry)]);
 export const zoneCount = (deck, zone) => count({ cards: deck.cards.filter(e => zoneFor(e) === zone) });
@@ -285,6 +287,7 @@ export function validateBackup(data) {
     if (d.bracket !== undefined && (!Number.isInteger(d.bracket) || !Object.hasOwn(BRACKETS,d.bracket))) throw Error('Invalid assigned Commander bracket.');
     if (d.budgetCents !== undefined && (!Number.isInteger(d.budgetCents) || d.budgetCents < 0 || d.budgetCents > 100_000_000)) throw Error('Invalid deck budget.');
     if (d.budgetBasis !== undefined && !['missing','full'].includes(d.budgetBasis)) throw Error('Invalid deck budget basis.');
+    if (d.budgetZones !== undefined && (!Array.isArray(d.budgetZones) || new Set(d.budgetZones).size !== d.budgetZones.length || ![...d.budgetZones].every(zone=>BUDGET_ZONE_ORDER.includes(zone)))) throw Error('Invalid budget zones.');
     if (d.ownershipMatch !== undefined && !['rules','printing'].includes(d.ownershipMatch)) throw Error('Invalid ownership match mode.');
     if (d.priceUpdatedAt !== undefined && (typeof d.priceUpdatedAt !== 'string' || !Number.isFinite(Date.parse(d.priceUpdatedAt)))) throw Error('Invalid price refresh date.');
     ids.add(d.id);
@@ -335,20 +338,23 @@ export function parseEuroCents(value) {
 
 export function collectionReport(deck, collection) {
   validateBackup([deck]);validateCollection(collection);
-  const mode=deck.ownershipMatch||'rules', zoneOrder={main:0,command:1,sideboard:2};
-  const entries=deck.cards.filter(entry=>Object.hasOwn(zoneOrder,zoneFor(entry))).sort((a,b)=>zoneOrder[zoneFor(a)]-zoneOrder[zoneFor(b)]||a.card.id.localeCompare(b.card.id));
+  const mode=deck.ownershipMatch||'rules', zones=deck.budgetZones??DEFAULT_BUDGET_ZONES;
+  const entries=[...deck.cards].sort((a,b)=>BUDGET_ZONE_ORDER.indexOf(zoneFor(a))-BUDGET_ZONE_ORDER.indexOf(zoneFor(b))||a.card.id.localeCompare(b.card.id));
   const matchKey=card=>mode==='printing'?card.id:rulesIdentity(card);
   const available=new Map();
   for(const lot of collection){const key=matchKey(lot.card);if(key)available.set(key,(available.get(key)||0)+lot.qty);}
   let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0;
   const rows=entries.map(entry=>{
-    const key=matchKey(entry.card),have=key?(available.get(key)||0):0,used=Math.min(entry.qty,have),needed=entry.qty-used,unitCents=parseEuroCents(entry.card.prices?.eur);
+    const key=matchKey(entry.card),zone=zoneFor(entry),included=zones.includes(zone),unitCents=parseEuroCents(entry.card.prices?.eur);
+    const row={entry,zone,included,demand:entry.qty,unitCents,identityResolved:Boolean(key)};
+    if(!included)return {...row,owned:null,missing:null};
+    const have=available.get(key)||0,used=Math.min(entry.qty,have),needed=entry.qty-used;
     if(key)available.set(key,have-used);
     demand+=entry.qty;owned+=used;missing+=needed;
     if(unitCents===null){fullUnpriced+=entry.qty;missingUnpriced+=needed;}else{fullCents+=unitCents*entry.qty;missingCents+=unitCents*needed;}
-    return {entry,zone:zoneFor(entry),demand:entry.qty,owned:used,missing:needed,unitCents,identityResolved:Boolean(key)};
+    return {...row,owned:used,missing:needed};
   });
-  return {mode,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced,maybeboardExcluded:deck.cards.filter(entry=>zoneFor(entry)==='maybeboard').reduce((sum,entry)=>sum+entry.qty,0)};
+  return {mode,zones,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced};
 }
 
 

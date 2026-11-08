@@ -1,9 +1,57 @@
 import { collectionReport, ZONES } from './core.js';
 import { esc, euro } from './view-utils.js';
 
-export function budgetPanel(d,collection,state){
-  const report=collectionReport(d,collection),basis=d.budgetBasis||'missing',estimate=basis==='full'?report.fullCents:report.missingCents,unpriced=basis==='full'?report.fullUnpriced:report.missingUnpriced;
-  const budget=d.budgetCents,comparison=budget===undefined?'No budget set.':unpriced?'Budget comparison unavailable until every scoped copy has a EUR price.':estimate<=budget?`${euro(budget-estimate)} remaining against the ${basis} estimate.`:`${euro(estimate-budget)} over the ${basis} budget.`;
-  const estimateLabel=(cents,unknown)=>`${euro(cents)}${unknown?` + ${unknown} unpriced ${unknown===1?'copy':'copies'}`:''}`;
-  return `<div class="planning"><header class="planning-heading"><div><h2>Ownership & budget</h2><p>Main deck, Command zone and Sideboard are included. Maybeboard is excluded${report.maybeboardExcluded?` (${report.maybeboardExcluded} ${report.maybeboardExcluded===1?'copy':'copies'})`:''}.</p></div><button class="secondary" data-action="refresh-prices" ${state?.status==='refreshing'?'disabled':''}>${state?.status==='refreshing'?'Refreshing…':'Refresh EUR prices'}</button></header><div class="planning-totals"><div><span>Required</span><strong>${report.demand}</strong></div><div><span>Owned applied</span><strong>${report.owned}</strong></div><div><span>Missing</span><strong>${report.missing}</strong></div><div><span>Full deck estimate</span><strong>${estimateLabel(report.fullCents,report.fullUnpriced)}</strong></div><div><span>Missing-copy estimate</span><strong>${estimateLabel(report.missingCents,report.missingUnpriced)}</strong></div></div><div class="planning-controls"><label>Budget in EUR<input id="deck-budget" inputmode="decimal" value="${budget===undefined?'':(budget/100).toFixed(2)}" placeholder="Optional"></label><label>Budget compares<select id="budget-basis"><option value="missing" ${basis==='missing'?'selected':''}>Missing-copy estimate</option><option value="full" ${basis==='full'?'selected':''}>Full deck estimate</option></select></label><label>Ownership matching<select id="ownership-match"><option value="rules" ${report.mode==='rules'?'selected':''}>Any printing of the same card</option><option value="printing" ${report.mode==='printing'?'selected':''}>Exact stored printing only</option></select></label></div><p class="budget-comparison">${esc(comparison)}</p>${state?.status==='failed'?`<p class="query-error" role="alert">Price refresh failed; last usable prices were retained. ${esc(state.error)}</p>`:''}<p class="hint">Regular EUR prices use each stored deck printing. Unknown prices stay unknown. Estimates exclude finish and condition adjustments, shipping and tax. Owned copies allocate in a stable order: Main deck, Command zone, Sideboard, then printing ID. Each deck is evaluated independently.</p><div class="planning-table"><div class="planning-row planning-header"><span>Card</span><span>Zone</span><span>Need</span><span>Owned</span><span>Missing</span><span>EUR each</span></div>${report.rows.map(row=>`<div class="planning-row"><span><strong>${esc(row.entry.card.name)}</strong>${!row.identityResolved&&report.mode==='rules'?'<small>Rules identity unavailable</small>':''}</span><span>${esc(ZONES[row.zone])}</span><span>${row.demand}</span><span>${row.owned}</span><span>${row.missing}</span><span>${row.unitCents===null?'Unknown':euro(row.unitCents)}</span></div>`).join('')}</div>${d.priceUpdatedAt?`<p class="hint">Prices last refreshed <time datetime="${esc(d.priceUpdatedAt)}">${esc(new Date(d.priceUpdatedAt).toLocaleString())}</time>.</p>`:'<p class="hint">Prices have not been refreshed in this workspace.</p>'}</div>`;
+const estimateLabels = { missing: 'Cost to buy', full: 'Deck estimate' };
+
+function budgetComparison(budget, estimate, unpriced, zones) {
+  if (!zones.length) return 'Select zones to estimate their cost.';
+  if (budget === undefined) return 'Enter a budget to compare it with the selected estimate.';
+  if (estimate > budget) return `${euro(estimate - budget)} over budget${unpriced ? ' from known costs alone' : ''}.`;
+  if (unpriced) return `${euro(budget - estimate)} left after known costs. Unpriced copies may change the result.`;
+  return `${euro(budget - estimate)} left in the budget.`;
+}
+
+export function budgetPanel(d, collection, state) {
+  const report = collectionReport(d, collection), basis = d.budgetBasis ?? 'missing';
+  const estimate = basis === 'full' ? report.fullCents : report.missingCents;
+  const unpriced = basis === 'full' ? report.fullUnpriced : report.missingUnpriced;
+  const budget = d.budgetCents, refreshing = state?.status === 'refreshing';
+  const estimateValue = (cents, unknown) => `${euro(cents)}${unknown ? `<small>+ ${unknown} unpriced ${unknown === 1 ? 'copy' : 'copies'}</small>` : ''}`;
+
+  return `<div class="planning">
+    <header class="planning-heading">
+      <h2>Ownership & budget</h2>
+      <button class="secondary" data-action="refresh-prices" ${refreshing || !report.demand ? 'disabled' : ''}>${refreshing ? 'Refreshing…' : 'Refresh EUR prices'}</button>
+    </header>
+    <fieldset class="planning-scope">
+      <legend>Zones in estimate</legend>
+      <div>${Object.entries(ZONES).map(([zone, label]) => `<label><input type="checkbox" id="budget-zone-${zone}" ${report.zones.includes(zone) ? 'checked' : ''}> ${label}</label>`).join('')}</div>
+    </fieldset>
+    <dl class="planning-totals">
+      <div><dt>Copies in estimate</dt><dd>${report.demand}</dd></div>
+      <div><dt>Covered by collection</dt><dd>${report.owned}</dd></div>
+      <div><dt>Copies to buy</dt><dd>${report.missing}</dd></div>
+      <div><dt>${estimateLabels.full}</dt><dd>${estimateValue(report.fullCents, report.fullUnpriced)}</dd></div>
+      <div><dt>${estimateLabels.missing}</dt><dd>${estimateValue(report.missingCents, report.missingUnpriced)}</dd></div>
+    </dl>
+    <div class="planning-controls">
+      <label>Budget in EUR<input id="deck-budget" inputmode="decimal" value="${budget === undefined ? '' : (budget / 100).toFixed(2)}" placeholder="Optional"></label>
+      <label>Compare budget against<select id="budget-basis">${Object.entries(estimateLabels).map(([value, label]) => `<option value="${value}" ${basis === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+      <label>Ownership matching<select id="ownership-match"><option value="rules" ${report.mode === 'rules' ? 'selected' : ''}>Any printing of the same card</option><option value="printing" ${report.mode === 'printing' ? 'selected' : ''}>Exact stored printing only</option></select></label>
+    </div>
+    <p class="budget-comparison">${esc(budgetComparison(budget, estimate, unpriced, report.zones))}</p>
+    ${state?.status === 'failed' ? `<p class="query-error" role="alert">Price refresh failed. Last usable prices were retained. ${esc(state.error)}</p>` : ''}
+    <p class="hint">Regular EUR prices for stored printings. Refresh applies to the selected zones.</p>
+    <div class="planning-table" tabindex="0" role="region" aria-label="Deck cards in all zones">
+      <table aria-label="Deck cards in all zones">
+        <thead><tr><th scope="col">Card</th><th scope="col">Zone</th><th scope="col">Copies</th><th scope="col">Covered</th><th scope="col">To buy</th><th scope="col">EUR each</th></tr></thead>
+        <tbody>${report.rows.length ? report.rows.map(row => `<tr>
+          <th scope="row">${esc(row.entry.card.name)}${row.included && !row.identityResolved && report.mode === 'rules' ? '<small>Rules identity unavailable</small>' : ''}</th>
+          <td>${ZONES[row.zone]}${row.included ? '' : '<small>Outside estimate</small>'}</td>
+          <td>${row.demand}</td><td>${row.owned ?? '—'}</td><td>${row.missing ?? '—'}</td><td>${row.unitCents === null ? 'Unknown' : euro(row.unitCents)}</td>
+        </tr>`).join('') : '<tr><td colspan="6">Add cards to see ownership and costs here.</td></tr>'}</tbody>
+      </table>
+    </div>
+    ${d.priceUpdatedAt ? `<p class="hint">Last price refresh <time datetime="${esc(d.priceUpdatedAt)}">${esc(new Date(d.priceUpdatedAt).toLocaleString())}</time>.</p>` : '<p class="hint">Prices have not been refreshed for this deck.</p>'}
+  </div>`;
 }

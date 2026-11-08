@@ -34,4 +34,10 @@ Delete entire collection is available in the Collection header. It offers a work
 
 Collection data lives in browser localStorage for the exact app origin (normally http://localhost:3000), in the `collection` property of the `arcana.workspace.v2` JSON value. This same value contains decks, so do not remove the whole key to reset inventory. It belongs to the current browser profile, not a file in the repository; exported workspace JSON files are separate snapshots. localhost and 127.0.0.1 use separate browser storage.
 
-Workspace v2 retains collection and deck planning. Each deck independently allocates ownership across Main/Command/Sideboard, excluding Maybeboard. No cloud account or global deck reservation is introduced.
+## Ownership and budget
+
+Select any combination of Main deck, Command zone, Sideboard and Maybeboard for each deck's estimate. Main deck, Command zone and Sideboard are selected by default for new decks and older backups. The complete card table stays visible. Rows outside the estimate retain their quantities and unit prices and do not receive ownership allocations. An empty selection pauses the comparison. The zone selection is saved per deck and included in JSON exports.
+
+Each deck independently allocates owned copies across selected zones in Main deck, Command zone, Sideboard, Maybeboard order, then by printing ID. The Deck estimate includes every copy in the selected zones. Cost to buy includes only copies the collection does not cover. Both use regular EUR quotes for the stored printing and exclude finish or condition adjustments, shipping and tax.
+
+An optional EUR budget compares against either estimate. Estimates show the priced subtotal and the number of unpriced copies. Known costs above budget establish an overage. Otherwise an incomplete estimate shows the allowance left after known costs. Refresh requests regular EUR quotes for the selected zones and retains saved prices if the request fails.
