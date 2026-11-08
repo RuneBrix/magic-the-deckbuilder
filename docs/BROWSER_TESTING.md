@@ -30,7 +30,8 @@ API requests receive deterministic fixture responses, and external requests rece
 
 - Deck navigation, scrolling/sticky navigation, Statistics and Ownership & budget rendering, and horizontal overflow.
 - Search results, card-printing dialog fit, keyboard Escape dismissal and same-context reload preservation.
-- Explore width at 1920px with/without tracking, two phone card columns, hidden initial regions, function-chip query synchronization and keyboard disclosure collapse.
+- Explore width at 1920px with/without tracking, two phone card columns, empty initial output, function-chip query synchronization and keyboard disclosure collapse.
+- Fresh top-navigation Explore entry, deck-editor entry with tracking, keyboard tracker toggle and guidance position.
 - Collection table, automatically loaded printing choices, dialog fit and cancelling a staged quantity edit without changing saved holdings.
 
 Failures retain screenshots and Playwright traces under ignored `test-results/browser/`; use `npx playwright show-trace <trace.zip>` for a specific trace. The CI browser job installs Chromium on Ubuntu and uploads failure artifacts for seven days. Native Node CI remains independent of browser/development dependency installation.

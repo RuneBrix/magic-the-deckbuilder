@@ -696,7 +696,8 @@ input::placeholder,textarea::placeholder{font-style:italic;font-weight:400;opaci
 .exploration-target{margin:0 0 24px;gap:12px 20px;align-items:flex-end}
 .exploration-target>label{display:block;max-width:100%;width:220px;color:var(--ink)}
 .exploration-target select{margin-top:6px;width:100%;text-transform:none;text-overflow:ellipsis}
-.exploration-target>span{flex:1;min-width:160px;font-size:12px;line-height:1.6;align-self:center}
+.exploration-target>span{flex:1;min-width:160px;min-height:40px;font-size:12px;line-height:1.6;align-content:center}
+.exploration-target>p{flex-basis:100%;margin:0;line-height:1.6}
 .exploration-target .text-button{margin-left:0;min-height:40px}
 .explorer h1{font-size:32px}
 .results-heading h2{font-size:23px}

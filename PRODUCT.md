@@ -7,7 +7,7 @@ Native browser modules, CSS and a Node.js 22+ standard-library server. No runtim
 ## Users and purpose
 Magic players building decks and exploring cards who currently move between Scryfall, Tagger and Archidekt. Bring discovery, deck editing, statistics and bounded format feedback into one local workspace.
 ## Capabilities and constraints
-My decks is startup/reload home and opens a dedicated editor. Explore cards retains search during session navigation and can track a separate deck or none. Guided filters and function discovery share one editable Scryfall query; unsupported expressions remain intact. Taxonomy and Commander Game Changer data are dated snapshots with documented update limits.
+My decks is startup/reload home and opens a dedicated editor. Top-navigation Explore cards starts with a blank search and no tracked deck. Find cards to add retains the session search and tracks the open deck. Guided filters and function discovery share one editable Scryfall query; unsupported expressions remain intact. Taxonomy and Commander Game Changer data are dated snapshots with documented update limits.
 
 Main deck, Sideboard, Command zone and Maybeboard persist in browser storage. Maybeboard holds ideas outside playing totals, statistics, construction checks and bracket calculations. Personal functions are ordered private labels, separate from Scryfall classifications. Complete JSON preserves printings, zones, functions and bracket assignments; text interchange preserves the selected names/quantities/zones contract. Imports and edits preserve existing data on validation failure.
 

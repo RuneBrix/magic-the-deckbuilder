@@ -1,5 +1,11 @@
 # Changelog
 
+## Explore entry and tracking
+
+- Start fresh from top-navigation Explore cards. Find cards to add keeps the current search and tracks the open deck (#116).
+- Place destination guidance beneath Track deck when browsing without a deck (#117).
+- Render results and broadening sections only when needed (#118).
+
 ## Repeatable search filters - 2026-11-04
 
 - Start mana-value filtering with one comparison, add more as needed and keep longer lists locally scrollable with all/any matching (#121).
