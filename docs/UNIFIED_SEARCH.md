@@ -8,6 +8,8 @@ Selected removable function chips and Combine functions by (Matching all / Match
 
 The primary search bar contains the effective editable query. Typing projects supported conditions into guided controls and selected function chips without replacing the focused input or changing its cursor. Guided text/number input updates the query while typing; changed controls and form submission run the search. Existing matching choices survive selecting a mode before its first value.
 
+Filters starts with Card name and gives each family a separate disclosure. The header summarizes the active filter families and query-only expression count. Search with these filters runs the current query from the header and leaves the disclosure state intact. The filter grid adapts to the space available beside the optional tracker.
+
 Typing invalidates pending requests. Previously completed results retain their original query context and are labeled when the query has changed; Search updates them. Pagination continues the displayed result query. Clear search and filters, or removing the final guided restriction, returns to the initial state and invalidates old responses. An explicit Search on a blank bar visibly becomes `game:paper`, preserving deliberate broad searches.
 
 ## Guided expressions
@@ -51,9 +53,9 @@ Comparison broadening removes only a representable independent condition (the en
 
 ## Function discovery
 
-The subordinate Find a function input searches names and aliases. Labels distinguish curated starting points, the full bundled catalog, matching tags and relationship navigation. Add filter / Remove filter changes the query; Related only browses recorded relationships and moves focus to the detail heading. Load-more labels identify the next matching or catalog batch. Counts and snapshot provenance remain in secondary help.
+Find a function searches names and aliases and shows the match count beneath the field as you type. An empty field shows curated starting points. Add filter / Remove filter changes the query. Related browses recorded relationships and focuses the detail heading. Show next adds another batch of matching tags. The snapshot date is in workspace Help.
 
-Selected functions and their all/any choice remain outside the browser disclosure. Enter an existing Scryfall tag searches known tagging data; it does not create public tags. Aliases resolve against the snapshot for this entry flow; outside-snapshot tags are permitted with an explicit unsupported/no-match warning. Taxonomy acquisition/update scope is unchanged; see [Tag taxonomy](TAG_TAXONOMY.md).
+Selected functions and their all/any choice sit inside Browse by function. A valid name with zero catalog matches offers Add as an unlisted function in the same panel. The action adds an `otag:` filter and runs the current query. The panel labels unlisted tags and explains that Scryfall may reject them or return no cards. Catalog results use the canonical tag slug. See [Tag taxonomy](TAG_TAXONOMY.md).
 
 ## Verification
 

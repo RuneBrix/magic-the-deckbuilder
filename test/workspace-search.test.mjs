@@ -10,16 +10,19 @@ test('search disclosures start closed and preserve the opened state and selected
   assert.doesNotMatch(w.node('#app').innerHTML, /id="function-tags"[^>]*\bopen\b/);
   w.node('#search-filters').toggle({ target: { open: true, isConnected: true } });
   w.node('#function-tags').toggle({ target: { open: true, isConnected: true } });
+  w.node('#guided-form').toggle({ target: { open: true, isConnected: true, dataset:{guidedFamily:'oracle'} } });
   vm.runInContext("filters=parseQuery('o:\"draw a card\" otag:ramp'); render()", w.context);
   const html = w.node('#app').innerHTML;
   assert.match(html, /id="search-filters"[^>]*\bopen\b/);
   assert.match(html, /id="function-tags"[^>]*\bopen\b/);
+  assert.match(html, /data-guided-family="oracle" open/);
+  assert.match(html, /id="applied-filter-summary">Oracle phrase · Function tags/);
   assert.match(html, /name="oracle-0" value="draw a card"/);
   assert.match(html, /aria-label="Remove ramp filter"/);
   assert.doesNotMatch(html, /data-action="backup"|data-action="restore"/);
 });
 
-test('tag discovery renders aliases, verified relationships, limits and custom tag guidance', () => {
+test('tag discovery renders aliases, verified relationships, visible counts and inline unlisted tags', () => {
   const w = workspace();
   vm.runInContext("tagSearch = 'blink'; browsedTag = 'flicker'; filters=parseQuery('otag:unknown-arcana-tag'); render()", w.context);
   const html = w.node('#app').innerHTML;
@@ -29,14 +32,18 @@ test('tag discovery renders aliases, verified relationships, limits and custom t
   assert.match(html, /Narrower tags/);
   assert.match(html, /data-browse-tag="flicker-creature"/);
   assert.match(html, /outside this snapshot/);
-  assert.match(html, /Snapshot \d{4}-\d{2}-\d{2}/);
+  assert.match(html, /id="tag-match-count"[^>]*>[\d,.]+ matching tags?/);
   assert.match(html, /Matching all \(AND\)/);
   assert.match(html, /otag:unknown-arcana-tag/);
-  vm.runInContext("tagSearch = 'unknown-arcana-tag'; render()", w.context);
-  assert.match(w.node('#app').innerHTML, /No matching name or alias/);
-  vm.runInContext("tagSearch = ''; allTags = true; render()", w.context);
-  assert.match(w.node('#app').innerHTML, /Browsing the full bundled catalog/);
-  assert.match(w.node('#app').innerHTML, /Show next 30 catalog tags/);
+  w.node('#tag-search').input({target:{value:'unknown arcana function'}});
+  assert.equal(w.node('#tag-match-count').textContent,'0 matching tags');
+  assert.match(w.node('#tag-options').innerHTML,/data-tag="unknown-arcana-function"[^>]*>Add “unknown arcana function” as an unlisted function/);
+  assert.doesNotMatch(w.node('#tag-options').innerHTML,/Tag relationships/);
+  w.node('#tag-search').input({target:{value:'tag:unexpected'}});
+  assert.doesNotMatch(w.node('#tag-options').innerHTML,/data-tag=/);
+  assert.match(w.node('#tag-options').innerHTML,/Use up to 80 letters/);
+  w.node('#tag-search').input({target:{value:'a'}});
+  assert.match(w.node('#tag-options').innerHTML,/Show next \d+ matching tags/);
 });
 
 test('upstream no-match responses explain recovery and possible unsupported custom tags', async () => {
@@ -111,6 +118,7 @@ test('typed query projects controls without replacing the focused search input; 
   assert.equal(w.node('#raw'),raw);assert.equal(raw.selectionStart,12);assert.equal(raw.selectionEnd,12);
   assert.equal(w.node('#app').innerHTML,shell);
   assert.match(w.node('#guided-controls').innerHTML,/value="instant, sorcery"/);
+  assert.equal(w.node('#applied-filter-summary').textContent,'Types · Function tags · 1 query-only expression');
   assert.match(w.node('#selected-functions').innerHTML,/Remove ramp filter/);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
   await w.node('#app').click({target:{closest:()=>({dataset:{tag:'ramp'}})}});

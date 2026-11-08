@@ -338,12 +338,62 @@ test('Explore fills available width and keeps selected functions inside their di
   await expect(page.locator('#search-output')).toBeEmpty();
 });
 
+test('Explore panels submit independently and add unlisted functions inline', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  const filters = page.locator('#search-filters'), raw = page.locator('#raw');
+  const submit = page.getByRole('button', { name: 'Search with these filters', exact: true });
+  await raw.fill('name:"Sol Ring" usd<5');
+  await expect(page.locator('#applied-filter-summary')).toHaveText('Card name · 1 query-only expression');
+  await submit.press('Enter');
+  await expect(page.locator('.card-tile')).toHaveCount(3);
+  await expect(filters).not.toHaveAttribute('open', '');
+
+  await filters.locator(':scope > summary').press('Space');
+  const nameFilter = filters.locator('.guided-family').first();
+  await expect(nameFilter.locator('summary')).toHaveText('Card name');
+  const name = nameFilter.getByLabel('Name phrase');
+  await expect(name).toBeHidden();
+  await nameFilter.locator('summary').press('Enter');
+  await expect(name).toHaveValue('Sol Ring');
+  await name.fill('Forest');
+  await submit.click();
+  await expect(raw).toHaveValue('name:"Forest" usd<5');
+  await expect(name).toBeVisible();
+  await expect(filters.locator('[data-guided-family="type"] input')).toBeHidden();
+  const columns = await filters.locator('.guided-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+  expect(columns > 1).toBe(testInfo.project.name.startsWith('desktop'));
+
+  await page.locator('#function-tags > summary').press('Enter');
+  const lookup = page.getByRole('searchbox', { name: 'Find a function' });
+  const matches = page.locator('#tag-match-count');
+  await expect(matches).toContainText('starting points');
+  await lookup.fill('blink');
+  await expect(matches).toHaveText(/^[1-9][\d,.]* matching tags?$/);
+  await expect(page.getByRole('button', { name: 'Add flicker filter', exact: true })).toBeVisible();
+  await lookup.fill('tag:invalid');
+  await expect(matches).toHaveText('0 matching tags');
+  await expect(page.getByRole('button', { name: /as an unlisted function/ })).toHaveCount(0);
+  await lookup.fill('arcana example function');
+  const add = page.getByRole('button', { name: 'Add “arcana example function” as an unlisted function', exact: true });
+  await expect(add).toBeVisible();
+  await expect(raw).toHaveValue('name:"Forest" usd<5');
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('explore-filter-panels.png'), fullPage:true });
+  await add.press('Enter');
+  await expect(raw).toHaveValue('name:"Forest" usd<5 otag:arcana-example-function');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remove arcana-example-function filter', exact: true })).toBeFocused();
+  await expect(name).toBeVisible();
+});
+
 test('repeatable mana and Oracle filters synchronize, scroll locally and preserve advanced syntax', async ({ page }, testInfo) => {
   const queries=[];
   page.on('request', request => {const url=new URL(request.url());if(url.pathname==='/api/search')queries.push(url.searchParams.get('q'));});
   await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
   await page.locator('#tracked-deck').selectOption('');
   await page.locator('#search-filters > summary').click();
+  await page.locator('#filter-heading-mv').click();
+  await page.locator('#filter-heading-oracle').click();
   const mv=page.locator('[data-family="mv"]'), oracle=page.locator('[data-family="oracle"]');
   await expect(mv.locator('input')).toHaveCount(1);
   await expect(oracle.locator('input')).toHaveCount(1);
@@ -364,7 +414,7 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
   await oracle.locator('[name="oracle-mode-1"]').selectOption('fo');
   await oracle.locator('[name="oracle-0"]').fill('Whenever ~ attacks');
   await oracle.locator('[name="oracle-1"]').fill('flying');
-  await page.locator('#guided-form').getByRole('button',{name:'Search with these filters',exact:true}).click();
+  await page.getByRole('button',{name:'Search with these filters',exact:true}).click();
   const expected='(mv>=1 OR mv>=2 OR mv>=6) (o:"Whenever ~ attacks" OR fo:"flying")';
   await expect(page.locator('#raw')).toHaveValue(expected);
   await expect.poll(()=>queries.at(-1)).toBe(expected);
@@ -390,6 +440,8 @@ test('additional mana and Oracle rows can be removed by keyboard without changin
   await page.getByRole('button',{name:'Explore cards',exact:true}).click();
   await page.locator('#raw').fill('(mv=1 OR mv=2 OR mv=3) (o:"draw" fo:"flying" o:"~ attacks") usd<5');
   await page.locator('#search-filters > summary').click();
+  await page.locator('#filter-heading-mv').click();
+  await page.locator('#filter-heading-oracle').click();
   const mv=page.locator('[data-family="mv"]'),oracle=page.locator('[data-family="oracle"]');
   for(const section of [mv,oracle]){
     await expect(section.locator('.filter-column-head')).toHaveCount(1);
