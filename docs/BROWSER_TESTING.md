@@ -34,6 +34,7 @@ API requests receive deterministic fixture responses, and external requests rece
 - Card-control contrast across all palettes, keyboard and touch flyouts, and commander minus confirmation from the editor, tracker and card details.
 - Search results, card-printing dialog fit, keyboard Escape dismissal and same-context reload preservation.
 - Explore width at 1920px with/without tracking, two phone card columns, empty initial output, function-chip query synchronization and keyboard disclosure collapse.
+- Explore filter header submission without toggling, independent filter-family disclosures, live function match counts, and inline unlisted function entry.
 - Fresh top-navigation Explore entry, deck-editor entry with tracking, keyboard tracker toggle and guidance position.
 - Collection table, automatically loaded printing choices, dialog fit and cancelling a staged quantity edit without changing saved holdings.
 

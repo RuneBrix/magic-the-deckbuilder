@@ -1,5 +1,10 @@
 # Changelog
 
+## Explore filter panels
+
+- Give Filters and Browse by function distinct panels. Expand filter families individually, see the active conditions in the header, and run the search from that header (#119).
+- Give Find a function a visible field boundary and live match count. Add a valid unlisted function from the lookup when the catalog has no match (#127).
+
 ## Deck card controls
 
 - Give visual plus, minus and options buttons solid, palette-aware surfaces so they stay readable over light and dark art (#91).

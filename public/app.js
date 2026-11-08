@@ -44,8 +44,9 @@ try {
 let view = 'decks', deckTab = 'cards', results = [], total = 0, page = 1, more = false, loading = false, error = '', requestId = 0, searched = false;
 let filters = parseQuery('');
 let filtersOpen = false, tagsOpen = false;
+const openFilterFamilies = new Set();
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
-let browsedTag = '', tagLimit = 30, allTags = false;
+let browsedTag = '', tagLimit = 30;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
 let previewKey = '', previewDeck = '', cardActionTrigger = null;
@@ -117,25 +118,54 @@ function render() {
 function queryNotes() {
   return `${filters.error?`<p class="query-error" role="alert">${esc(filters.error)} Guided edits are paused; your query is unchanged.</p>`:''}${filters.opaque.length&&!filters.error?`<details class="query-help"><summary>Query-only expressions · ${filters.opaque.length}</summary><p>These expressions stay verbatim in the search. Complex or unsupported expressions cannot be edited with guided controls${filters.locked.length?'; affected controls are disabled':''}.</p>${filters.opaque.map(text=>`<code>${esc(text)}</code>`).join('')}<p>Supported controls cover positive type/tag groups, mana-value comparisons, color modes, symbol minimums, Oracle/full-Oracle phrases, one name and one format. Edit other expressions directly above.</p></details>`:''}`;
 }
+function appliedFiltersSummary() {
+  if(filters.error)return 'Query incomplete or invalid';
+  const labels=relaxationOptions(filters,current()).map(option=>option.label);
+  if(filters.opaque.length)labels.push(`${filters.opaque.length} query-only ${filters.opaque.length===1?'expression':'expressions'}`);
+  return labels.join(' · ')||'No filters applied';
+}
 function guidedControls() {
   const selected=(value,current)=>value===current?'selected':'';
   const mode=(name,current,options,label='')=>`<select name="${name}" ${label?`aria-label="${label}"`: ''}>${options.map(([v,l])=>`<option value="${v}" ${selected(v,current)}>${l}</option>`).join('')}</select>`;
   const match=(name,current)=>mode(name,current,[['all','Matching all (AND)'],['any','Matching any (OR)']]);
-  const field=(family,title,content)=>`<fieldset data-family="${family}" ${filters.locked.includes(family)?'disabled':''}><legend>${title}</legend>${content}${filters.locked.includes(family)?'<p class="hint">Edit this condition in the query above.</p>':''}</fieldset>`;
+  const field=(family,title,content)=>{
+    const locked=filters.locked.includes(family),summaryId=`filter-heading-${family}`;
+    return `<details class="guided-family" data-guided-family="${family}" ${openFilterFamilies.has(family)?'open':''}><summary id="${summaryId}">${title}${locked?' <span>Query only</span>':''}</summary><fieldset data-family="${family}" aria-labelledby="${summaryId}" ${locked?'disabled':''}>${locked?'<p class="hint">Edit this condition in the query above.</p>':''}${content}</fieldset></details>`;
+  };
   const removeRow=(family,i,total)=>`<button type="button" class="remove-filter-row" data-remove-filter="${family}" data-filter-index="${i}" aria-label="Remove ${family==='mv'?'mana value':'oracle'} filter ${i+1}" title="Remove ${family==='mv'?'mana value':'oracle'} filter ${i+1}" ${total===1?'disabled':''}>${icon('close',16)}</button>`;
   const values=filters.values.length?filters.values:[{op:'>=',value:''}],phrases=filters.oracle.length?filters.oracle:[{mode:'o',text:''}];
   const valueRows=`<div class="filter-rows" role="region" aria-label="Mana-value comparisons" tabindex="0"><div class="filter-column-head mana-columns" aria-hidden="true"><span>Comparison</span><span>Mana value</span><span></span></div>${values.map((row,i)=>`<div class="repeatable-filter-row mana-columns">${mode('mv-op-'+i,row.op,[['<=','At most (≤)'],['<','Less than (<)'],['=','Exactly (=)'],['>=','At least (≥)'],['>','More than (>)'],['!=','Not equal (≠)']],'Comparison '+(i+1))}<input type="number" min="0" step="any" name="mv-${i}" value="${esc(row.value)}" aria-label="Mana value ${i+1}" placeholder="Any">${removeRow('mv',i,values.length)}</div>`).join('')}</div>`;
   const oracleRows=`<div class="filter-rows" role="region" aria-label="Oracle phrases" tabindex="0"><div class="filter-column-head oracle-columns" aria-hidden="true"><span>Text source</span><span>Rules-text phrase</span><span></span></div>${phrases.map((row,i)=>`<div class="repeatable-filter-row oracle-columns">${mode('oracle-mode-'+i,row.mode,[['o','Oracle'],['fo','Full oracle']],'Text source '+(i+1))}<input name="oracle-${i}" value="${esc(row.text)}" aria-label="Rules-text phrase ${i+1}" maxlength="300" placeholder="e.g. whenever ~ attacks">${removeRow('oracle',i,phrases.length)}</div>`).join('')}</div><p class="hint">Full oracle includes reminder text.</p>`;
   const color=(family,title)=>field(family,title,`<label>Matching mode${mode(family+'-mode',filters[family].mode,[['all','Contains all selected colors'],['any','Contains any selected color'],['exact','Exactly the selected colors'],['subset','Only these colors, including colorless'],['multi','Multicolor only'],['colorless','Colorless only']])}</label><div class="guided-colors">${[...'WUBRG'].map(c=>`<label><input type="checkbox" name="${family}-${c}" ${filters[family].values.includes(c)?'checked':''} ${['multi','colorless'].includes(filters[family].mode)?'disabled':''}>${mana('{'+c+'}',true)} ${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[c]}</label>`).join('')}</div><p class="hint">Select colors for all/any/exact/only matching. Multicolor and colorless use no color selection.</p>`);
-  return `<form id="guided-form"><div class="guided-grid">${field('type','Card types and subtypes',`<label>Type names, separated by commas<input name="types" value="${esc(filters.types.join(', '))}" placeholder="e.g. instant, sorcery" maxlength="200"></label><label>Combine types${match('type-match',filters.typeMatch)}</label><p class="hint">Use all for Artifact + Creature; any for Instant OR Sorcery. Subtypes such as Elf work here too.</p>`)}${field('mv','Mana value',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}${color('color','Card color')}${color('identity','Color identity')}${field('name','Card name',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`)}${field('oracle','Oracle text',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}${field('cost','Mana cost contains',`<label>Mana symbols<input name="cost" value="${esc(filters.cost)}" maxlength="100" placeholder="e.g. {1}{G}"></label><p class="hint">{C} is colorless mana; {1} is generic mana. Hybrid symbols such as {U/B} stay distinct.</p>`)}${field('symbols','Minimum mana-symbol counts',`<div class="symbol-minimums">${[...'WUBRGC'].map(c=>`<label>${mana('{'+c+'}',true)} ${c==='C'?'Colorless {C}':({W:'White {W}',U:'Blue {U}',B:'Black {B}',R:'Red {R}',G:'Green {G}'})[c]}<input type="number" name="symbol-${c}" min="0" max="20" step="1" value="${filters.symbols[c]||''}" placeholder="0"></label>`).join('')}</div><p class="hint">Each count means at least that many of the exact symbol, all required. Colorless {C} does not mean generic mana.</p>`)}${field('legal','Format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('')}</select></label><p class="hint">Chosen independently of the tracked deck.</p>`)}</div><p id="guided-error" role="alert"></p><button class="secondary" type="submit">Search with these filters</button></form>`;
+  return `<form id="guided-form"><div class="guided-grid">${field('name','Card name',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`)}${field('type','Card types and subtypes',`<label>Type names, separated by commas<input name="types" value="${esc(filters.types.join(', '))}" placeholder="e.g. instant, sorcery" maxlength="200"></label><label>Combine types${match('type-match',filters.typeMatch)}</label><p class="hint">Use all for Artifact + Creature; any for Instant OR Sorcery. Subtypes such as Elf work here too.</p>`)}${field('mv','Mana value',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}${color('color','Card color')}${color('identity','Color identity')}${field('oracle','Oracle text',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}${field('cost','Mana cost contains',`<label>Mana symbols<input name="cost" value="${esc(filters.cost)}" maxlength="100" placeholder="e.g. {1}{G}"></label><p class="hint">{C} is colorless mana; {1} is generic mana. Hybrid symbols such as {U/B} stay distinct.</p>`)}${field('symbols','Minimum mana-symbol counts',`<div class="symbol-minimums">${[...'WUBRGC'].map(c=>`<label>${mana('{'+c+'}',true)} ${c==='C'?'Colorless {C}':({W:'White {W}',U:'Blue {U}',B:'Black {B}',R:'Red {R}',G:'Green {G}'})[c]}<input type="number" name="symbol-${c}" min="0" max="20" step="1" value="${filters.symbols[c]||''}" placeholder="0"></label>`).join('')}</div><p class="hint">Each count means at least that many of the exact symbol, all required. Colorless {C} does not mean generic mana.</p>`)}${field('legal','Format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('')}</select></label><p class="hint">Chosen independently of the tracked deck.</p>`)}</div><p id="guided-error" role="alert"></p></form>`;
 }
 function uniqueFormats(){return [...new Set([...FORMATS,...(filters.legal?[filters.legal]:[])])];}
 function selectedFunctions() {
   return `<section class="selected-functions" aria-label="Selected function filters"><div class="selected-functions-heading"><h3>Selected functions</h3><label>Combine functions by<select id="tag-match"><option value="all" ${filters.match==='all'?'selected':''}>Matching all (AND)</option><option value="any" ${filters.match==='any'?'selected':''}>Matching any (OR)</option></select></label></div><div class="active-tags">${filters.tags.map(t=>`<button class="tag-option selected" data-tag="${esc(t)}" aria-label="Remove ${esc(t)} filter">${esc(t.replaceAll('-',' '))} ${icon('close',12)}</button>`).join('')}</div></section>`;
 }
+function searchPanels() {
+  const matches=tagMatches();
+  return `<div class="filters-panel">
+    <details id="search-filters" class="search-disclosure search-panel" ${filtersOpen?'open':''}>
+      <summary id="filters-heading" aria-labelledby="filters-title" aria-describedby="applied-filter-summary"><span id="filters-title" class="search-panel-title">Filters</span><span id="applied-filter-summary">${appliedFiltersSummary()}</span></summary>
+      <div id="guided-controls">${guidedControls()}</div>
+    </details>
+    <button id="search-guided" class="secondary" type="submit" form="guided-form">Search with these filters</button>
+  </div>
+  <details id="function-tags" class="tag-browser search-panel" ${tagsOpen?'open':''}>
+    <summary id="function-tags-heading"><span class="search-panel-title">Browse by function</span></summary>
+    <div class="tag-browser-content">
+      <div id="selected-functions">${selectedFunctions()}</div>
+      <label class="tag-search-label" for="tag-search">Find a function</label>
+      <input id="tag-search" type="search" value="${esc(tagSearch)}" maxlength="200" placeholder="e.g. ramp or removal" aria-describedby="tag-match-count">
+      <p id="tag-match-count" role="status">${tagMatchCount(matches)}</p>
+      <div id="tag-options">${tagOptions(matches)}</div>
+    </div>
+  </details>`;
+}
 function explorer() {
   const d=current();
-  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Quick add: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div><details id="search-filters" class="search-disclosure" ${filtersOpen?'open':''}><summary>Filters</summary><div id="guided-controls">${guidedControls()}</div></details><details id="function-tags" class="tag-browser" ${tagsOpen?'open':''}><summary>Browse by function <span>Find existing Scryfall tags</span></summary><div class="tag-browser-content"><div id="selected-functions">${selectedFunctions()}</div><label class="tag-search-label" for="tag-search">Find a function</label><div class="tag-search"><input id="tag-search" value="${esc(tagSearch)}" placeholder="e.g. ramp or removal" aria-label="Find function tags"></div><div id="tag-options">${tagOptions()}</div><div class="tag-footer"><button class="text-button" data-action="custom-tag">Enter an existing Scryfall tag…</button><details class="tag-info"><summary>About this tag catalog</summary><p>${TAG_CATALOG.tags.length.toLocaleString()} tags from <a href="https://scryfall.com/docs/api/tags" target="_blank" rel="noreferrer">Scryfall Tagger</a> · Snapshot ${esc(TAG_CATALOG.updated.slice(0,10))}. May lag behind live tags. This bundled catalog does not update live. Entering a tag searches existing Scryfall tagging; it does not create tags.</p></details></div></div></details><div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
+  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Quick add: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div>${searchPanels()}<div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
 }
 function searchResults(){
   if(!searched&&!loading&&!error)return '';
@@ -146,12 +176,28 @@ function searchResults(){
   ${error?`<div class="empty-state" role="alert"><h3>${noMatch?'No cards matched':'Search couldn’t finish'}</h3><p>${esc(error)}</p><div><button class="secondary" data-action="reset">Clear search and filters</button>${!noMatch?'<button class="primary" data-action="retry">Try again</button>':''}</div></div>`:loading&&!results.length?'<div class="loading-state" role="status"><p>Loading cards…</p></div>':`<div class="card-grid" aria-busy="${loading}">${results.slice(0,visibleLimit).map(cardTile).join('')}</div>`}
   ${(more||visibleLimit<results.length)&&!error?`<button class="load-more secondary" data-action="more" ${loading?'disabled':''}>${loading?'Loading…':'Load more cards'}</button>`:''}<footer>Card data and images by <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. Magic: The Gathering © Wizards of the Coast.</footer></section>`;
 }
-function tagOptions() {
-  const searching=Boolean(tagSearch.trim()), matches=searching||allTags?findTags(tagSearch):TAGS.map(([id])=>tagById.get(id)||resolveTag(id)).filter(Boolean);
+function tagMatches() {
+  return tagSearch.trim()?findTags(tagSearch):TAGS.map(([id])=>tagById.get(id)||resolveTag(id)).filter(Boolean);
+}
+function tagMatchCount(matches) {
+  return tagSearch.trim()?`${matches.length.toLocaleString()} matching ${matches.length===1?'tag':'tags'}`:`${matches.length} starting points · Search ${TAG_CATALOG.tags.length.toLocaleString()} tags`;
+}
+function unlistedFunctionOption(locked) {
+  const value=tagSearch.trim(),slug=value.toLowerCase().replace(/\s+/g,'-');
+  if(slug.length>80||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))return '<p class="hint">Use up to 80 letters, numbers, spaces or single hyphens for an unlisted function.</p>';
+  if(filters.tags.includes(slug))return '<p class="hint">This unlisted function is already applied.</p>';
+  return `<div class="unlisted-function"><button type="button" class="secondary" data-tag="${esc(slug)}" ${locked?'disabled':''}>Add “${esc(value)}” as an unlisted function</button><p class="hint">Searches for this tag on Scryfall. It may be unsupported or return no cards.</p></div>`;
+}
+function refreshTagOptions() {
+  const matches=tagMatches();
+  $('#tag-match-count').textContent=tagMatchCount(matches);
+  $('#tag-options').innerHTML=tagOptions(matches);
+}
+function tagOptions(matches) {
   const shown=matches.slice(0,tagLimit),detail=tagById.get(browsedTag),locked=filters.locked.includes('tags');
   const browse=id=>`<button class="text-button" data-browse-tag="${esc(id)}">${esc(id.replaceAll('-',' '))}</button>`;
   const relation=(label,ids)=>`<div class="tag-relations"><strong>${label}</strong><div>${ids.map(browse).join('')||'<span class="hint">None recorded in this snapshot.</span>'}</div></div>`;
-  return `<p class="hint" role="status">${searching?'Matching names and aliases for “'+esc(tagSearch)+'”':allTags?'Browsing the full bundled catalog':'Curated starting points — or search the full catalog above.'}</p>${locked?'<p class="hint">Function expressions in a complex query group must be edited in the query above.</p>':''}<details class="tag-info"><summary>About these tag results</summary><p>${matches.length.toLocaleString()} ${searching?'matching':allTags?'catalog':'curated'} tags · showing ${shown.length}. Search names and aliases; relationships come from the bundled snapshot.</p></details><div class="tag-options">${shown.map(t=>`<span class="tag-choice"><button class="tag-option ${filters.tags.includes(t.id)?'selected':''}" data-tag="${esc(t.id)}" aria-pressed="${filters.tags.includes(t.id)}" aria-label="${filters.tags.includes(t.id)?'Remove':'Add'} ${esc(t.id)} filter" ${locked?'disabled':''}>${esc(TAGS.find(([id])=>id===t.id)?.[1]||t.id.replaceAll('-',' '))} <span>${filters.tags.includes(t.id)?'Remove filter':'Add filter'}</span></button><button class="tag-browse" data-browse-tag="${esc(t.id)}" aria-label="Browse ${esc(t.id)} relationships">Related ${icon('arrow',14)}</button></span>`).join('')||'<p class="hint">No matching name or alias. Try another phrase or enter an existing Scryfall tag; absence here does not mean Scryfall rejects it.</p>'}</div>${!searching&&!allTags?'<button class="text-button tag-more" data-action="all-tags">Browse the full tag catalog</button>':''}${matches.length>shown.length?`<button class="text-button tag-more" data-action="more-tags">Show next ${Math.min(30,matches.length-shown.length)} ${searching?'matching':'catalog'} tags</button>`:''}${detail?`<section class="tag-detail" aria-label="Tag relationships"><h3>${esc(detail.id.replaceAll('-',' '))}</h3><p class="hint">${detail.aliases.length?'Aliases: '+esc(detail.aliases.join(', '))+'. ':''}<a href="https://tagger.scryfall.com/tags/card/${encodeURIComponent(detail.id)}" target="_blank" rel="noreferrer">View on Tagger</a></p>${relation('Broader tags',detail.parents)}${relation('Narrower tags',detail.children)}<p class="hint">Browsing relationships leaves the card query unchanged. Use Add filter to search a function.</p><button class="secondary" data-tag="${esc(detail.id)}" ${locked?'disabled':''}>${filters.tags.includes(detail.id)?'Remove filter':'Add filter'}</button></section>`:''}${filters.tags.filter(t=>!tagById.has(t)).map(t=>`<p class="hint">Existing tag “${esc(t)}” is outside this snapshot. Scryfall may accept it, reject it, or return no cards.</p>`).join('')}`;
+  return `${locked?'<p class="hint">Function expressions in a complex query group must be edited in the query above.</p>':''}<div class="tag-options">${shown.map(t=>`<span class="tag-choice"><button class="tag-option ${filters.tags.includes(t.id)?'selected':''}" data-tag="${esc(t.id)}" aria-pressed="${filters.tags.includes(t.id)}" aria-label="${filters.tags.includes(t.id)?'Remove':'Add'} ${esc(t.id)} filter" ${locked?'disabled':''}>${esc(TAGS.find(([id])=>id===t.id)?.[1]||t.id.replaceAll('-',' '))} <span>${filters.tags.includes(t.id)?'Remove filter':'Add filter'}</span></button><button class="tag-browse" data-browse-tag="${esc(t.id)}" aria-label="Browse ${esc(t.id)} relationships">Related ${icon('arrow',14)}</button></span>`).join('')}</div>${!matches.length?unlistedFunctionOption(locked):''}${matches.length>shown.length?`<button class="text-button tag-more" data-action="more-tags">Show next ${Math.min(30,matches.length-shown.length)} matching tags</button>`:''}${detail?`<section class="tag-detail" aria-label="Tag relationships"><h3>${esc(detail.id.replaceAll('-',' '))}</h3><p class="hint">${detail.aliases.length?'Aliases: '+esc(detail.aliases.join(', '))+'. ':''}<a href="https://tagger.scryfall.com/tags/card/${encodeURIComponent(detail.id)}" target="_blank" rel="noreferrer">View on Tagger</a></p>${relation('Broader tags',detail.parents)}${relation('Narrower tags',detail.children)}<p class="hint">Browsing relationships leaves the card query unchanged. Use Add filter to search a function.</p><button class="secondary" data-tag="${esc(detail.id)}" ${locked?'disabled':''}>${filters.tags.includes(detail.id)?'Remove filter':'Add filter'}</button></section>`:''}${filters.tags.filter(t=>!tagById.has(t)).map(t=>`<p class="hint">Existing tag “${esc(t)}” is outside this snapshot. Scryfall may accept it, reject it, or return no cards.</p>`).join('')}`;
 }
 function broadeningTools() {
   const options=relaxationOptions(broadening?.original || filters,current());
@@ -697,15 +743,15 @@ function resetResults(){++requestId;loading=false;results=[];total=0;more=false;
 function clearSearch(){
   filters=parseQuery('');
   tagSearch='';
+  browsedTag='';
+  tagLimit=30;
   resetResults();
 }
 function resetExplore(){
   clearSearch();
   tracker.id='';
   filtersOpen=tagsOpen=broadeningOpen=false;
-  browsedTag='';
-  allTags=false;
-  tagLimit=30;
+  openFilterFamilies.clear();
   page=1;
   visibleLimit=24;
   order='edhrec';
@@ -739,13 +785,18 @@ function applyGuided(family,run=true,keepForm=false){
   return setCondition(family,model,run,keepForm);
 }
 function bindGuided(){
+  $('#guided-form')?.addEventListener('toggle',e=>{
+    const family=e.target.dataset.guidedFamily;
+    if(!family||!e.target.isConnected)return;
+    if(e.target.open)openFilterFamilies.add(family);else openFilterFamilies.delete(family);
+  },true);
   $('#guided-form')?.addEventListener('input',e=>{const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,false);});
   $('#guided-form')?.addEventListener('change',e=>{const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,e.target.tagName==='INPUT');});
-  $('#guided-form')?.addEventListener('submit',e=>{e.preventDefault();const family=document.activeElement?.closest('[data-family]')?.dataset.family;if(family)applyGuided(family);else search();});
+  $('#guided-form')?.addEventListener('submit',e=>{e.preventDefault();const family=document.activeElement?.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,true);else search(false,false,true);});
   $('#tag-match')?.addEventListener('change',e=>{const model={...filters,match:e.target.value};setCondition('tags',model);});
 }
 function refreshSearchTools(){
-  $('#query-notes').innerHTML=queryNotes();$('#guided-controls').innerHTML=guidedControls();$('#selected-functions').innerHTML=selectedFunctions();$('#tag-options').innerHTML=tagOptions();
+  $('#query-notes').innerHTML=queryNotes();$('#applied-filter-summary').textContent=appliedFiltersSummary();$('#guided-controls').innerHTML=guidedControls();$('#selected-functions').innerHTML=selectedFunctions();refreshTagOptions();
   refreshSearchOutput();
   bindGuided();
 }
@@ -799,7 +850,7 @@ function bind() {
   $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected)tagsOpen=e.target.open;});
   $('#search-form')?.addEventListener('submit',e=>{e.preventDefault();readFilters();search();});
   $('#raw')?.addEventListener('input',e=>{filters=parseQuery(e.target.value);++requestId;loading=false;error='';broadening=null;if(!filters.query.trim())resetResults();refreshSearchTools();});
-  $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagLimit=30;$('#tag-options').innerHTML=tagOptions();});
+  $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagLimit=30;browsedTag='';refreshTagOptions();});
   bindGuided();bindSearchOutput();
 }
 addEventListener('click',e=>{
@@ -861,7 +912,7 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.manage){const menu=button.closest?.('.deck-menu');if(menu){menu.open=false;menu.querySelector('summary').focus();}const d=decks.find(d=>d.id===button.dataset.target);if(!d)return;const action=button.dataset.manage;if(action==='rename')deckForm(d);if(action==='duplicate')duplicateDeck(d);if(action==='delete')deleteDeck(d);if(action==='import')importDialog(d);if(action==='export')exportDialog(d);return;}
   if(button.dataset.tab){deckTab=button.dataset.tab;render();return;}
   if(button.dataset.relax){await broaden(button.dataset.relax);return;}
-  if(button.dataset.browseTag){browsedTag=button.dataset.browseTag;$('#tag-options').innerHTML=tagOptions();$('#tag-options .tag-detail h3').tabIndex=-1;$('#tag-options .tag-detail h3').focus();return;}
+  if(button.dataset.browseTag){browsedTag=button.dataset.browseTag;refreshTagOptions();$('#tag-options .tag-detail h3').tabIndex=-1;$('#tag-options .tag-detail h3').focus();return;}
   if(button.dataset.tag){const t=button.dataset.tag;setCondition('tags',{...filters,tags:filters.tags.includes(t)?filters.tags.filter(x=>x!==t):[...filters.tags,t]});return;}
 
   if(button.dataset.inspect){inspect(button.dataset.inspect,button.dataset.entry);return;}
@@ -895,8 +946,10 @@ $('#app').addEventListener('click',async e=>{
   if(action==='retry')search(false,true);
   if(action==='restore-search')await restoreSearch();
   if(action==='more')search(true);
-  if(action==='all-tags'||action==='more-tags'){allTags=true;if(action==='more-tags')tagLimit+=30;$('#tag-options').innerHTML=tagOptions();}
-  if(action==='custom-tag')customTag();
+  if(action==='more-tags'){
+    const previousLimit=tagLimit;tagLimit+=30;refreshTagOptions();
+    document.querySelectorAll('#tag-options .tag-choice .tag-option')[previousLimit]?.focus();
+  }
   if(action==='sample')sample();
   if(action==='import')importDialog();
   if(action==='import-new')importDialog(null);
@@ -908,14 +961,14 @@ $('#app').addEventListener('click',async e=>{
   if(action==='add-owned')collectionLotDialog();
   if(action==='import-collection')collectionImport();
   if(action==='clear-collection')clearCollection();
-  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Matching all” narrows your results; “Matching any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Starting points and their descriptions are curated. Search names and aliases across the bundled Scryfall Oracle Tags snapshot; use the arrow beside a tag to browse its recorded broader and narrower relationships. The snapshot date is shown because live Tagger can change. Use Enter an existing Scryfall tag for newer or other known tags. This searches existing tags; it does not create tagging data.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Inspect a card to choose its deck zone or assign personal role tags. These role tags power deck statistics and are separate from Scryfall’s tags.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander coverage remains partial; review paired commanders and companions manually.</p>`);
+  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Matching all” narrows your results; “Matching any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Search names and aliases in the bundled Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}. Use Related to browse recorded broader and narrower relationships. When a name has no catalog match, add it as an unlisted function to try it in a Scryfall search.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Inspect a card to choose its deck zone or assign personal role tags. These role tags power deck statistics and are separate from Scryfall’s tags.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander coverage remains partial; review paired commanders and companions manually.</p>`);
 });
 async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Object.assign(new Error(data.error || 'Request failed.'),{status:r.status,retryAfter:data.retryAfter});return data; }
 // Input blur may happen while the next row is receiving focus. Keep that form in place
 // during its search, including when the response arrives after the next keystroke.
 function renderSearchState(keepForm=false){
   if(!keepForm||view!=='explore'){render();return;}
-  $('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();
+  $('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();$('#applied-filter-summary').textContent=appliedFiltersSummary();
   refreshSearchOutput();
 }
 async function search(append=false,keepBroadening=false,keepForm=false) {
@@ -1003,7 +1056,6 @@ function settings() {
   $('#settings-backup').onclick=()=>saveWorkspaceCopy();
   $('#settings-restore').onclick=restore;
 }
-function customTag(){showDialog('<h2>Enter an existing Scryfall tag</h2><p>Search an existing Scryfall function tag, such as mana-rock or reanimate. This does not create public tags. Names and aliases in the snapshot resolve to their canonical tags. Tags outside the snapshot are allowed, but may be unsupported by Scryfall.</p><form id="custom-tag-form"><label>Function tag<input name="tag" required maxlength="80" placeholder="e.g. mana-rock"></label><p id="custom-tag-error" role="alert"></p><button class="primary">Add to search</button></form>');$('#custom-tag-form').onsubmit=e=>{e.preventDefault();readFilters();const value=String(new FormData(e.target).get('tag')).trim().toLowerCase();const t=resolveTag(value)?.id || value.replace(/\s+/g,'-');if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t)){$('#custom-tag-error').textContent='Use a tag name with letters, numbers and single hyphens.';return;}try{const model={...filters,tags:[...new Set([...filters.tags,t])]};const next=replaceCondition(filters,'tags',conditionQuery(model,'tags'));filters=next;$('#dialog').close();runGuidedSearch();}catch(error){$('#custom-tag-error').textContent=error.message;}};}
 function detailEntry(s=detail) { return s?.deck?.cards.find(e=>entryKey(e)===s.key); }
 function detailMessage(message, error=false) {
   $('#detail-save-status').textContent=message;
