@@ -29,6 +29,7 @@ API requests receive deterministic fixture responses, and external requests rece
 ## Coverage and failure evidence
 
 - Deck navigation, scrolling/sticky navigation, Statistics and Ownership & budget rendering, and horizontal overflow.
+- Desktop drag destination sizing, gap hit testing, edge scrolling and cancellation. Keyboard and emulated touch card menus retain deletion confirmation.
 - Search results, card-printing dialog fit, keyboard Escape dismissal and same-context reload preservation.
 - Explore width at 1920px with/without tracking, two phone card columns, empty initial output, function-chip query synchronization and keyboard disclosure collapse.
 - Fresh top-navigation Explore entry, deck-editor entry with tracking, keyboard tracker toggle and guidance position.
