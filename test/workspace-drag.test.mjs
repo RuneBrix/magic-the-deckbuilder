@@ -131,13 +131,14 @@ test('drag targets follow current hit testing during edge scroll and cleanup sto
   w.events.pointercancel();assert.equal(w.dragFrame,null);assert.equal(w.node('#deck-drag-targets').hidden,true);
 });
 
-test('all layouts expose drag scope and empty-zone destinations; only real Function groups receive assignment overlays',()=>{
+test('all layouts retain drag destinations and named card actions without the help paragraph',()=>{
   const d=editorDeck();d.cards[1].tags=['<Draw & more>'];
   const w=workspace({savedDecks:JSON.stringify([d])});
   const commandSection=html=>html.match(/<section class="deck-zone" data-drop-zone="command">([\s\S]*?)(?=<section class="deck-zone"|$)/)[1];
   for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']) {
     w.context.dragLayout=layout;vm.runInContext("view='deck';editorOptions.layout=dragLayout;editorOptions.group='role';render()",w.context);
-    const html=w.node('#app').innerHTML;assert.match(html,/data-card-draggable aria-describedby="deck-drag-help"/);assert.match(html,/Drag all copies in an entry/);
+    const html=w.node('#app').innerHTML;assert.match(html,/data-card-draggable/);assert.doesNotMatch(html,/deck-drag-help/);
+    assert.match(html,/aria-label="Card actions for Leader in Command zone"/);
     assert.match(html,/data-drop-new-function>Add to new function/);
     assert.doesNotMatch(commandSection(html),/<h4>|data-drop-function/);
     assert.match(html,/data-drop-function="&lt;Draw &amp; more&gt;"/);assert.doesNotMatch(html,/data-drop-function="Unassigned"/);

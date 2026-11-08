@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck drag destinations
+
+- Give Add to new function the same size as zone destinations in the drag strip (#92).
+- Pause edge scrolling over the whole strip, including gaps. Keep labels visible above the dragged preview (#93).
+- Remove the standing drag instructions from the Cards tab. Card actions still provide named keyboard and touch destinations and deletion confirmation (#112).
+
 ## Explore entry and tracking
 
 - Start fresh from top-navigation Explore cards. Find cards to add keeps the current search and tracks the open deck (#116).

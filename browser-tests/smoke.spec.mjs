@@ -32,6 +32,76 @@ test('deck navigation, sticky header, statistics and budget fit the viewport', a
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
 });
 
+test('deck drag destinations stay still across gaps and let the page scroll outside', async ({ page, isMobile }, testInfo) => {
+  test.skip(isMobile, 'Direct dragging uses a desktop pointer');
+  if (testInfo.project.name === 'desktop-dark') await page.setViewportSize({ width: 760, height: 720 });
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.locator('#editor-layout').selectOption('text-vertical');
+  const original = await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
+  const scrollY = () => page.evaluate(() => window.scrollY);
+  const dock = page.locator('#deck-drag-targets');
+  const startDrag = async () => {
+    const name = page.locator('.deck-workspace [data-inspect]').first();
+    await name.scrollIntoViewIfNeeded();
+    const box = await name.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 10, box.y + box.height / 2);
+    await expect(dock).toBeVisible();
+  };
+  const sideboard = dock.getByText('Move to Sideboard', { exact: true });
+  const mainDeck = dock.getByText('Move to Main deck', { exact: true });
+  const checkSizing = async () => {
+    const newFunction = await dock.getByText('Add to new function', { exact: true }).boundingBox();
+    const zone = await sideboard.boundingBox();
+    expect(newFunction.width).toBeCloseTo(zone.width, 0);
+    expect(newFunction.height).toBeCloseTo(zone.height, 0);
+    await noPageOverflow(page);
+  };
+
+  await startDrag();
+  const [left, right] = await Promise.all([mainDeck.boundingBox(), sideboard.boundingBox()]);
+  const beforeGap = await scrollY();
+  await page.mouse.move((left.x + left.width + right.x) / 2, left.y + left.height / 2);
+  await page.evaluate(async () => {
+    for (let frame = 0; frame < 8; frame++) await new Promise(requestAnimationFrame);
+  });
+  expect(await scrollY(), 'scroll offset over the gap between bottom targets').toBe(beforeGap);
+  await checkSizing();
+  await page.screenshot({ path: testInfo.outputPath('deck-drag-destinations.png') });
+  await page.mouse.up();
+  await expect(dock).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(original);
+
+  await page.locator('#editor-group').selectOption('role');
+  await startDrag();
+  await checkSizing();
+  const beforeEdge = await scrollY();
+  const { width, height } = page.viewportSize();
+  await page.mouse.move(width / 2, height - 2);
+  await expect.poll(scrollY).toBeGreaterThan(beforeEdge);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await expect(dock).toBeHidden();
+  await expect(page.locator('#deck-drag-help')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(original);
+});
+
+test('card menus keep deletion available by keyboard and touch', async ({ page, isMobile }) => {
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  const action = page.getByRole('button', { name: 'Card actions for Smoke Card 1 in Command zone', exact: true });
+  if (isMobile) await action.tap();
+  else await action.press('Enter');
+  const remove = page.getByRole('menuitem', { name: 'Delete card', exact: true });
+  if (isMobile) await remove.tap();
+  else await remove.press('Enter');
+  await dialogFits(page);
+  const keep = page.getByRole('button', { name: 'Keep cards', exact: true });
+  await expect(keep).toBeFocused();
+  await keep.click();
+  await expect(action).toBeVisible();
+});
+
 test('search, printing dialog, keyboard dismissal and reload retain deck data', async ({ page }) => {
   await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
   await page.locator('#raw').fill('Smoke');
