@@ -146,14 +146,16 @@ export function deckPrintingPrice(card) {
   const cents = parseCurrencyCents(typeof quote === 'number' ? String(quote) : quote);
   return { finish: field ? finish : null, cents };
 }
+const numeric = value => typeof value==='number' && Number.isFinite(value) ? value
+  : typeof value==='string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()) && Number.isFinite(Number(value)) ? Number(value) : null;
+const combatValue = (card, field) => numeric(card[field] ?? card.card_faces?.[0]?.[field]);
 export function deckEntries(deck, { type = '', role = '', search = '', order = 'name' } = {}) {
   const terms=search.trim().toLocaleLowerCase('en').split(/\s+/).filter(Boolean);
   const mode=order.replace(/-desc$/,''), descending=order.endsWith('-desc') || mode==='quantity';
-  const numeric=value=>typeof value==='number' && Number.isFinite(value)?value:typeof value==='string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()) && Number.isFinite(Number(value))?Number(value):null;
   const value=entry=>{
     const c=entry.card;
     if(mode==='price')return deckPrintingPrice(c).cents;
-    if(mode==='power' || mode==='toughness')return numeric(c[mode] ?? c.card_faces?.[0]?.[mode]);
+    if(mode==='power' || mode==='toughness')return combatValue(c,mode);
     return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
   };
   return deck.cards.filter(e=>{
@@ -211,20 +213,100 @@ export function relaxSearch(f, deck, key) {
   relaxed[key] = Array.isArray(f[key]) ? [] : key === 'legal' ? false : '';
   return { original, filters: relaxed, originalQuery: queryFor(original, deck), query: queryFor(relaxed, deck), label: option.label };
 }
-export function stats(deck) {
-  const result = { total: count(deck), lands: 0, spells: 0, average: 0, curve: Array(8).fill(0), types: {}, tags: Object.create(null), colors: Object.fromEntries('WUBRGC'.split('').map(c => [c, 0])) };
+export function stats(deck, { detailed = false } = {}) {
+  const result = { total: 0, lands: 0, spells: 0, average: 0, curve: Array(8).fill(0), types: {}, tags: Object.create(null), colors: Object.fromEntries('WUBRGC'.split('').map(c => [c, 0])) };
+  const values = detailed ? new Map() : null;
+  if (detailed) {
+    result.breakdowns = Object.fromEntries(['color', 'type', 'function', 'power', 'toughness', 'rarity'].map(key => [key, new Map()]));
+    result.draw = { total: 0, types: new Map(), functions: new Map() };
+  }
   let value = 0;
-  for (const { card, qty, tags = [] } of deck.cards.filter(e => zoneFor(e) !== 'sideboard' && zoneFor(e) !== 'maybeboard' && (deck.format === 'commander' || zoneFor(e) === 'main'))) {
-    const type = category(card);
+  for (const entry of deck.cards) {
+    const zone = zoneFor(entry);
+    if (zone !== 'main' && !(zone === 'command' && deck.format === 'commander')) continue;
+    const { card, qty, tags = [] } = entry;
+    const types = cardTypes(card), type = types[0] || 'Other';
+    const storedColors = card.colors ?? card.card_faces?.[0]?.colors;
+    const knownColors = Array.isArray(storedColors) ? storedColors.filter(color => typeof color === 'string' && /^[WUBRG]$/.test(color)) : [];
+    const colors = knownColors.length ? knownColors : ['C'];
     result.types[type] = (result.types[type] || 0) + qty;
     for (const tag of tags) result.tags[tag] = (result.tags[tag] || 0) + qty;
-    if (isLand(card)) result.lands += qty;
-    else { result.spells += qty; value += card.cmc * qty; result.curve[Math.min(7, Math.floor(card.cmc))] += qty; }
-    for (const c of card.colors?.length ? card.colors : ['C']) result.colors[c] += qty;
+    for (const c of colors) result.colors[c] += qty;
+    const primary = detailed ? primaryRole({ tags }) : null;
+    if (detailed && zone === 'main') {
+      result.draw.total += qty;
+      addWeight(result.draw.types, type, qty);
+      addWeight(result.draw.functions, primary, qty);
+    }
+    if (type === 'Land') {
+      result.lands += qty;
+      continue;
+    }
+    result.spells += qty;
+    value += card.cmc * qty;
+    const bucket = Math.min(7, Math.max(0, Math.floor(card.cmc)));
+    result.curve[bucket] += qty;
+    if (detailed) {
+      addWeight(values, card.cmc, qty);
+      const groups = {
+        color: [...new Set(colors)], type: types.length ? types : ['Other'], function: [primary],
+        power: [combatValue(card, 'power') ?? 'No fixed value'], toughness: [combatValue(card, 'toughness') ?? 'No fixed value'],
+        rarity: [typeof card.rarity === 'string' && card.rarity.trim() ? card.rarity.trim() : 'Unknown'],
+      };
+      for (const [key, labels] of Object.entries(groups)) {
+        const breakdown = result.breakdowns[key];
+        for (const label of labels) {
+          if (!breakdown.has(label)) breakdown.set(label, Array(8).fill(0));
+          breakdown.get(label)[bucket] += qty;
+        }
+      }
+    }
   }
   result.total = result.lands + result.spells;
   result.average = result.spells ? value / result.spells : 0;
+  if (detailed) {
+    result.manaValue = value;
+    result.median = weightedMedian(values, result.spells);
+  }
   return result;
+}
+function addWeight(groups, key, qty) {
+  groups.set(key, (groups.get(key) ?? 0) + qty);
+}
+function weightedMedian(values, total) {
+  const lower = Math.floor((total - 1) / 2), upper = Math.floor(total / 2);
+  let cumulative = 0, first;
+  for (const [value, qty] of [...values].sort(([a], [b]) => a - b)) {
+    cumulative += qty;
+    if (cumulative > lower) first ??= value;
+    if (cumulative > upper) return first / 2 + value / 2;
+  }
+  return null;
+}
+export function drawProbability(total, matching, draws, wanted, comparison) {
+  const misses = total - matching;
+  const min = Math.max(0, draws - misses), max = Math.min(draws, matching);
+  const from = comparison === 'at-most' ? min : wanted;
+  const to = comparison === 'at-least' ? max : wanted;
+  if (from > max || to < min) return 0;
+  if (from <= min && to >= max) return 1;
+
+  // Start at the most likely outcome. Relative weights avoid huge binomial
+  // coefficients and underflow from starting at an extreme tail.
+  const mode = Math.floor((draws + 1) * (matching + 1) / (total + 2));
+  const included = hits => hits >= from && hits <= to;
+  let sum = 1, selected = included(mode) ? 1 : 0;
+  for (let hits = mode, weight = 1; hits > min; hits--) {
+    weight *= hits * (misses - draws + hits) / ((matching - hits + 1) * (draws - hits + 1));
+    sum += weight;
+    if (included(hits - 1)) selected += weight;
+  }
+  for (let hits = mode, weight = 1; hits < max; hits++) {
+    weight *= (matching - hits) * (draws - hits) / ((hits + 1) * (misses - draws + hits + 1));
+    sum += weight;
+    if (included(hits + 1)) selected += weight;
+  }
+  return selected / sum;
 }
 export function legalityReport(deck) {
   const failed = [], unavailable = [], manual = [];
