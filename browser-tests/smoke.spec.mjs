@@ -339,6 +339,40 @@ test('Explore navigation starts fresh and tracker guidance follows the selector'
   await page.screenshot({ path: testInfo.outputPath('explore-fresh.png') });
 });
 
+test('Explore sorts USD prices in both directions and labels unavailable quotes', async ({ page }, testInfo) => {
+  const priced = [
+    { ...cards[0], prices: { usd: '0.25' } },
+    { ...cards[1], prices: { usd: '12.00' } },
+  ];
+  const unknown = { ...cards[2], prices: { usd: null, usd_foil: '5.00' } };
+  const query = 't:artifact otag:ramp';
+  await page.route('**/api/search?**', route => {
+    const params = new URL(route.request().url()).searchParams;
+    expect(params.get('q')).toBe(query);
+    const order = params.get('order');
+    const dir = params.get('dir');
+    const data = order === 'usd' && dir === 'asc' ? [priced[0], unknown, priced[1]] : [priced[1], unknown, priced[0]];
+    return route.fulfill({ json: { data, total_cards: data.length, has_more: false } });
+  });
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  const raw = page.locator('#raw');
+  await raw.fill(query);
+  await raw.press('Enter');
+  const sort = page.getByRole('combobox', { name: 'Sort cards' });
+  await expect(sort).toBeVisible();
+  await sort.focus();
+  const quotes = page.locator('.card-meta span:last-child');
+  await sort.selectOption({ label: 'USD: low first' });
+  await expect(quotes).toHaveText(['0.25 USD', 'Price unavailable', '12.00 USD']);
+  await expect(sort).toBeFocused();
+  await sort.selectOption({ label: 'USD: high first' });
+  await expect(quotes).toHaveText(['12.00 USD', 'Price unavailable', '0.25 USD']);
+  await expect(sort).toBeFocused();
+  await expect(raw).toHaveValue(query);
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('explore-usd-sort.png') });
+});
+
 test('Explore fills available width and keeps selected functions inside their disclosure', async ({ page }, testInfo) => {
   await page.route('**/api/search?**', route => route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } }));
   await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
@@ -356,11 +390,17 @@ test('Explore fills available width and keeps selected functions inside their di
   await expect(chips).toBeVisible();
   await noPageOverflow(page);
   await page.screenshot({ path: testInfo.outputPath('explore-functions.png') });
-  await expect(chips.getByLabel('Combine functions by')).toHaveValue('any');
-  await chips.getByLabel('Combine functions by').selectOption('all');
+  const matching = chips.getByLabel('Combine functions by');
+  await expect(matching).toHaveValue('any');
+  await matching.focus();
+  await matching.selectOption('all');
   await expect(page.locator('#raw')).toHaveValue('t:creature (otag:ramp otag:draw)');
-  await chips.getByRole('button', { name: 'Remove ramp filter', exact: true }).click();
+  await expect(page.locator('.card-tile')).toHaveCount(12);
+  await expect(matching).toBeFocused();
+  await chips.getByRole('button', { name: 'Remove ramp filter', exact: true }).press('Enter');
   await expect(page.locator('#raw')).toHaveValue('t:creature otag:draw');
+  await expect(page.locator('.card-tile')).toHaveCount(12);
+  await expect(functions.getByLabel('Find a function')).toBeFocused();
   await summary.focus();
   await page.keyboard.press('Enter');
   await expect(chips).toBeHidden();

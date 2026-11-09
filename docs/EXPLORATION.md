@@ -15,6 +15,9 @@ Selection, visibility and preferred width persist separately under `arcana.explo
 
 ## Search hierarchy and states
 
+- **Sort results** offers **USD: low first** and **USD: high first**. Each page uses the completed search's query and direction. Card tiles show the regular USD quote or **Price unavailable**. Scryfall determines the order and placement of results without a regular quote. A late response from a previous search or sort is ignored.
+- **Browse by function** shows selected chips below **Combine functions by**. Collapsing the panel hides the controls and keeps the filters in the query. Changing the matching mode keeps focus on its selector. Removing a selected chip moves focus to **Find a function**, where it stays as results load.
+
 Search leads the explorer. Filters and function browsing retain their existing collapsed disclosures and unified query. Explore fills the available page width. Result columns adapt to the space left by the optional tracker (200px minimum on desktop, two columns on phones). The results area uses an ordinary heading and labeled sort control when a search has run; initial Discover cards starters are removed. The competing decorative welcome heading/icon is removed. Format legality remains in Filters and is independent of the tracked deck.
 
 The initial view omits the results and broadening sections until there is content to show. Loading, no-match, request-error and populated states retain separate feedback. No-match reports zero results and suggests changing the query; request failures offer retry. Clear search and filters, raw clearing and removal of the last guided clause restore the initial state and invalidate pending responses. Explicit blank submission still becomes `game:paper`, allowing an intentional broad search. Clearing is not a broad-search request.

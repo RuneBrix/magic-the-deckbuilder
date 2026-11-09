@@ -25,6 +25,27 @@ test('server serves the app, rejects traversal and validates API requests', asyn
   } finally { child.kill(); }
 });
 
+test('price search forwards the chosen direction and page to Scryfall', async () => {
+  const stub = `globalThis.fetch = async url => ({ ok: true, json: async () => Object.fromEntries(new URL(url).searchParams) });
+    await import('./server.mjs');`;
+  const child = spawn(process.execPath, ['--input-type=module', '--eval', stub], { cwd: new URL('../', import.meta.url), env: { ...process.env, PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    const [output] = await once(child.stdout, 'data', { signal: AbortSignal.timeout(5000) });
+    const port = output.toString().match(/localhost:(\d+)/)?.[1];
+    assert.ok(port);
+    const q = 't:artifact otag:ramp';
+    const url = `http://127.0.0.1:${port}/api/search?`;
+    assert.equal((await fetch(url + new URLSearchParams({ q, order: 'usd', dir: 'invalid' }))).status, 400);
+    for (const [page, dir] of [['1', 'asc'], ['2', 'desc'], ['1', undefined]]) {
+      const params = new URLSearchParams({ q, order: 'usd', page });
+      if (dir !== undefined) params.set('dir', dir);
+      const response = await fetch(url + params);
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { q, order: 'usd', dir: dir ?? 'asc', page, unique: 'cards' });
+    }
+  } finally { child.kill(); }
+});
+
 
 test('printing proxy fixes upstream identity/scope, supports pagination and shares the response cache',async()=>{
   const oracle='00000000-0000-0000-0000-000000000001';

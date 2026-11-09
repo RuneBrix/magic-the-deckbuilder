@@ -1,5 +1,10 @@
 # Changelog
 
+## Explore sorting and function filters
+
+- Sort Explore results by USD price in either direction across pages and label unavailable quotes (#131).
+- Keep keyboard focus in Browse by function after changing the match mode or removing a selected chip (#129).
+
 ## Searchable Explore filters
 
 - Add searchable include and exclude chips for types and subtypes (#120).

@@ -47,6 +47,13 @@ let view = 'decks', deckTab = 'cards', results = [], total = 0, page = 1, more =
 let filters = parseQuery('');
 let filtersOpen = false, tagsOpen = false;
 const openFilterFamilies = new Set();
+const SEARCH_SORTS = {
+  edhrec: { label: 'Popular first', params: { order: 'edhrec' } },
+  cmc: { label: 'Mana value', params: { order: 'cmc' } },
+  name: { label: 'Name A–Z', params: { order: 'name' } },
+  'usd-asc': { label: 'USD: low first', params: { order: 'usd', dir: 'asc' } },
+  'usd-desc': { label: 'USD: high first', params: { order: 'usd', dir: 'desc' } },
+};
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
 let browsedTag = '', tagLimit = 30;
 let broadeningOpen = false, broadening = null, resultContext = null;
@@ -204,7 +211,8 @@ function searchResults(){
   if(!searched&&!loading&&!error)return '';
   const noMatch=Boolean(error)&&error.startsWith('No cards');
   const status=loading?'Searching Scryfall…':error?(noMatch?'0 cards found':'Search failed'):total.toLocaleString()+(total===1?' card found':' cards found');
-  return `<section id="results-area" aria-labelledby="result-heading" data-state="${loading?'loading':error?(noMatch?'no-match':'error'):searched?'populated':'initial'}"><div class="results-heading"><div><h2 id="result-heading" tabindex="-1">Cards</h2><span id="result-count" role="status" aria-live="polite">${status}</span></div>${searched||loading||error?`<div class="results-controls"><label>Sort results<select id="sort" aria-label="Sort cards">${[['edhrec','Popular first'],['cmc','Mana value'],['name','Name A–Z'],['usd','Price: low first']].map(([v,l])=>`<option value="${v}" ${order===v?'selected':''}>${l}</option>`).join('')}</select></label></div>`:''}</div>
+  const sortOptions = Object.entries(SEARCH_SORTS).map(([value, { label }]) => `<option value="${value}" ${order===value?'selected':''}>${label}</option>`).join('');
+  return `<section id="results-area" aria-labelledby="result-heading" data-state="${loading?'loading':error?(noMatch?'no-match':'error'):searched?'populated':'initial'}"><div class="results-heading"><div><h2 id="result-heading" tabindex="-1">Cards</h2><span id="result-count" role="status" aria-live="polite">${status}</span></div><div class="results-controls"><label>Sort results<select id="sort" aria-label="Sort cards">${sortOptions}</select></label></div></div>
   ${resultContext&&resultContext.query!==queryFor(filters,current())?'<p class="query-stale" role="status">These results are from the previous query. Press Search to update them.</p>':''}
   ${error?`<div class="empty-state" role="alert"><h3>${noMatch?'No cards matched':'Search couldn’t finish'}</h3><p>${esc(error)}</p><div><button class="secondary" data-action="reset">Clear search and filters</button>${!noMatch?'<button class="primary" data-action="retry">Try again</button>':''}</div></div>`:loading&&!results.length?'<div class="loading-state" role="status"><p>Loading cards…</p></div>':`<div class="card-grid" aria-busy="${loading}">${results.slice(0,visibleLimit).map(cardTile).join('')}</div>`}
   ${(more||visibleLimit<results.length)&&!error?`<button class="load-more secondary" data-action="more" ${loading?'disabled':''}>${loading?'Loading…':'Load more cards'}</button>`:''}<footer>Card data and images by <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. Magic: The Gathering © Wizards of the Coast.</footer></section>`;
@@ -225,6 +233,15 @@ function refreshTagOptions() {
   const matches=tagMatches();
   $('#tag-match-count').textContent=tagMatchCount(matches);
   $('#tag-options').innerHTML=tagOptions(matches);
+}
+function refreshFunctionFilters() {
+  $('#selected-functions').innerHTML = selectedFunctions();
+  refreshTagOptions();
+}
+function applySelectedFunctions(model, focusSelector) {
+  if (!setCondition('tags', model, true, true)) return;
+  refreshFunctionFilters();
+  $(focusSelector)?.focus({ preventScroll: true });
 }
 function tagOptions(matches) {
   const shown=matches.slice(0,tagLimit),detail=tagById.get(browsedTag),locked=filters.locked.includes('tags');
@@ -254,7 +271,8 @@ function restoreSearch() {
 function cardTile(c) {
   const entry = current()?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');
   const image = imageFor(c);
-  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${c.prices?.usd ? '$' + esc(c.prices.usd) : '—'}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}</article>`;
+  const price = c.prices?.usd ? esc(c.prices.usd) + ' USD' : 'Price unavailable';
+  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${price}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}</article>`;
 }
 function deckPanel(d) {
   return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Quick add goes to Main deck.</p>${freshnessNotice(d)}<button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use quick add on a result to add to this deck’s Main deck.</p>'}</div>`;
@@ -952,20 +970,21 @@ function bindGuided(){
     (options[next]||input).focus();
   });
   $('#guided-form')?.addEventListener('submit',e=>{e.preventDefault();const family=document.activeElement?.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,true);else search(false,false,true);});
-  $('#tag-match')?.addEventListener('change',e=>{const model={...filters,match:e.target.value};setCondition('tags',model);});
 }
 function refreshSearchTools(){
-  $('#query-notes').innerHTML=queryNotes();$('#applied-filter-summary').textContent=appliedFiltersSummary();$('#guided-controls').innerHTML=guidedControls();$('#selected-functions').innerHTML=selectedFunctions();refreshTagOptions();
+  $('#query-notes').innerHTML=queryNotes();$('#applied-filter-summary').textContent=appliedFiltersSummary();$('#guided-controls').innerHTML=guidedControls();refreshFunctionFilters();
   refreshSearchOutput();
   bindGuided();
 }
 function refreshSearchOutput(){
+  const focusSort = document.activeElement?.id === 'sort';
   $('#search-output').innerHTML=searchResults()+broadeningTools();
   bindSearchOutput();
+  if (focusSort) $('#sort')?.focus({ preventScroll: true });
 }
 function bindSearchOutput(){
   $('#broadening-tools')?.addEventListener('toggle',e=>{if(e.target.isConnected)broadeningOpen=e.target.open;});
-  $('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true);});
+  $('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true,true);});
 }
 function resizeTracker(width) {
   tracker.width = Math.round(Math.max(280,Math.min(480,width)));
@@ -1028,6 +1047,10 @@ $('#app').addEventListener('keydown',e=>{
 $('#app').addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
 $('#app').addEventListener('focusin',e=>{const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
 $('#app').addEventListener('change',e=>{
+  if(e.target.id==='tag-match'){
+    applySelectedFunctions({...filters,match:e.target.value}, '#tag-match');
+    return;
+  }
   if(e.target.dataset?.ownedQuantity!==undefined){updateOwnedQuantity(Number(e.target.dataset.ownedQuantity),e.target.value);return;}
   const key=e.target.dataset?.moveEntry;if(!key)return;
   try{changeDeck(d=>moveEntry(d,key,e.target.value));toast('All copies moved; roles preserved');}catch(error){toast(error.message);render();}
@@ -1072,7 +1095,12 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.tab){deckTab=button.dataset.tab;render();return;}
   if(button.dataset.relax){await broaden(button.dataset.relax);return;}
   if(button.dataset.browseTag){browsedTag=button.dataset.browseTag;refreshTagOptions();$('#tag-options .tag-detail h3').tabIndex=-1;$('#tag-options .tag-detail h3').focus();return;}
-  if(button.dataset.tag){const t=button.dataset.tag;setCondition('tags',{...filters,tags:filters.tags.includes(t)?filters.tags.filter(x=>x!==t):[...filters.tags,t]});return;}
+  if(button.dataset.tag){
+    const t=button.dataset.tag, model={...filters,tags:filters.tags.includes(t)?filters.tags.filter(x=>x!==t):[...filters.tags,t]};
+    if(button.closest?.('#selected-functions')) applySelectedFunctions(model, '#tag-search');
+    else setCondition('tags',model);
+    return;
+  }
 
   if(button.dataset.inspect){inspect(button.dataset.inspect,button.dataset.entry);return;}
   if(button.dataset.chooseAdd){chooseDestination(button.dataset.chooseAdd);return;}
@@ -1135,9 +1163,9 @@ async function search(append=false,keepBroadening=false,keepForm=false) {
   if(!filters.query.trim())filters=parseQuery('game:paper');
   if(!append && (!keepBroadening || (broadening && queryFor(filters,current())!==broadening.query)))broadening=null;
   if(append && visibleLimit < results.length){visibleLimit+=24;renderSearchState(keepForm);return;}
-  const context=append&&resultContext ? resultContext : {query:queryFor(filters,current())};
+  const context=append&&resultContext ? resultContext : {query:queryFor(filters,current()),order};
   const id=++requestId;loading=true;error='';if(!append){page=1;results=[];visibleLimit=24;}else{visibleLimit+=24;}const requestedPage=append?page+1:1;renderSearchState(keepForm);
-  try {const data=await api('/api/search?'+new URLSearchParams({q:context.query,page:requestedPage,order}));if(id!==requestId)return;results=append?[...results,...data.data]:data.data;resultContext=context;total=data.total_cards;more=data.has_more;page=requestedPage;}
+  try {const data=await api('/api/search?'+new URLSearchParams({q:context.query,page:requestedPage,...SEARCH_SORTS[context.order].params}));if(id!==requestId)return;results=append?[...results,...data.data]:data.data;resultContext=context;total=data.total_cards;more=data.has_more;page=requestedPage;}
   catch(e){if(id!==requestId)return;error=/0 cards|No cards|didn.t match any cards/i.test(e.message)?'No cards matched these filters. A custom tag may be unsupported. Remove a tag, switch to Match any, or broaden your Oracle text.':e.message;more=false;}
   finally{if(id===requestId){loading=false;searched=true;renderSearchState(keepForm);}}
 }
