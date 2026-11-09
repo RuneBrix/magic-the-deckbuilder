@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseQuery, replaceCondition, conditionQuery, searchOptions } from '../public/search.js';
 import { queryFor, relaxSearch } from '../public/core.js';
+import { TYPE_CATALOG, KEYWORD_CATALOG } from '../public/filter-catalog.js';
 
 const edit=(query,family,changes)=>{const state=parseQuery(query);return replaceCondition(state,family,conditionQuery({...state,...changes},family));};
 
@@ -50,6 +51,41 @@ test('complex/negated conditions lock affected controls and unrelated edits reta
   const q=edit('t:creature OR mv<3','legal',{legal:'modern'}).query;
   assert.equal(q,'(t:creature OR mv<3) f:modern');
   assert.ok(parseQuery('t:creature OR mv<3').locked.includes('type'));
+});
+
+test('type chips round-trip one positive group and independent exclusions', () => {
+  const raw = 'usd<5 (t:creature OR type:"time lord") -t:artifact -type:"power-plant"';
+  const parsed = parseQuery(raw);
+  assert.deepEqual(parsed.types, ['creature', 'time lord']);
+  assert.deepEqual(parsed.excludedTypes, ['artifact', 'power-plant']);
+  assert.equal(parsed.typeMatch, 'any');
+  assert.deepEqual(parsed.opaque, ['usd<5']);
+  assert.equal(edit(raw, 'type', { types: [] }).query, 'usd<5 -t:"artifact" -t:"power-plant"');
+  assert.equal(edit(raw, 'type', { excludedTypes: [] }).query, 'usd<5 (t:"creature" OR t:"time lord")');
+  assert.deepEqual(relaxSearch(parsed, null, 'type').filters.excludedTypes, []);
+  for (const query of ['(t:creature OR -t:artifact)', 't:land (t:creature OR t:artifact) -t:vehicle', '-t:/land|elf/']) {
+    assert.ok(parseQuery(query).locked.includes('type'), query);
+    assert.ok(edit(query, 'name', { name: 'Sol Ring' }).query.includes(query));
+  }
+});
+
+test('keyword chips preserve quoted abilities, matching modes and unsupported expressions', () => {
+  const raw = '(kw:flying OR keyword:"first strike") -t:artifact o:/draw a card/';
+  const parsed = parseQuery(raw);
+  assert.deepEqual(parsed.keywords, ['flying', 'first strike']);
+  assert.equal(parsed.keywordMatch, 'any');
+  assert.deepEqual(parsed.opaque, ['o:/draw a card/']);
+  const updated = edit(raw, 'keyword', { keywordMatch: 'all', keywords: ['for mirrodin!', 'flying'] });
+  assert.deepEqual(updated.keywords, ['for mirrodin!', 'flying']);
+  assert.equal(updated.keywordMatch, 'all');
+  assert.deepEqual(updated.excludedTypes, ['artifact']);
+  assert.equal(edit(raw, 'keyword', { keywords: [] }).query, '-t:artifact o:/draw a card/');
+  assert.ok(parseQuery('-kw:flying').locked.includes('keyword'));
+  assert.ok(parseQuery('(kw:flying OR t:artifact)').locked.includes('keyword'));
+  assert.ok(parseQuery('keyword:').error);
+  for (const [values, operator, property] of [[TYPE_CATALOG,'t','types'], [KEYWORD_CATALOG,'keyword','keywords']]) {
+    for (const value of values) assert.deepEqual(parseQuery(operator+':'+JSON.stringify(value))[property], [value.toLowerCase()]);
+  }
 });
 
 test('unsupported text and grouping survive repeated edits without growing parentheses',()=>{

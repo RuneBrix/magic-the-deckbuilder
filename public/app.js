@@ -4,6 +4,7 @@ import { collectionPage, CONDITION_LABELS, collectionChoices } from './collectio
 import { statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
 import { deckPrintingPrice } from './core.js';
+import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
 const $ = s => document.querySelector(s);
 const icon = (name, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${({ search: '<path d="m10 2 8 8-8 8-8-8zM10 6v8M6 10h8m2 6 6 6"/>', cards: '<path d="M8 3h12v16H8zM4 7v14h12M11 8l3-2 3 2-3 4z"/>' , settings: '<path d="M4 7h16M4 17h16M8 4v6M16 14v6"/>' , filters: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>', leaf: '<path d="M20 4C8 2 2 10 7 16s14-1 13-12ZM5 21 16 10"/>', check: '<path d="m5 12 4 4L19 6"/>', down: '<path d="m6 9 6 6 6-6"/>', upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>', download: '<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>', chart: '<path d="M4 20V4m0 16h17M9 16v-5m5 5V7m5 9v-8"/>', more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>', book: '<path d="M12 5C8 2 4 3 2 4v15c4-2 7-1 10 1 3-2 6-3 10-1V4c-4-2-7-1-10 1Zm0 0v15"/>' })[name] || ''}</svg>`;
@@ -117,13 +118,29 @@ function render() {
   if(focusSelector) {const target=document.querySelector(focusSelector)||document.querySelector('.deck-tabs [aria-selected="true"]');target?.focus({preventScroll:true});}
 }
 function queryNotes() {
-  return `${filters.error?`<p class="query-error" role="alert">${esc(filters.error)} Guided edits are paused; your query is unchanged.</p>`:''}${filters.opaque.length&&!filters.error?`<details class="query-help"><summary>Query-only expressions · ${filters.opaque.length}</summary><p>These expressions stay verbatim in the search. Complex or unsupported expressions cannot be edited with guided controls${filters.locked.length?'; affected controls are disabled':''}.</p>${filters.opaque.map(text=>`<code>${esc(text)}</code>`).join('')}<p>Supported controls cover positive type/tag groups, mana-value comparisons, color modes, symbol minimums, Oracle/full-Oracle phrases, one name and one format. Edit other expressions directly above.</p></details>`:''}`;
+  return `${filters.error?`<p class="query-error" role="alert">${esc(filters.error)} Guided edits are paused; your query is unchanged.</p>`:''}${filters.opaque.length&&!filters.error?`<details class="query-help"><summary>Query-only expressions · ${filters.opaque.length}</summary><p>These expressions stay verbatim in the search. Complex or unsupported expressions cannot be edited with guided controls${filters.locked.length?'; affected controls are disabled':''}.</p>${filters.opaque.map(text=>`<code>${esc(text)}</code>`).join('')}<p>Guided controls support type groups and exclusions, keyword abilities, function tags, mana comparisons, colors, Oracle phrases, one name and one format. Edit other expressions directly above.</p></details>`:''}`;
 }
 function appliedFiltersSummary() {
   if(filters.error)return 'Query incomplete or invalid';
   const labels=relaxationOptions(filters,current()).map(option=>option.label);
   if(filters.opaque.length)labels.push(`${filters.opaque.length} query-only ${filters.opaque.length===1?'expression':'expressions'}`);
   return labels.join(' · ')||'No filters applied';
+}
+const clearFilterButton = (name, label) => `<button type="button" class="guided-clear" data-clear-filter="${name}" aria-label="Clear ${esc(label)}" title="Clear ${esc(label)}">${icon('close',16)}</button>`;
+const clearable = (name, label, control) => `<div class="guided-entry">${control}${clearFilterButton(name,label)}</div>`;
+const chipFields = {
+  types: { catalog: TYPE_CATALOG, label: 'Types and subtypes', placeholder: 'e.g. Elf' },
+  excludedTypes: { catalog: TYPE_CATALOG, label: 'Do not include', placeholder: 'e.g. Artifact' },
+  keywords: { catalog: KEYWORD_CATALOG, label: 'Keyword abilities', placeholder: 'e.g. First strike' },
+};
+function chipPicker(name) {
+  const { catalog, label, placeholder } = chipFields[name];
+  const selected = filters[name].map(value => {
+    const display = catalog.find(choice => choice.toLowerCase() === value) || value;
+    return `<button type="button" class="tag-option selected" data-remove-chip="${esc(value)}" aria-label="Remove ${esc(display)} from ${esc(label)}">${esc(display)} ${icon('close',12)}</button>`;
+  }).join('');
+  const input = `<label>${label}<input type="text" name="${name}" data-chip-input autocomplete="off" maxlength="80" placeholder="${placeholder}" aria-controls="${name}-suggestions"></label>`;
+  return `<div class="chip-picker" data-chip-picker="${name}">${clearable(name,label,input)}<div class="chip-suggestions" id="${name}-suggestions" role="group" aria-label="${label} suggestions" hidden></div>${selected?`<div class="filter-chips">${selected}</div>`:''}</div>`;
 }
 function guidedControls() {
   const selected=(value,current)=>value===current?'selected':'';
@@ -135,10 +152,25 @@ function guidedControls() {
   };
   const removeRow=(family,i,total)=>`<button type="button" class="remove-filter-row" data-remove-filter="${family}" data-filter-index="${i}" aria-label="Remove ${family==='mv'?'mana value':'oracle'} filter ${i+1}" title="Remove ${family==='mv'?'mana value':'oracle'} filter ${i+1}" ${total===1?'disabled':''}>${icon('close',16)}</button>`;
   const values=filters.values.length?filters.values:[{op:'>=',value:''}],phrases=filters.oracle.length?filters.oracle:[{mode:'o',text:''}];
-  const valueRows=`<div class="filter-rows" role="region" aria-label="Mana-value comparisons" tabindex="0"><div class="filter-column-head mana-columns" aria-hidden="true"><span>Comparison</span><span>Mana value</span><span></span></div>${values.map((row,i)=>`<div class="repeatable-filter-row mana-columns">${mode('mv-op-'+i,row.op,[['<=','At most (≤)'],['<','Less than (<)'],['=','Exactly (=)'],['>=','At least (≥)'],['>','More than (>)'],['!=','Not equal (≠)']],'Comparison '+(i+1))}<input type="number" min="0" step="any" name="mv-${i}" value="${esc(row.value)}" aria-label="Mana value ${i+1}" placeholder="Any">${removeRow('mv',i,values.length)}</div>`).join('')}</div>`;
-  const oracleRows=`<div class="filter-rows" role="region" aria-label="Oracle phrases" tabindex="0"><div class="filter-column-head oracle-columns" aria-hidden="true"><span>Text source</span><span>Rules-text phrase</span><span></span></div>${phrases.map((row,i)=>`<div class="repeatable-filter-row oracle-columns">${mode('oracle-mode-'+i,row.mode,[['o','Oracle'],['fo','Full oracle']],'Text source '+(i+1))}<input name="oracle-${i}" value="${esc(row.text)}" aria-label="Rules-text phrase ${i+1}" maxlength="300" placeholder="e.g. whenever ~ attacks">${removeRow('oracle',i,phrases.length)}</div>`).join('')}</div><p class="hint">Full oracle includes reminder text.</p>`;
-  const color=(family,title)=>field(family,title,`<label>Matching mode${mode(family+'-mode',filters[family].mode,[['all','Contains all selected colors'],['any','Contains any selected color'],['exact','Exactly the selected colors'],['subset','Only these colors, including colorless'],['multi','Multicolor only'],['colorless','Colorless only']])}</label><div class="guided-colors">${[...'WUBRG'].map(c=>`<label><input type="checkbox" name="${family}-${c}" ${filters[family].values.includes(c)?'checked':''} ${['multi','colorless'].includes(filters[family].mode)?'disabled':''}>${mana('{'+c+'}',true)} ${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[c]}</label>`).join('')}</div><p class="hint">Select colors for all/any/exact/only matching. Multicolor and colorless use no color selection.</p>`);
-  return `<form id="guided-form"><div class="guided-grid">${field('name','Card name',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`)}${field('type','Card types and subtypes',`<label>Type names, separated by commas<input name="types" value="${esc(filters.types.join(', '))}" placeholder="e.g. instant, sorcery" maxlength="200"></label><label>Combine types${match('type-match',filters.typeMatch)}</label><p class="hint">Use all for Artifact + Creature; any for Instant OR Sorcery. Subtypes such as Elf work here too.</p>`)}${field('mv','Mana value',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}${color('color','Card color')}${color('identity','Color identity')}${field('oracle','Oracle text',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}${field('cost','Mana cost contains',`<label>Mana symbols<input name="cost" value="${esc(filters.cost)}" maxlength="100" placeholder="e.g. {1}{G}"></label><p class="hint">{C} is colorless mana; {1} is generic mana. Hybrid symbols such as {U/B} stay distinct.</p>`)}${field('symbols','Minimum mana-symbol counts',`<div class="symbol-minimums">${[...'WUBRGC'].map(c=>`<label>${mana('{'+c+'}',true)} ${c==='C'?'Colorless {C}':({W:'White {W}',U:'Blue {U}',B:'Black {B}',R:'Red {R}',G:'Green {G}'})[c]}<input type="number" name="symbol-${c}" min="0" max="20" step="1" value="${filters.symbols[c]||''}" placeholder="0"></label>`).join('')}</div><p class="hint">Each count means at least that many of the exact symbol, all required. Colorless {C} does not mean generic mana.</p>`)}${field('legal','Format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('')}</select></label><p class="hint">Chosen independently of the tracked deck.</p>`)}</div><p id="guided-error" role="alert"></p></form>`;
+  const valueRows=`<div class="filter-rows" role="region" aria-label="Mana-value comparisons" tabindex="0"><div class="filter-column-head mana-columns" aria-hidden="true"><span>Comparison</span><span>Mana value</span><span></span></div>${values.map((row,i)=>`<div class="repeatable-filter-row mana-columns">${mode('mv-op-'+i,row.op,[['<=','At most (≤)'],['<','Less than (<)'],['=','Exactly (=)'],['>=','At least (≥)'],['>','More than (>)'],['!=','Not equal (≠)']],'Comparison '+(i+1))}${clearable('mv-'+i,'mana value '+(i+1),`<input type="number" min="0" step="any" name="mv-${i}" value="${esc(row.value)}" aria-label="Mana value ${i+1}" placeholder="Any">`)}${removeRow('mv',i,values.length)}</div>`).join('')}</div>`;
+  const oracleRows=`<div class="filter-rows" role="region" aria-label="Oracle phrases" tabindex="0"><div class="filter-column-head oracle-columns" aria-hidden="true"><span>Text source</span><span>Rules-text phrase</span><span></span></div>${phrases.map((row,i)=>`<div class="repeatable-filter-row oracle-columns">${mode('oracle-mode-'+i,row.mode,[['o','Oracle'],['fo','Full oracle']],'Text source '+(i+1))}${clearable('oracle-'+i,'rules-text phrase '+(i+1),`<input name="oracle-${i}" value="${esc(row.text)}" aria-label="Rules-text phrase ${i+1}" maxlength="300" placeholder="e.g. whenever ~ attacks">`)}${removeRow('oracle',i,phrases.length)}</div>`).join('')}</div><p class="hint">Full oracle includes reminder text.</p>`;
+  const color=(family,title)=>field(family,title,`${clearable(family+'-mode',title,`<label>Matching mode${mode(family+'-mode',filters[family].mode,[['all','Contains all selected colors'],['any','Contains any selected color'],['exact','Exactly the selected colors'],['subset','Only these colors, including colorless'],['multi','Multicolor only'],['colorless','Colorless only']])}</label>`)}<div class="guided-colors">${[...'WUBRG'].map(c=>`<label><input type="checkbox" name="${family}-${c}" ${filters[family].values.includes(c)?'checked':''} ${['multi','colorless'].includes(filters[family].mode)?'disabled':''}>${mana('{'+c+'}',true)} ${({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'})[c]}</label>`).join('')}</div><p class="hint">Select colors for all/any/exact/only matching. Multicolor and colorless use no color selection.</p>`);
+  const symbols=[...'WUBRGC'].map(c=>{
+    const label=({W:'White',U:'Blue',B:'Black',R:'Red',G:'Green',C:'Colorless'})[c]+' {'+c+'}';
+    return clearable('symbol-'+c,label,`<label>${mana('{'+c+'}',true)} ${label}<input type="number" name="symbol-${c}" min="0" max="20" step="1" value="${filters.symbols[c]||''}" placeholder="0"></label>`);
+  }).join('');
+  const formats=uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('');
+  return `<form id="guided-form"><div class="guided-grid">
+    ${field('name','Card name',clearable('name','name phrase',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`))}
+    ${field('type','Types and subtypes',`${chipPicker('types')}<label>Combine types by${match('type-match',filters.typeMatch)}</label>${chipPicker('excludedTypes')}`)}
+    ${field('keyword','Keywords',`${chipPicker('keywords')}<label>Combine keywords by${match('keyword-match',filters.keywordMatch)}</label>`)}
+    ${field('mv','Mana value',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}
+    ${color('color','Card color')}${color('identity','Color identity')}
+    ${field('oracle','Oracle text',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}
+    ${field('cost','Mana cost contains',`${clearable('cost','mana symbols',`<label>Mana symbols<input name="cost" value="${esc(filters.cost)}" maxlength="100" placeholder="e.g. {1}{G}"></label>`)}<p class="hint">{C} is colorless mana; {1} is generic mana. Hybrid symbols such as {U/B} stay distinct.</p>`)}
+    ${field('symbols','Minimum mana-symbol counts',`<div class="symbol-minimums">${symbols}</div><p class="hint">Each count means at least that many of the exact symbol, all required. Colorless {C} does not mean generic mana.</p>`)}
+    ${field('legal','Format legality',`${clearable('legal','format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${formats}</select></label>`)}<p class="hint">Chosen independently of the tracked deck.</p>`)}
+    </div><p id="guided-error" role="alert"></p></form>`;
 }
 function uniqueFormats(){return [...new Set([...FORMATS,...(filters.legal?[filters.legal]:[])])];}
 function selectedFunctions() {
@@ -809,13 +841,15 @@ function resetExplore(){
 function runGuidedSearch(keepForm=false){if(!filters.query.trim()){resetResults();renderSearchState(keepForm);}else search(false,false,keepForm);}
 function setCondition(family,model,run=true,keepForm=false){
   try{
-    const previous=filters,clause=conditionQuery(model,family);filters=replaceCondition(filters,family,clause);
+    const previous=filters,clause=conditionQuery(model,family),next=replaceCondition(filters,family,clause);
+    if(next.error)throw Error(next.error);
+    filters=next;
     // One operand cannot encode AND versus OR; retain the player's equivalent guided intent.
     // Typing in the raw query still rebuilds projections solely from that query.
     for(const key of SEARCH_FAMILIES){
       if(filters.locked.includes(key))continue;
       const source=family===key?model:previous;
-      const fields=key==='type'?['types','typeMatch']:key==='mv'?['values','valueMatch']:key==='oracle'?['oracle','oracleMatch']:key==='tags'?['tags','match']:[key];
+      const fields=key==='type'?['types','excludedTypes','typeMatch']:key==='keyword'?['keywords','keywordMatch']:key==='mv'?['values','valueMatch']:key==='oracle'?['oracle','oracleMatch']:key==='tags'?['tags','match']:[key];
       for(const field of fields)filters[field]=source[field];
     }
     if(run)runGuidedSearch(keepForm);
@@ -828,11 +862,48 @@ function applyGuided(family,run=true,keepForm=false){
   const data=new FormData($('#guided-form')),model=structuredClone(filters);
   if(['name','cost','legal'].includes(family))model[family]=String(data.get(family)||'');
   if(family==='oracle'){model.oracle=Array.from({length:Math.max(1,filters.oracle.length)},(_,i)=>({mode:String(data.get('oracle-mode-'+i)),text:String(data.get('oracle-'+i)||'')}));model.oracleMatch=String(data.get('oracle-match'));}
-  if(family==='type'){model.types=[...new Set(String(data.get('types')||'').split(',').map(t=>t.trim().toLowerCase()).filter(Boolean))];model.typeMatch=String(data.get('type-match'));}
+  if(family==='type')model.typeMatch=String(data.get('type-match'));
+  if(family==='keyword')model.keywordMatch=String(data.get('keyword-match'));
   if(family==='mv'){model.values=Array.from({length:Math.max(1,filters.values.length)},(_,i)=>({op:String(data.get('mv-op-'+i)),value:String(data.get('mv-'+i)||'')}));model.valueMatch=String(data.get('value-match'));}
   if(family==='color'||family==='identity')model[family]={mode:String(data.get(family+'-mode')),values:[...'WUBRG'].filter(c=>data.get(family+'-'+c))};
   if(family==='symbols')model.symbols=Object.fromEntries([...'WUBRGC'].map(c=>[c,Number(data.get('symbol-'+c)||0)]));
   return setCondition(family,model,run,keepForm);
+}
+function showChipSuggestions(input) {
+  const list = document.getElementById(input.getAttribute('aria-controls'));
+  const query = input.value.trim().toLowerCase();
+  const { catalog } = chipFields[input.name];
+  const selected = filters[input.name];
+  if (!query) { list.hidden = true; return; }
+  const available = catalog.filter(choice => !selected.includes(choice.toLowerCase()));
+  const prefix = available.filter(choice => choice.toLowerCase().startsWith(query));
+  const others = available.filter(choice => choice.toLowerCase().includes(query) && !prefix.includes(choice));
+  const matches = [...prefix, ...others].slice(0, 12);
+  list.innerHTML = matches.map(choice => `<button type="button" data-add-chip="${esc(choice.toLowerCase())}">${esc(choice)}</button>`).join('')
+    || '<p class="hint" role="status">No matching suggestions.</p>';
+  list.hidden = false;
+}
+function editChips(picker, values) {
+  const name = picker.dataset.chipPicker;
+  const family = picker.closest('[data-family]').dataset.family;
+  const previous = filters.query;
+  if (!setCondition(family,{ ...filters, [name]: values },false)) return;
+  picker.outerHTML = chipPicker(name);
+  $('#guided-form').elements.namedItem(name).focus();
+  if (filters.query !== previous) runGuidedSearch(true);
+}
+function clearGuidedField(form, button, family) {
+  const input = form.elements.namedItem(button.dataset.clearFilter);
+  if (family === 'color' || family === 'identity') {
+    input.value = 'all';
+    for (const color of button.closest('fieldset').querySelectorAll('input[type="checkbox"]')) {
+      color.checked = false;
+      color.disabled = false;
+    }
+  } else input.value = '';
+  const previous = filters.query;
+  if (applyGuided(family,false) && filters.query !== previous) runGuidedSearch(true);
+  input.focus();
 }
 function bindGuided(){
   $('#guided-form')?.addEventListener('toggle',e=>{
@@ -840,8 +911,46 @@ function bindGuided(){
     if(!family||!e.target.isConnected)return;
     if(e.target.open)openFilterFamilies.add(family);else openFilterFamilies.delete(family);
   },true);
-  $('#guided-form')?.addEventListener('input',e=>{const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,false);});
-  $('#guided-form')?.addEventListener('change',e=>{const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,e.target.tagName==='INPUT');});
+  $('#guided-form')?.addEventListener('input',e=>{
+    if(e.target.hasAttribute('data-chip-input')){showChipSuggestions(e.target);return;}
+    const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,false);
+  });
+  $('#guided-form')?.addEventListener('change',e=>{
+    if(e.target.hasAttribute('data-chip-input'))return;
+    const family=e.target.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,e.target.tagName==='INPUT');
+  });
+  $('#guided-form')?.addEventListener('click',e=>{
+    const button=e.target.closest('button[data-clear-filter],button[data-add-chip],button[data-remove-chip]');
+    if(!button)return;
+    const picker=button.closest('[data-chip-picker]');
+    if(!picker){clearGuidedField(e.currentTarget,button,button.closest('[data-family]').dataset.family);return;}
+    const selected=filters[picker.dataset.chipPicker];
+    const values=button.dataset.addChip?[...selected,button.dataset.addChip]:button.dataset.removeChip?selected.filter(value=>value!==button.dataset.removeChip):[];
+    editChips(picker,values);
+  });
+  $('#guided-form')?.addEventListener('focusout',e=>{
+    const picker=e.target.closest('[data-chip-picker]');
+    if(picker && e.relatedTarget && !picker.contains(e.relatedTarget))picker.querySelector('.chip-suggestions').hidden=true;
+  });
+  $('#guided-form')?.addEventListener('focusin',e=>{
+    if(e.target.matches('[data-chip-input]'))showChipSuggestions(e.target);
+  });
+  $('#guided-form')?.addEventListener('keydown',e=>{
+    const picker=e.target.closest('[data-chip-picker]');
+    if(!picker)return;
+    const input=picker.querySelector('[data-chip-input]'),list=picker.querySelector('.chip-suggestions');
+    if(e.key==='Escape'&&!list.hidden){e.preventDefault();input.focus();list.hidden=true;return;}
+    if(e.key==='Enter'&&e.target===input){
+      e.preventDefault();
+      if(!list.hidden)list.querySelector('button')?.click();
+      return;
+    }
+    if(list.hidden || !['ArrowDown','ArrowUp'].includes(e.key) || (e.target!==input&&!list.contains(e.target)))return;
+    const options=[...list.querySelectorAll('button')],index=options.indexOf(e.target);
+    e.preventDefault();
+    const next=e.key==='ArrowDown'?Math.min(index+1,options.length-1):index-1;
+    (options[next]||input).focus();
+  });
   $('#guided-form')?.addEventListener('submit',e=>{e.preventDefault();const family=document.activeElement?.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,true);else search(false,false,true);});
   $('#tag-match')?.addEventListener('change',e=>{const model={...filters,match:e.target.value};setCondition('tags',model);});
 }

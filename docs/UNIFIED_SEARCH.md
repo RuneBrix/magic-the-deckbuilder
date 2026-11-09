@@ -16,7 +16,8 @@ Typing invalidates pending requests. Previously completed results retain their o
 
 | Control | Supported representation / meaning |
 | --- | --- |
-| Types/subtypes | Comma-separated names; all requires each type, any accepts any type. `t:`, `type:`; quoted multiword values supported. |
+| Types and subtypes | Search and add removable chips from the first typed letter. Matching all (AND) requires each included type. Matching any (OR) accepts any included type. Do not include excludes every selected type, regardless of the include mode. Supports `t:`, `type:`, `-t:` and `-type:` with quoted multiword values. |
+| Keyword abilities | Search and add removable chips for Scryfall keyword abilities. Matching all (AND) requires each ability and Matching any (OR) accepts alternatives. Supports `keyword:` and `kw:` with quoted multiword values. Keyword exclusion is edited in the query. |
 | Mana value | Repeatable comparisons using `<`, `<=`, `=`, `!=`, `>=`, `>`; all builds ranges, any builds alternatives. `mv`, `cmc`, `manavalue` aliases supported. Starts with one row; Add additional mana value filter appends a blank row without searching. Column headers appear once; comparison, value and a square cross control share each evenly spaced row. With multiple rows, any row can be removed, including the first; the sole remaining row has its cross disabled. Removal focuses the next remaining row, or the previous row when removing the last. The row list scrolls locally above the all/any control. |
 | Card color / identity | Separate controls: contains all, contains any, exactly, only selected colors including colorless, multicolor only, colorless only. `c:`/`color:` and `id:`/`identity:` plus `=`, `>=`, `<=`. Color selection is disabled for multicolor/colorless modes. |
 | Name phrase | One positive `name:`/`n:` phrase. Quotes and escaped characters are preserved. |
@@ -25,6 +26,10 @@ Typing invalidates pending requests. Previously completed results retain their o
 | Symbol minimums | Exact W/U/B/R/G/C symbol counts, 0–20 each, all required, serialized as `m>=...`. Conjoined minimum clauses combine by maximum count per symbol, not by adding overlapping requirements. `{C}` is colorless; `{1}` is generic. |
 | Format | One positive `f:`/`format:` clause, independent of any tracked deck. |
 | Function tags | Positive `otag:` clauses; all/any selected tags share the same query. A tag entered as syntax can be removed by its chip. |
+
+The type and keyword suggestions use a bundled [Scryfall catalogs snapshot](https://scryfall.com/docs/api/catalogs), fetched on 2026-11-09. Run `node scripts/update-filter-catalog.mjs` to refresh the snapshot. Typing uses the local list. Select a suggestion by click or touch, use Arrow Down and Enter, or press Enter in the field to choose the first match. Escape dismisses suggestions. The query stays as entered until a suggestion is selected, and typed query values can appear as chips even when the local snapshot has no suggestion for them.
+
+Each writable text or number field and each chip picker has a trailing Clear control. Clear removes the targeted value or set of chips and returns focus to its field. Format clears to Any format. Card color and color identity clear their respective selected colors and reset their matching mode. In repeatable rows, Clear empties the value while keeping its comparison or text source. Remove deletes the entire row.
 
 Examples available without typing syntax:
 
@@ -38,14 +43,15 @@ Examples available without typing syntax:
 | At least one colorless symbol | Minimum Colorless {C}: 1 | `m>={C}` |
 | At least two blue symbols | Minimum Blue {U}: 2 | `m>={U}{U}` |
 | Instant or sorcery, mana value 2–4 | Types: instant, sorcery / Any; comparisons ≥2 and ≤4 / All | `(t:"instant" OR t:"sorcery") (mv>=2 mv<=4)` |
+| Flying or first strike, excluding creatures | Keywords: Flying, First strike / Any. Do not include: Creature | `(keyword:"flying" OR keyword:"first strike") -t:"creature"` |
 
 Color and cost searches follow Scryfall's multi-face semantics: a card may match through an individual face. Card color is not commander identity, and literal symbols do not stand for hybrid alternatives.
 
 ## Preservation boundary
 
-The small parser recognizes grouping and AND/OR precedence, quotes, escapes, regex tokens and negation so it can preserve advanced input safely. Projection edits independent supported conditions. Uniform type/tag OR groups, conjoined groups and supported mana/color groups round-trip without changing their meaning.
+The small parser recognizes grouping and AND/OR precedence, quotes, escapes, regex tokens and negation so it can preserve advanced input safely. Projection edits independent supported conditions. Uniform type, keyword and tag OR groups, independent type exclusions, conjoined groups and supported mana/color groups round-trip without changing their meaning.
 
-Mixed-family OR groups, negated expressions, mixed Boolean logic within one family, repeated unrepresentable name/format/cost conditions, unsupported color operators/nicknames, regexes and unknown qualifiers remain query-only. Query-only help shows their source text; affected controls are disabled and explain that the expression must be edited in the query. Unrelated guided conditions can still be changed. Untouched expressions retain their text; top-level AND separators may normalize to spaces, and necessary parentheses protect OR precedence when adding a condition. Redundant outer grouping of the entire conjunction may normalize without changing meaning.
+Mixed-family OR groups, negation beyond standalone type exclusions, mixed Boolean logic within one family, repeated unrepresentable name/format/cost conditions, unsupported color operators/nicknames, regexes and unknown qualifiers remain query-only. Query-only help shows their source text and the affected controls are disabled. Unrelated guided conditions can still be changed. Untouched expressions retain their text. Top-level AND separators may normalize to spaces, and necessary parentheses protect OR precedence when adding a condition. Redundant outer grouping of the entire conjunction may normalize without changing meaning.
 
 Incomplete quotes/regexes/groups, dangling AND/OR and unfinished recognized clauses pause guided edits and search, keeping the exact typed query. This does not validate every Scryfall expression: other invalid syntax is reported by Scryfall. Queries are bounded to 1,500 characters and 40 nested groups. No deck data or filter state is migrated or stored.
 
