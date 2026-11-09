@@ -1,5 +1,11 @@
 # Changelog
 
+## Searchable Explore filters
+
+- Add searchable include and exclude chips for types and subtypes (#120).
+- Add keyword ability chips with all/any matching (#124).
+- Clear individual guided fields and repeatable values with focus returned to the cleared field (#126).
+
 ## Deck counts, prices and previews
 
 - Emphasize type and Function headings and show copy counts across all four deck layouts (#90).

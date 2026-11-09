@@ -117,7 +117,8 @@ test('typed query projects controls without replacing the focused search input; 
   raw.input({target:{value:'(t:instant OR t:sorcery) (otag:ramp OR otag:draw) usd<5'}});
   assert.equal(w.node('#raw'),raw);assert.equal(raw.selectionStart,12);assert.equal(raw.selectionEnd,12);
   assert.equal(w.node('#app').innerHTML,shell);
-  assert.match(w.node('#guided-controls').innerHTML,/value="instant, sorcery"/);
+  assert.match(w.node('#guided-controls').innerHTML,/data-remove-chip="instant"/);
+  assert.match(w.node('#guided-controls').innerHTML,/data-remove-chip="sorcery"/);
   assert.equal(w.node('#applied-filter-summary').textContent,'Types · Function tags · 1 query-only expression');
   assert.match(w.node('#selected-functions').innerHTML,/Remove ramp filter/);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
@@ -156,7 +157,7 @@ test('inactive matching preferences survive choosing a mode before its first col
 test('guided numeric input updates the same query without replacing its active form',()=>{
   const w=workspace(),form=w.node('#guided-form'),shell=w.node('#app').innerHTML;
   formValues(w,{'symbol-U':'2','symbol-C':'1'});
-  form.input({target:{closest:()=>({dataset:{family:'symbols'}})}});
+  form.input({target:{hasAttribute:()=>false,closest:()=>({dataset:{family:'symbols'}})}});
   assert.equal(vm.runInContext('filters.query',w.context),'m>={U}{U}{C}');
   assert.equal(w.node('#raw').value,'m>={U}{U}{C}');
   assert.equal(w.node('#guided-form'),form);assert.equal(w.node('#app').innerHTML,shell);

@@ -399,7 +399,7 @@ test('Explore panels submit independently and add unlisted functions inline', as
   await filters.locator(':scope > summary').press('Space');
   const nameFilter = filters.locator('.guided-family').first();
   await expect(nameFilter.locator('summary')).toHaveText('Card name');
-  const name = nameFilter.getByLabel('Name phrase');
+  const name = nameFilter.getByLabel('Name phrase', { exact: true });
   await expect(name).toBeHidden();
   await nameFilter.locator('summary').press('Enter');
   await expect(name).toHaveValue('Sol Ring');
@@ -407,7 +407,7 @@ test('Explore panels submit independently and add unlisted functions inline', as
   await submit.click();
   await expect(raw).toHaveValue('name:"Forest" usd<5');
   await expect(name).toBeVisible();
-  await expect(filters.locator('[data-guided-family="type"] input')).toBeHidden();
+  await expect(filters.locator('[data-guided-family="type"] input:visible')).toHaveCount(0);
   const columns = await filters.locator('.guided-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
   expect(columns > 1).toBe(testInfo.project.name.startsWith('desktop'));
 
@@ -432,6 +432,84 @@ test('Explore panels submit independently and add unlisted functions inline', as
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Remove arcana-example-function filter', exact: true })).toBeFocused();
   await expect(name).toBeVisible();
+});
+
+test('type and keyword chips suggest locally, synchronize, and clear independently', async ({ page, isMobile }, testInfo) => {
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  const raw = page.locator('#raw');
+  await raw.fill('usd<5 o:/draw a card/');
+  await page.locator('#search-filters > summary').click();
+  await page.locator('#filter-heading-type').click();
+  await page.locator('#filter-heading-keyword').click();
+  const include = page.locator('[name="types"]'), exclude = page.locator('[name="excludedTypes"]');
+  const keywords = page.locator('[name="keywords"]');
+  await include.fill('e');
+  await expect(page.locator('#types-suggestions button').first()).toBeVisible();
+  await expect(raw).toHaveValue('usd<5 o:/draw a card/');
+  await include.fill('elf');
+  await include.press('ArrowDown');
+  await expect(page.locator('#types-suggestions').getByRole('button', { name: 'Elf', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(include).toBeFocused();
+  await expect(include).toHaveValue('');
+  await include.fill('creature');
+  await page.locator('#types-suggestions').getByRole('button', { name: 'Creature', exact: true }).click();
+  await page.getByLabel('Combine types by').selectOption('any');
+  await exclude.fill('artifact');
+  const artifact = page.locator('#excludedTypes-suggestions').getByRole('button', { name: 'Artifact', exact: true });
+  if (isMobile) await artifact.tap(); else await artifact.click();
+  await keywords.fill('first strike');
+  await keywords.press('Enter');
+  await keywords.fill('flying');
+  await page.locator('#keywords-suggestions').getByRole('button', { name: 'Flying', exact: true }).click();
+  await page.getByLabel('Combine keywords by').selectOption('any');
+  await expect(raw).toHaveValue('usd<5 o:/draw a card/ (t:"elf" OR t:"creature") -t:"artifact" (keyword:"first strike" OR keyword:"flying")');
+  await include.fill('elf');
+  await expect(page.locator('#types-suggestions').getByRole('status')).toHaveText('No matching suggestions.');
+  await include.fill('el');
+  await expect(page.locator('#types-suggestions').getByRole('button', { name: 'Elk', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('explore-type-suggestions.png') });
+  await include.press('Escape');
+  await expect(page.locator('#types-suggestions')).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('explore-type-keyword-chips.png') });
+  await page.getByRole('button', { name: 'Clear Types and subtypes', exact: true }).press('Enter');
+  await expect(include).toBeFocused();
+  await expect(include).toHaveValue('');
+  await expect(raw).toHaveValue('usd<5 o:/draw a card/ -t:"artifact" (keyword:"first strike" OR keyword:"flying")');
+  await page.getByRole('button', { name: 'Remove Artifact from Do not include', exact: true }).click();
+  await expect(exclude).toBeFocused();
+  await expect(raw).toHaveValue('usd<5 o:/draw a card/ (keyword:"first strike" OR keyword:"flying")');
+  await page.getByRole('button', { name: 'Clear Keyword abilities', exact: true }).click();
+  await expect(raw).toHaveValue('usd<5 o:/draw a card/');
+  await raw.fill('(t:creature OR -t:artifact) -kw:flying');
+  await expect(include).toBeDisabled();
+  await expect(keywords).toBeDisabled();
+  await noPageOverflow(page);
+});
+
+test('guided clear controls reset only the requested value and return focus', async ({ page }) => {
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  const raw = page.locator('#raw');
+  await raw.fill('name:"Sol Ring" mv>=2 mv<=5 o:"draw" fo:"flying" c:m id>=W m:{1}{G} m>={U}{C} f:modern usd<5');
+  await page.locator('#search-filters > summary').click();
+  for (const family of ['name', 'mv', 'oracle', 'color', 'identity', 'cost', 'symbols', 'legal']) {
+    await page.locator('#filter-heading-' + family).click();
+  }
+  for (const [label, field] of [
+    ['name phrase', 'name'], ['mana value 1', 'mv-0'], ['rules-text phrase 2', 'oracle-1'],
+    ['Card color', 'color-mode'], ['Color identity', 'identity-mode'], ['mana symbols', 'cost'],
+    ['Blue {U}', 'symbol-U'], ['format legality', 'legal'],
+  ]) {
+    await page.getByRole('button', { name: 'Clear ' + label, exact: true }).click();
+    await expect(page.locator('#guided-form [name="' + field + '"]')).toBeFocused();
+  }
+  await expect(page.locator('[name="mv-1"]')).toHaveValue('5');
+  await expect(page.locator('[name="oracle-mode-1"]')).toHaveValue('fo');
+  await expect(page.locator('[name="color-W"]')).toBeEnabled();
+  await expect(page.locator('[name="identity-W"]')).not.toBeChecked();
+  await expect(raw).toHaveValue('mv<=5 o:"draw" m>={C} usd<5');
+  await expect(page.locator('#applied-filter-summary')).toContainText('Mana values');
+  await noPageOverflow(page);
 });
 
 test('repeatable mana and Oracle filters synchronize, scroll locally and preserve advanced syntax', async ({ page }, testInfo) => {
