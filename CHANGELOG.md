@@ -1,5 +1,10 @@
 # Changelog
 
+## Explore color and mana cost filters
+
+- Edit card color and color identity in one Colors panel while keeping both query clauses independent (#122).
+- Compare generic amounts and literal mana-symbol counts in repeatable rows with all/any matching (#125).
+
 ## Deck statistics
 
 - Calculate draw chances by primary function or card type for a chosen number of draws and matches from Main deck (#103).

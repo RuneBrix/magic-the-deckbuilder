@@ -19,11 +19,10 @@ Typing invalidates pending requests. Previously completed results retain their o
 | Types and subtypes | Search and add removable chips from the first typed letter. Matching all (AND) requires each included type. Matching any (OR) accepts any included type. Do not include excludes every selected type, regardless of the include mode. Supports `t:`, `type:`, `-t:` and `-type:` with quoted multiword values. |
 | Keyword abilities | Search and add removable chips for Scryfall keyword abilities. Matching all (AND) requires each ability and Matching any (OR) accepts alternatives. Supports `keyword:` and `kw:` with quoted multiword values. Keyword exclusion is edited in the query. |
 | Mana value | Repeatable comparisons using `<`, `<=`, `=`, `!=`, `>=`, `>`; all builds ranges, any builds alternatives. `mv`, `cmc`, `manavalue` aliases supported. Starts with one row; Add additional mana value filter appends a blank row without searching. Column headers appear once; comparison, value and a square cross control share each evenly spaced row. With multiple rows, any row can be removed, including the first; the sole remaining row has its cross disabled. Removal focuses the next remaining row, or the previous row when removing the last. The row list scrolls locally above the all/any control. |
-| Card color / identity | Separate controls: contains all, contains any, exactly, only selected colors including colorless, multicolor only, colorless only. `c:`/`color:` and `id:`/`identity:` plus `=`, `>=`, `<=`. Color selection is disabled for multicolor/colorless modes. |
+| Colors | Match by Card color or Color identity. Each target keeps its own clause, and switching targets keeps the query intact. Modes include all, any, exactly, only selected colors including colorless, multicolor and colorless. The latter two disable individual color selection. For color letters, `c:` means contains and `id:` means fits within. The guided controls use explicit operators for these modes. |
 | Name phrase | One positive `name:`/`n:` phrase. Quotes and escaped characters are preserved. |
 | Oracle phrases | Repeatable positive `o:`/`oracle:` and `fo:`/`fulloracle:` rows, each with an Oracle / Full oracle selector. Full oracle includes reminder text. Add additional oracle filter appends a blank row; one header labels the Text source and Rules-text phrase columns. Each row places its source selector, phrase input and square cross control on one line. Any row can be deleted while multiple rows exist; the sole remaining row has its cross disabled. Removal preserves remaining phrases, their sources and matching mode. Matching all (AND) requires each phrase and Matching any (OR) accepts alternatives. Quotes, escapes and `~` remain intact; blank rows add no restriction. The row list scrolls locally. Regex Oracle conditions remain query-only. |
-| Mana cost contains | One `m:`/`mana:` literal cost expression; accepts ordinary and braced symbols, including hybrid. This is symbol containment, not an exact-cost promise. |
-| Symbol minimums | Exact W/U/B/R/G/C symbol counts, 0–20 each, all required, serialized as `m>=...`. Conjoined minimum clauses combine by maximum count per symbol, not by adding overlapping requirements. `{C}` is colorless; `{1}` is generic. |
+| Mana cost | Repeatable symbol, comparison and amount rows with Matching all (AND) or Matching any (OR). Add mana cost appends a blank row without searching. At least accepts 1–20. At most and Exactly accept 0–20. A blank amount adds no restriction. Generic compares the printed number. Colorless, variable, hybrid and Phyrexian symbols count as literal symbols. |
 | Format | One positive `f:`/`format:` clause, independent of any tracked deck. |
 | Function tags | Positive `otag:` clauses; all/any selected tags share the same query. A tag entered as syntax can be removed by its chip. |
 
@@ -40,18 +39,19 @@ Examples available without typing syntax:
 | Multicolor | Card color: Multicolor only | `c:m` |
 | Colorless | Card color: Colorless only | `c:c` |
 | White or colorless | Card color: Only these colors including colorless, White | `c<=W` |
-| At least one colorless symbol | Minimum Colorless {C}: 1 | `m>={C}` |
-| At least two blue symbols | Minimum Blue {U}: 2 | `m>={U}{U}` |
+| At least one colorless symbol | Colorless, At least, 1 | `m>={C}` |
+| At least two blue symbols | Blue, At least, 2 | `m>={U}{U}` |
+| Exactly one blue symbol or at most two generic mana | Blue, Exactly, 1 / Generic, At most, 2 / Any | `((m>={U} -m>={U}{U}) OR -m>={3})` |
 | Instant or sorcery, mana value 2–4 | Types: instant, sorcery / Any; comparisons ≥2 and ≤4 / All | `(t:"instant" OR t:"sorcery") (mv>=2 mv<=4)` |
 | Flying or first strike, excluding creatures | Keywords: Flying, First strike / Any. Do not include: Creature | `(keyword:"flying" OR keyword:"first strike") -t:"creature"` |
 
-Color and cost searches follow Scryfall's multi-face semantics: a card may match through an individual face. Card color is not commander identity, and literal symbols do not stand for hybrid alternatives.
+Mana comparisons use [Scryfall search](https://scryfall.com/docs/syntax) thresholds. A maximum negates the next threshold. Exact positive counts combine both bounds, and exactly zero is equivalent to at most zero. Scryfall evaluates these clauses across faces using its normal search semantics. The [symbology catalog](https://scryfall.com/docs/api/symbology) supplies the symbol notation.
 
 ## Preservation boundary
 
 The small parser recognizes grouping and AND/OR precedence, quotes, escapes, regex tokens and negation so it can preserve advanced input safely. Projection edits independent supported conditions. Uniform type, keyword and tag OR groups, independent type exclusions, conjoined groups and supported mana/color groups round-trip without changing their meaning.
 
-Mixed-family OR groups, negation beyond standalone type exclusions, mixed Boolean logic within one family, repeated unrepresentable name/format/cost conditions, unsupported color operators/nicknames, regexes and unknown qualifiers remain query-only. Query-only help shows their source text and the affected controls are disabled. Unrelated guided conditions can still be changed. Untouched expressions retain their text. Top-level AND separators may normalize to spaces, and necessary parentheses protect OR precedence when adding a condition. Redundant outer grouping of the entire conjunction may normalize without changing meaning.
+Mixed-family OR groups, mixed Boolean logic within one family, repeated name/format conditions, unsupported color operators and nicknames, regexes and unknown qualifiers remain query-only. Whole-cost expressions such as `m:{1}{G}`, `m={U}{U}` and mixed-symbol thresholds such as `m>={U}{C}` also remain query-only. Guided negation is limited to type exclusions and single-symbol mana ceilings. Query-only help shows source text and disables the affected controls. Unrelated guided conditions remain editable. Untouched expressions retain their text. Top-level AND separators may normalize to spaces, and necessary parentheses protect OR precedence when adding a condition.
 
 Incomplete quotes/regexes/groups, dangling AND/OR and unfinished recognized clauses pause guided edits and search, keeping the exact typed query. This does not validate every Scryfall expression: other invalid syntax is reported by Scryfall. Queries are bounded to 1,500 characters and 40 nested groups. No deck data or filter state is migrated or stored.
 

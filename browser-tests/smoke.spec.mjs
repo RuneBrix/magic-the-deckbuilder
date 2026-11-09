@@ -604,15 +604,14 @@ test('type and keyword chips suggest locally, synchronize, and clear independent
 test('guided clear controls reset only the requested value and return focus', async ({ page }) => {
   await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
   const raw = page.locator('#raw');
-  await raw.fill('name:"Sol Ring" mv>=2 mv<=5 o:"draw" fo:"flying" c:m id>=W m:{1}{G} m>={U}{C} f:modern usd<5');
+  await raw.fill('name:"Sol Ring" mv>=2 mv<=5 o:"draw" fo:"flying" c:m id>=W m>={U} m>={C} f:modern usd<5');
   await page.locator('#search-filters > summary').click();
-  for (const family of ['name', 'mv', 'oracle', 'color', 'identity', 'cost', 'symbols', 'legal']) {
+  for (const family of ['name', 'mv', 'oracle', 'colors', 'cost', 'legal']) {
     await page.locator('#filter-heading-' + family).click();
   }
   for (const [label, field] of [
     ['name phrase', 'name'], ['mana value 1', 'mv-0'], ['rules-text phrase 2', 'oracle-1'],
-    ['Card color', 'color-mode'], ['Color identity', 'identity-mode'], ['mana symbols', 'cost'],
-    ['Blue {U}', 'symbol-U'], ['format legality', 'legal'],
+    ['Card color', 'color-mode'], ['mana amount 1', 'cost-0'], ['format legality', 'legal'],
   ]) {
     await page.getByRole('button', { name: 'Clear ' + label, exact: true }).click();
     await expect(page.locator('#guided-form [name="' + field + '"]')).toBeFocused();
@@ -620,10 +619,65 @@ test('guided clear controls reset only the requested value and return focus', as
   await expect(page.locator('[name="mv-1"]')).toHaveValue('5');
   await expect(page.locator('[name="oracle-mode-1"]')).toHaveValue('fo');
   await expect(page.locator('[name="color-W"]')).toBeEnabled();
+  await page.getByRole('combobox',{name:'Match by',exact:true}).selectOption('identity');
+  await expect(page.getByRole('combobox',{name:'Match by',exact:true})).toBeFocused();
+  await expect(page.locator('[name="identity-W"]')).toBeChecked();
+  await page.getByRole('button', {name:'Clear Color identity',exact:true}).click();
+  await expect(page.locator('[name="identity-mode"]')).toBeFocused();
   await expect(page.locator('[name="identity-W"]')).not.toBeChecked();
   await expect(raw).toHaveValue('mv<=5 o:"draw" m>={C} usd<5');
   await expect(page.locator('#applied-filter-summary')).toContainText('Mana values');
   await noPageOverflow(page);
+});
+
+test('one Colors panel and repeatable mana costs preserve query semantics', async ({page}) => {
+  const queries=[];
+  page.on('request', request => {
+    const url=new URL(request.url());
+    if(url.pathname==='/api/search')queries.push(url.searchParams.get('q'));
+  });
+  await page.getByRole('button', {name:'Explore cards',exact:true}).click();
+  await page.locator('#search-filters > summary').click();
+  const raw=page.locator('#raw');
+  await raw.fill('id:w usd<5');
+  await page.locator('#filter-heading-colors').click();
+  const target=page.getByRole('combobox',{name:'Match by',exact:true});
+  const matching=page.getByRole('combobox',{name:'Matching mode',exact:true});
+  await expect(target).toHaveValue('identity');
+  await expect(matching).toHaveValue('subset');
+  await target.selectOption('color');
+  await expect(raw).toHaveValue('id:w usd<5');
+  await matching.selectOption('multi');
+  await expect(raw).toHaveValue('id:w usd<5 c:m');
+  await expect(page.getByRole('checkbox',{name:'White',exact:true})).toBeDisabled();
+
+  await page.locator('#filter-heading-cost').click();
+  await page.getByLabel('Mana amount 1',{exact:true}).fill('0');
+  await expect(page.locator('#guided-error')).toContainText('from 1 to 20');
+  await expect(raw).toHaveValue('id:w usd<5 c:m');
+  await page.getByLabel('Mana amount 1',{exact:true}).fill('2');
+  await expect(page.locator('#guided-error')).toBeEmpty();
+  await page.getByRole('button',{name:'Add mana cost',exact:true}).click();
+  await expect(page.getByLabel('Mana amount 2',{exact:true})).toBeFocused();
+  await page.getByLabel('Mana symbol 2',{exact:true}).selectOption('C');
+  await page.getByLabel('Mana cost comparison 2',{exact:true}).selectOption('=');
+  await page.getByLabel('Mana amount 2',{exact:true}).fill('1');
+  await page.getByRole('combobox',{name:'Combine mana cost filter by',exact:true}).selectOption('any');
+  const expected='id:w usd<5 c:m (m>={2} OR (m>={C} -m>={C}{C}))';
+  await expect(raw).toHaveValue(expected);
+  await expect.poll(()=>queries.at(-1)).toBe(expected);
+  await noPageOverflow(page);
+  await raw.fill(expected+' f:commander');
+  await expect(page.getByLabel('Mana symbol 2',{exact:true})).toHaveValue('C');
+  await expect(page.getByLabel('Mana cost comparison 2',{exact:true})).toHaveValue('=');
+  await page.getByRole('button',{name:'Remove mana cost filter 1',exact:true}).click();
+  await expect(page.getByLabel('Mana amount 1',{exact:true})).toBeFocused();
+  await expect(raw).toHaveValue('id:w usd<5 c:m (m>={C} -m>={C}{C}) f:commander');
+  await raw.fill('c:r (id:w OR t:land) m:{1}{G}');
+  await expect(page.getByLabel('Mana amount 1',{exact:true})).toBeDisabled();
+  await target.selectOption('identity');
+  await expect(matching).toBeDisabled();
+  await expect(raw).toHaveValue('c:r (id:w OR t:land) m:{1}{G}');
 });
 
 test('repeatable mana and Oracle filters synchronize, scroll locally and preserve advanced syntax', async ({ page }, testInfo) => {
