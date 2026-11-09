@@ -3,6 +3,7 @@ import { esc, mana, printingLabel } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
+import { deckPrintingPrice } from './core.js';
 
 const $ = s => document.querySelector(s);
 const icon = (name, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${({ search: '<path d="m10 2 8 8-8 8-8-8zM10 6v8M6 10h8m2 6 6 6"/>', cards: '<path d="M8 3h12v16H8zM4 7v14h12M11 8l3-2 3 2-3 4z"/>' , settings: '<path d="M4 7h16M4 17h16M8 4v6M16 14v6"/>' , filters: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>', leaf: '<path d="M20 4C8 2 2 10 7 16s14-1 13-12ZM5 21 16 10"/>', check: '<path d="m5 12 4 4L19 6"/>', down: '<path d="m6 9 6 6 6-6"/>', upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>', download: '<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>', chart: '<path d="M4 20V4m0 16h17M9 16v-5m5 5V7m5 9v-8"/>', more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>', book: '<path d="M12 5C8 2 4 3 2 4v15c4-2 7-1 10 1 3-2 6-3 10-1V4c-4-2-7-1-10 1Zm0 0v15"/>' })[name] || ''}</svg>`;
@@ -404,11 +405,32 @@ function checksPanel(d, report) {
   return `<div class="checks"><h2>Deck legality checks</h2><p>Deck construction and card legality are checked together for ${esc(formatLabel(d.format))}.</p><h3 class="check-summary check-${status}">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3><p>${scope} Card legality uses stored data; freshness is shown below.</p>${freshnessNotice(d)}${section('Failed checks',report.failed,'failure','close','These supported rules fail with the stored deck and card data. Review freshness before relying on card legality results.')}${section('Data unavailable',report.unavailable,'warning','book','Missing or unrecognized card data prevents these checks. This does not mean the affected cards are banned.')}${section('Manual review',report.manual,'info','book','The app cannot fully check these rules. Verify them yourself before playing.')}<p class="hint">Passing supported checks is not tournament certification. ${d.format==='commander'?'<a href="https://github.com/RuneBrix/magic-the-deckbuilder/issues/13" target="_blank" rel="noreferrer">Commander rules still needing support</a> include basic-land type restrictions, commander eligibility and pairings. ':''}Companion designation and starting-deck restrictions are not automated.</p>${bracketPanel(d)}</div>`;
 }
 
+const usdAmount = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const usd = cents => usdAmount.format(cents / 100) + ' USD';
+function deckPriceTotal(entries) {
+  let total = 0, unpriced = 0, priced = 0;
+  for (const entry of entries) {
+    const { cents } = deckPrintingPrice(entry.card);
+    if (cents === null) unpriced += entry.qty;
+    else { total += cents * entry.qty; priced += entry.qty; }
+  }
+  const unknownCopies = `${unpriced} ${unpriced === 1 ? 'copy' : 'copies'} unpriced`;
+  if (!Number.isSafeInteger(total)) return unpriced ? `Price total unavailable · ${unknownCopies}` : 'Price total unavailable';
+  if (!unpriced) return usd(total);
+  return priced ? `${usd(total)} known · ${unknownCopies}` : unknownCopies;
+}
+function stackCardMeta(card) {
+  const { cents } = deckPrintingPrice(card);
+  const setCode = typeof card.set === 'string' && card.set.trim() ? card.set.toUpperCase() : 'Set unknown';
+  return `<div class="stack-card-meta"><span>${esc(card.name)}</span><span>${esc(setCode)} · ${cents === null ? 'Price unavailable' : usd(cents)}</span></div>`;
+}
 function previewMarkup(d) {
   const entry=deckEntries(d,editorOptions).find(e=>entryKey(e)===previewKey);
   if(!entry)return '<p class="hint">Point to a card or focus its name to preview.</p>';
   const image=safeUrl(imageFor(entry.card),true);
-  return `<figure>${image?`<img src="${esc(image)}" alt="${esc(entry.card.name)}">`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}</figcaption></figure>`;
+  const { cents, finish } = deckPrintingPrice(entry.card);
+  const price = cents === null ? 'Price unavailable' : `${usd(cents)} per copy`;
+  return `<figure>${image?`<img src="${esc(image)}" alt="${esc(entry.card.name)}">`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}<span>Function: ${esc(primaryRole(entry))}</span><span>${price}${finish ? ' · ' + finish : ''}</span></figcaption></figure>`;
 }
 function deckCards(d) {
   if(previewDeck!==d.id || !deckEntries(d,editorOptions).some(e=>entryKey(e)===previewKey)){previewKey='';previewDeck=d.id;}
@@ -427,16 +449,44 @@ function deckEntry(e) {
   const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
   const badge=`<span class="entry-quantity${visual&&e.qty>=100?' three-digits':''}" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>`;
   const art=`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
-  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}</div>${art}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}</div>${art}${stackCardMeta(e.card)}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckList(d, full=false) {
-  const filtered=full?deckEntries(d,editorOptions):d.cards,zones=['command','main','sideboard','maybeboard'].map(z=>[z,ZONES[z]]);
-  return `<div class="zone-counts" aria-label="Deck zone counts">${zones.map(([z,label])=>`<span>${label}: ${zoneCount(d,z)}</span>`).join('')}</div><div class="deck-zones ${full?esc(editorOptions.layout):'tracker-zones'}">`+zones.map(([zone,label])=>{
-    if(['sideboard','maybeboard'].includes(zone)&&!d.cards.some(e=>zoneFor(e)===zone))return '';
-    const entries=filtered.filter(e=>zoneFor(e)===zone),groups=new Map();
-    for(const e of entries){const group=full&&zone!=='command'?(editorOptions.group==='role'?primaryRole(e):editorOptions.group==='type'?category(e.card):''):'';if(!groups.has(group))groups.set(group,[]);groups.get(group).push(e);}
-    return `<section class="deck-zone"${full?` data-drop-zone="${zone}"`: ''}><h3>${label} · ${zoneCount(d,zone)}${full&&editorOptions.search.trim()?' · '+entries.reduce((n,e)=>n+e.qty,0)+' shown':''}</h3><div class="deck-group-list">${[...groups].map(([group,items])=>`<section class="deck-group"${full&&editorOptions.group==='role'&&items.some(e=>e.tags[0]===group)?` data-drop-zone="${zone}" data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"`:''}>${group?`<h4>${esc(group)}</h4>`:''}<div class="deck-group-items" style="--stack-divisor:${Math.max(1,items.length-2)}">${items.map(e=>full?(editorOptions.layout.startsWith('visual')?`<div class="card-slot">${deckEntry(e)}</div>`:deckEntry(e)):`<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${esc(entryKey(e))}">${esc(e.card.name)}</button></span><div class="row-actions"><button data-zone-minus="${esc(entryKey(e))}" aria-label="Remove one ${esc(e.card.name)} from ${label}">−</button><button data-zone-plus="${esc(entryKey(e))}" aria-label="Add one ${esc(e.card.name)} to ${label}">+</button></div></div>`).join('')}</div></section>`).join('')||`<p class="hint">${full&&d.cards.some(e=>zoneFor(e)===zone)?'No cards match these filters.':'No cards in this zone.'}</p>`}</div></section>`;
-  }).join('')+'</div>';
+  const filtered = full ? deckEntries(d, editorOptions) : d.cards;
+  const filtering = full && Boolean(editorOptions.search.trim());
+  const visual = full && editorOptions.layout.startsWith('visual');
+  const zones = ['command', 'main', 'sideboard', 'maybeboard'].map(zone => [zone, ZONES[zone], zoneCount(d, zone)]);
+  const zoneCounts = zones.map(([,label,qty]) => `<span>${label}: ${qty}</span>`).join('');
+  const zoneSections = zones.map(([zone,label,qty]) => {
+    if (qty === 0 && ['sideboard', 'maybeboard'].includes(zone)) return '';
+    const entries = filtered.filter(e => zoneFor(e) === zone);
+    const grouping = full && zone !== 'command' ? editorOptions.group : 'none';
+    const groups = new Map();
+    for (const entry of entries) {
+      const group = grouping === 'role' ? primaryRole(entry) : grouping === 'type' ? category(entry.card) : '';
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group).push(entry);
+    }
+    const groupSections = [...groups].map(([group,items]) => {
+      const cards = items.map(e => {
+        if (visual) return `<div class="card-slot">${deckEntry(e)}</div>`;
+        if (full) return deckEntry(e);
+        const key = esc(entryKey(e)), name = esc(e.card.name);
+        return `<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${key}">${name}</button></span><div class="row-actions"><button data-zone-minus="${key}" aria-label="Remove one ${name} from ${label}">−</button><button data-zone-plus="${key}" aria-label="Add one ${name} to ${label}">+</button></div></div>`;
+      }).join('');
+      const target = grouping === 'role' && items.some(e => e.tags[0] === group)
+        ? ` data-drop-zone="${zone}" data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"` : '';
+      const groupQty = group ? count({ cards: items }) : 0;
+      const summary = group ? `<h4>${esc(group)} <span>· ${groupQty} ${filtering ? 'shown' : groupQty === 1 ? 'card' : 'cards'}</span></h4><p class="deck-group-price">${deckPriceTotal(items)}</p>` : '';
+      return `<section class="deck-group"${target}>${summary}<div class="deck-group-items" style="--stack-divisor:${Math.max(1, items.length - 2)}">${cards}</div></section>`;
+    }).join('');
+    const shown = filtering ? ` · ${count({ cards: entries })} shown` : '';
+    const price = full ? `<span class="deck-zone-price"> · ${deckPriceTotal(entries)}${filtering ? ' for shown cards' : ''}</span>` : '';
+    const empty = `<p class="hint">${full && qty ? 'No cards match these filters.' : 'No cards in this zone.'}</p>`;
+    return `<section class="deck-zone"${full ? ` data-drop-zone="${zone}"` : ''}><h3>${label} · ${qty}${shown}${price}</h3><div class="deck-group-list">${groupSections || empty}</div></section>`;
+  }).join('');
+  const priceNote = full ? '<p class="deck-price-note">Stored USD estimates use the regular or sole printing finish.</p>' : '';
+  return `<div class="zone-counts" aria-label="Deck zone counts">${zoneCounts}</div>${priceNote}<div class="deck-zones ${full ? esc(editorOptions.layout) : 'tracker-zones'}">${zoneSections}</div>`;
 }
 function finishCardDrag() {
   cardDragPress=null;

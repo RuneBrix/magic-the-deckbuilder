@@ -168,7 +168,7 @@ test('deck controls compose live text filtering, grouping and sorting without re
   assert.equal(w.node('#app').innerHTML,shell);assert.equal(w.node('#editor-search'),field);
   assert.match(w.node('#editor-card-area').outerHTML,/Ramp spell/);assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
   w.node('#editor-group').change({target:{value:'role'}});w.node('#editor-order').change({target:{value:'price-desc'}});
-  assert.match(w.node('#app').innerHTML,/<h4>Removal<\/h4>/);assert.match(w.node('#app').innerHTML,/2 shown/);
+  assert.match(w.node('#app').innerHTML,/<h4>Removal <span>· 2 shown<\/span><\/h4>/);
   field.input({target:{value:'not in this deck'}});assert.match(w.node('#editor-card-area').outerHTML,/No cards match these filters/);
   await w.node('#app').click({target:{closest:()=>({dataset:{action:'clear-deck-filters'}})}});
   assert.equal(vm.runInContext('editorOptions.search',w.context),'');assert.equal(vm.runInContext('editorOptions.order',w.context),'price-desc');
@@ -219,7 +219,7 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
     else assert.match(w.node('#app').innerHTML,/class="entry-quantity"/);
-    w.node('#editor-group').change({target:{value:'role'}});assert.match(w.node('#app').innerHTML,/<h4>Removal<\/h4>/);
+    w.node('#editor-group').change({target:{value:'role'}});assert.match(w.node('#app').innerHTML,/<h4>Removal <span>· 2 cards<\/span><\/h4>/);
     w.node('#editor-search').input({target:{value:'sorcery ramp'}});assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
     assert.match(w.node('#editor-card-area').outerHTML,/Maybeboard · 3 · 3 shown/);
     vm.runInContext("editorOptions.search='';editorOptions.group='none';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/<h4>/);
@@ -240,6 +240,40 @@ test('horizontal stack slots follow visible group entries without changing quant
   w.node('#editor-search').input({target:{value:'Stack card 19'}});
   assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,1);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
+});
+
+test('deck prices and preview follow visible quantities, primary functions and stored printing finishes', async () => {
+  const d = editorDeck();
+  const ramp = d.cards[1];
+  ramp.card.set = 'one';
+  ramp.card.prices = { usd: '1.10', usd_foil: '10.00', eur: '5.00' };
+  ramp.card.finishes = ['nonfoil', 'foil'];
+  d.cards.push({ card: editorCard('Other spell', 'Sorcery'), qty: 3, zone: 'main', tags: ['Removal'] });
+  const key = core.entryKey(ramp);
+  const w = workspace({ savedDecks: JSON.stringify([d]) });
+  vm.runInContext("openDeck('editor')", w.context);
+  const html = () => w.node('#app').innerHTML;
+  assert.match(html(), /Sorcery <span>· 5 cards<\/span><\/h4><p[^>]+>2\.20 USD known · 3 copies unpriced/);
+  assert.match(html(), /Main deck · 5<span[^>]+> · 2\.20 USD known · 3 copies unpriced/);
+  assert.match(html(), /Ramp spell<\/span><span>ONE · 1\.10 USD/);
+  assert.match(html(), /Other spell<\/span><span>Set unknown · Price unavailable/);
+
+  w.node('#editor-search').input({ target: { value: 'Ramp' } });
+  assert.match(w.node('#editor-card-area').outerHTML, /Main deck · 5 · 2 shown<span[^>]+> · 2\.20 USD for shown cards/);
+  assert.match(w.node('#editor-card-area').outerHTML, /Sorcery <span>· 2 shown/);
+  w.node('#app').focusin({ target: { closest: () => ({ dataset: { previewEntry: key } }) } });
+  assert.match(w.node('#deck-card-preview').innerHTML, /Function: Removal<\/span><span>1\.10 USD per copy · regular/);
+  await w.node('#app').click({ target: { closest: () => ({ dataset: { zonePlus: key } }) } });
+  assert.match(html(), /3\.30 USD for shown cards/);
+
+  w.context.replacement = { ...ramp.card, id: 'foil-version', set: 'two', finishes: ['foil'], prices: { usd: '99.00', usd_foil: '0.75' } };
+  vm.runInContext(`setEntryPrinting(current(), ${JSON.stringify(key)}, replacement);render()`, w.context);
+  assert.match(html(), /2\.25 USD for shown cards/);
+  assert.match(html(), /TWO · 0\.75 USD/);
+  assert.match(html(), /0\.75 USD per copy · foil/);
+  assert.deepEqual(core.deckPrintingPrice({ finishes: ['etched'], prices: { usd_etched: '0.00' } }), { finish: 'etched', cents: 0 });
+  assert.equal(core.deckPrintingPrice({ finishes: ['foil'], prices: { usd: '5.00' } }).cents, null);
+  assert.equal(core.deckPrintingPrice({ finishes: ['foil', 'etched'], prices: { usd_foil: '5.00' } }).cents, null);
 });
 
 test('optional viewing zones follow stored entries rather than filter matches in every layout and tracker', () => {

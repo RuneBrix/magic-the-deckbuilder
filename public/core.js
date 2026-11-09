@@ -138,13 +138,21 @@ export const isLand = card => cardTypes(card).includes('Land');
 export const category = card => cardTypes(card)[0] || 'Other';
 // The first personal role is primary; keeping the ordered tags preserves legacy backups.
 export const primaryRole = entry => entry.tags[0] || 'Unassigned';
+export function deckPrintingPrice(card) {
+  const finishes = Array.isArray(card.finishes) ? card.finishes : [];
+  const finish = !finishes.length || finishes.includes('nonfoil') ? 'regular' : finishes.length === 1 ? finishes[0] : null;
+  const field = finish === 'regular' ? 'usd' : finish === 'foil' ? 'usd_foil' : finish === 'etched' ? 'usd_etched' : null;
+  const quote = field ? card.prices?.[field] : null;
+  const cents = parseCurrencyCents(typeof quote === 'number' ? String(quote) : quote);
+  return { finish: field ? finish : null, cents };
+}
 export function deckEntries(deck, { type = '', role = '', search = '', order = 'name' } = {}) {
   const terms=search.trim().toLocaleLowerCase('en').split(/\s+/).filter(Boolean);
   const mode=order.replace(/-desc$/,''), descending=order.endsWith('-desc') || mode==='quantity';
   const numeric=value=>typeof value==='number' && Number.isFinite(value)?value:typeof value==='string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()) && Number.isFinite(Number(value))?Number(value):null;
   const value=entry=>{
     const c=entry.card;
-    if(mode==='price'){const price=numeric(c.prices?.usd);return price!==null && price>=0?price:null;}
+    if(mode==='price')return deckPrintingPrice(c).cents;
     if(mode==='power' || mode==='toughness')return numeric(c[mode] ?? c.card_faces?.[0]?.[mode]);
     return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
   };
@@ -329,12 +337,13 @@ export function validateCollection(data) {
   return data;
 }
 
-export function parseEuroCents(value) {
+function parseCurrencyCents(value) {
   if (typeof value !== 'string' || !/^\d+(?:[.,]\d{1,2})?$/.test(value.trim())) return null;
-  const [euros,cents=''] = value.trim().replace(',','.').split('.');
-  const result=Number(euros)*100+Number(cents.padEnd(2,'0'));
+  const [units,cents=''] = value.trim().replace(',','.').split('.');
+  const result=Number(units)*100+Number(cents.padEnd(2,'0'));
   return Number.isSafeInteger(result) ? result : null;
 }
+export const parseEuroCents = parseCurrencyCents;
 
 export function collectionReport(deck, collection) {
   validateBackup([deck]);validateCollection(collection);

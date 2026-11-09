@@ -32,6 +32,54 @@ test('deck navigation, sticky header, statistics and budget fit the viewport', a
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
 });
 
+test('deck groups show copy counts and prices, and visual stacks reveal card metadata', async ({ page, isMobile }, testInfo) => {
+  await page.evaluate(() => {
+    const key = 'arcana.workspace.v2';
+    const data = JSON.parse(localStorage.getItem(key));
+    const entries = data.decks[0].cards;
+    data.decks[0].cards = entries.slice(0, 4);
+    entries[2].card.prices.usd = null;
+    entries[3].zone = 'maybeboard';
+    localStorage.setItem(key, JSON.stringify(data));
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  const layout = page.locator('#editor-layout');
+  const main = page.locator('.deck-zone[data-drop-zone="main"]');
+  const group = main.locator('.deck-group');
+  const preview = page.locator('#deck-card-preview');
+  for (const view of ['visual-horizontal', 'text-horizontal', 'text-vertical', 'visual-vertical']) {
+    await layout.selectOption(view);
+    await expect(group.getByRole('heading')).toHaveText('Creature · 3 cards');
+    await expect(group.locator('.deck-group-price')).toHaveText('3.00 USD known · 1 copy unpriced');
+    await expect(main.locator('.deck-zone-price')).toContainText('3.00 USD known · 1 copy unpriced');
+    if (view.startsWith('text')) await expect(main.locator('.stack-card-meta')).toHaveCount(0);
+    await noPageOverflow(page);
+  }
+  const first = main.locator('.visual-card').first();
+  const caption = first.locator('.stack-card-meta');
+  await expect(caption).toBeHidden();
+  if (!isMobile) {
+    await first.locator('.card-art').hover({ position: { x: 25, y: 25 } });
+    await expect(caption).toBeVisible();
+    await expect(caption).toContainText('TST · 1.50 USD');
+    await expect(preview).toContainText('Function: Draw');
+    await expect(preview).toContainText('1.50 USD per copy · regular');
+    const bottom = (await caption.boundingBox()).y + (await caption.boundingBox()).height;
+    expect((await main.locator('.card-art').nth(1).boundingBox()).y).toBeGreaterThan(bottom);
+  }
+  await page.keyboard.press('Tab');
+  await first.focus();
+  await expect(caption).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('deck-counts-and-prices.png') });
+  await page.locator('#editor-group').selectOption('role');
+  await expect(group.getByRole('heading')).toHaveText('Draw · 3 cards');
+  await page.locator('#editor-search').fill('Smoke Card 2');
+  await expect(group.getByRole('heading')).toHaveText('Draw · 2 shown');
+  await expect(main.getByRole('heading', { level: 3 })).toHaveText('Main deck · 3 · 2 shown · 3.00 USD for shown cards');
+  await noPageOverflow(page);
+});
+
 test('budget zones keep every card visible and compare known costs across scope and basis changes', async ({ page }) => {
   await page.evaluate(() => {
     const key = 'arcana.workspace.v2';
