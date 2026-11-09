@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import * as core from '../public/core.js';
 import * as viewUtils from '../public/view-utils.js';
 import * as collectionView from '../public/collection-view.js';
-import { statPanel } from '../public/statistics-view.js';
+import * as statisticsView from '../public/statistics-view.js';
 import { budgetPanel } from '../public/budget-view.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from '../public/filter-catalog.js';
 
@@ -26,7 +26,7 @@ export function workspace({ savedTheme = null, savedDecks = null, savedWorkspace
   };
   const media = { matches: dark, addEventListener(type, fn) { this[type] = fn; } };
   const document = { querySelector: node, querySelectorAll:()=>[], scrollIntoView() {}, documentElement: { dataset: {} }, activeElement: null };
-  const context = vm.createContext({ ...core, ...viewUtils, ...collectionView, statPanel, budgetPanel, TYPE_CATALOG, KEYWORD_CATALOG, document, addEventListener:(type,fn)=>{events[type]=fn;}, matchMedia: () => media,
+  const context = vm.createContext({ ...core, ...viewUtils, ...collectionView, ...statisticsView, budgetPanel, TYPE_CATALOG, KEYWORD_CATALOG, document, addEventListener:(type,fn)=>{events[type]=fn;}, matchMedia: () => media,
     localStorage: {
       getItem(key) { if (blocked) throw Error('Storage blocked'); return key === 'arcana.palette.v1' ? savedPalette : key === 'arcana.theme.v1' ? savedTheme : key === 'arcana.explorer.v1' ? savedTracker : key==='arcana.workspace.v2'?savedWorkspace:key==='arcana.decks.v1'?savedDecks:null; },
       setItem(key, value) { if (blocked) throw Error('Storage blocked'); writes.push([key, value]); },

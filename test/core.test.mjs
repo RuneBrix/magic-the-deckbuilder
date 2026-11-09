@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { queryFor, stats, legality, parseImport, exportDeckText, resolveImport, validateBackup, safeUrl, primaryRole, deckEntries, deckIdentity } from '../public/core.js';
+import { queryFor, stats, drawProbability, legality, parseImport, exportDeckText, resolveImport, validateBackup, safeUrl, primaryRole, deckEntries, deckIdentity } from '../public/core.js';
 const card=(name,type,cmc,identity=[],extra={})=>({id:name,oracle_id:name,name,type_line:type,cmc,color_identity:identity,colors:identity,oracle_text:'',legalities:{commander:'legal',modern:'legal',vintage:'legal'},...extra});
 const entry=(c,qty=1,extra={})=>({card:c,qty,tags:[],...extra});
 
@@ -23,6 +23,45 @@ test('guided filters compose without losing advanced syntax',()=>{
 test('stats weight quantities and omit lands from average and curve',()=>{
   const s=stats({cards:[entry(card('Forest','Basic Land — Forest',0,['G']),10),entry(card('Spell','Creature',3,['G']),2,{tags:['Ramp']}),entry(card('Big','Artifact',9),1)]});
   assert.equal(s.total,13);assert.equal(s.lands,10);assert.equal(s.average,5);assert.equal(s.curve[3],2);assert.equal(s.curve[7],1);assert.equal(s.tags.Ramp,2);
+});
+test('detailed statistics weight exact mana values and separate the playing deck from the draw population', () => {
+  const deck = { format: 'commander', cards: [
+    entry(card('Forest', 'Basic Land', 0, ['G']), 8),
+    entry(card('Hybrid', 'Artifact Creature', 2, ['G', 'U'], { power: '*', toughness: '0', rarity: 'rare' }), 3, { tags: ['Draw', 'Ramp'] }),
+    entry(card('Half', 'Instant', 2.5), 1),
+    entry(card('Commander', 'Legendary Creature', 9, ['G'], { colors: undefined, card_faces: [{ colors: ['G'], power: '2', toughness: '3' }] }), 2, { commander: true, tags: ['Ramp'] }),
+    entry(card('Side', 'Sorcery', 6), 20, { zone: 'sideboard' }),
+    entry(card('Maybe', 'Creature', 1), 20, { zone: 'maybeboard' }),
+  ] };
+  const before = structuredClone(deck), s = stats(deck, { detailed: true });
+  assert.equal(s.total, 14);
+  assert.equal(s.manaValue, 26.5);
+  assert.equal(s.median, 2.25);
+  assert.equal(s.average, 26.5 / 6);
+  assert.equal(s.curve[7], 2);
+  for (const [axis, group, bucket, copies] of [
+    ['color', 'U', 2, 3], ['color', 'G', 2, 3], ['color', 'G', 7, 2], ['color', 'C', 2, 1],
+    ['type', 'Creature', 2, 3], ['type', 'Artifact', 2, 3], ['function', 'Draw', 2, 3],
+    ['function', 'Ramp', 7, 2], ['power', 'No fixed value', 2, 4], ['power', 2, 7, 2],
+    ['toughness', 0, 2, 3], ['rarity', 'rare', 2, 3], ['rarity', 'Unknown', 7, 2],
+  ]) assert.equal(s.breakdowns[axis].get(group)[bucket], copies, `${axis} / ${group}`);
+  assert.deepEqual(s.draw, { total: 12, types: new Map([['Land', 8], ['Creature', 3], ['Instant', 1]]), functions: new Map([['Unassigned', 9], ['Draw', 3]]) });
+  assert.equal(stats({ ...deck, format: 'modern' }, { detailed: true }).median, 2);
+  assert.equal(stats({ cards: [deck.cards[0]] }, { detailed: true }).median, null);
+  assert.deepEqual(deck, before);
+});
+
+test('draw probability uses sampling without replacement and handles degenerate and large draws', () => {
+  assert.equal(drawProbability(10, 3, 2, 1, 'exactly'), 21 / 45);
+  assert.equal(drawProbability(10, 3, 2, 1, 'at-least'), 24 / 45);
+  assert.equal(drawProbability(10, 3, 2, 1, 'at-most'), 42 / 45);
+  assert.equal(drawProbability(10, 0, 5, 0, 'exactly'), 1);
+  assert.equal(drawProbability(10, 0, 5, 1, 'at-least'), 0);
+  assert.equal(drawProbability(10, 10, 5, 5, 'exactly'), 1);
+  assert.equal(drawProbability(10, 10, 5, 4, 'at-most'), 0);
+  assert.equal(drawProbability(10, 3, 10, 3, 'exactly'), 1);
+  assert.equal(drawProbability(10, 3, 0, 0, 'exactly'), 1);
+  assert.ok(Math.abs(drawProbability(500000, 250000, 250000, 125000, 'exactly') - 0.00225675) < 1e-7);
 });
 test('Commander flags missing commander, duplicate copies, bans, size and identity',()=>{
   const c=card('Leader','Legendary Creature',3,['G']);

@@ -32,6 +32,80 @@ test('deck navigation, sticky header, statistics and budget fit the viewport', a
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
 });
 
+test('statistics breakdowns and draw chances work with long labels, keyboard and empty decks', async ({ page, isMobile }) => {
+  const longFunction = 'Ramp'.repeat(20);
+  const saved = await page.evaluate(label => {
+    const key = 'arcana.workspace.v2';
+    const workspace = JSON.parse(localStorage.getItem(key));
+    const entries = workspace.decks[0].cards;
+    Object.assign(entries[0].card, { cmc: 9 });
+    entries[0].tags = ['Commander only'];
+    entries[2].tags = [label, 'Draw'];
+    Object.assign(entries[2].card, { cmc: 4, type_line: 'Artifact Creature', colors: ['G', 'U'], power: '0' });
+    entries.push({ ...entries[2], qty: 10, zone: 'sideboard' }, { ...entries[2], qty: 10, zone: 'maybeboard' });
+    workspace.decks.push({ id: 'empty-statistics', name: 'Empty Statistics', format: 'modern', cards: [] });
+    localStorage.setItem(key, JSON.stringify(workspace));
+    return JSON.stringify([workspace.decks, workspace.collection]);
+  }, longFunction);
+  await page.reload();
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
+  const board = page.locator('.stats-view');
+  await expect(board.getByText('Total mana value').locator('..').getByText('91', { exact: true })).toBeVisible();
+  await expect(board.getByText('Median mana value').locator('..').getByText('2', { exact: true })).toBeVisible();
+  const [curveBox, otherToolsBox] = await Promise.all([board.locator('.stat-tool').first().boundingBox(), board.locator('.stat-tools').boundingBox()]);
+  if (isMobile) {
+    expect(otherToolsBox.x).toBe(curveBox.x);
+    expect(otherToolsBox.y).toBeGreaterThan(curveBox.y + curveBox.height);
+  } else {
+    expect(otherToolsBox.y).toBe(curveBox.y);
+    expect(otherToolsBox.x).toBeGreaterThan(curveBox.x + curveBox.width);
+  }
+  const toolHeights = await board.locator('.stat-tools > section').evaluateAll(tools => tools.map(tool => tool.offsetHeight));
+  expect(toolHeights[1]).toBeGreaterThan(toolHeights[0]);
+
+  const breakdown = page.getByRole('combobox', { name: 'Breakdown', exact: true });
+  await breakdown.focus();
+  await breakdown.press('ArrowDown');
+  await expect(breakdown).toBeFocused();
+  const curveGroup = page.getByRole('combobox', { name: 'Group', exact: true });
+  await curveGroup.selectOption('U');
+  await expect(page.getByRole('img', { name: /Mana curve for Blue:.*4 mana: 1/ })).toBeVisible();
+  await breakdown.selectOption('function');
+  await curveGroup.selectOption(longFunction);
+  await expect(page.getByRole('img', { name: /Mana curve for RampRamp/ })).toBeVisible();
+  const drawTable = page.getByRole('table', { name: 'Draw chances by primary function' });
+  await expect(drawTable.getByRole('row', { name: new RegExp(longFunction) })).toContainText('17.5%');
+  await expect(drawTable.getByText('Commander only')).toHaveCount(0);
+  const drawn = page.getByRole('spinbutton', { name: 'Cards drawn' });
+  await drawn.focus();
+  await drawn.press('Tab');
+  const comparison = page.getByRole('combobox', { name: 'Comparison', exact: true });
+  await expect(comparison).toBeFocused();
+  await drawn.fill('41');
+  await expect(drawn).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#draw-status')).toHaveText('Enter a whole number of draws from 0 to 40.');
+  await expect(drawTable).toHaveCount(0);
+  await drawn.fill('40');
+  await comparison.selectOption('at-least');
+  await page.getByRole('combobox', { name: 'Group by', exact: true }).selectOption('types');
+  await expect(page.getByRole('table', { name: 'Draw chances by card type' }).getByRole('row', { name: /Creature/ })).toContainText('100%');
+  await noPageOverflow(page);
+
+  await page.getByRole('button', { name: 'My decks', exact: true }).click();
+  await page.getByRole('button', { name: 'Empty Statistics', exact: true }).click();
+  await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
+  await expect(page.getByText('Add cards to Main deck to calculate draw chances.')).toBeVisible();
+  await expect(drawn).toBeDisabled();
+  await noPageOverflow(page);
+  // The automatic legality refresh can update the workspace timestamp.
+  const dataPreserved = await page.evaluate(before => {
+    const { decks, collection } = JSON.parse(localStorage.getItem('arcana.workspace.v2'));
+    return JSON.stringify([decks, collection]) === before;
+  }, saved);
+  expect(dataPreserved).toBe(true);
+});
+
 test('deck groups show copy counts and prices, and visual stacks reveal card metadata', async ({ page, isMobile }, testInfo) => {
   await page.evaluate(() => {
     const key = 'arcana.workspace.v2';

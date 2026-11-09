@@ -960,6 +960,19 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .stat-tool .curve{margin-top:0}
 .stat-tool .color-stats{justify-content:flex-start;flex-wrap:wrap;gap:12px 20px}
 .stat-tool .hint{margin-top:12px}
+.stat-summary-heading{margin:14px 0 0;font-size:12px;font-weight:550;color:var(--muted)}
+.stat-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin:0;padding:0;border:0;min-width:0}
+.stat-controls label{min-width:0}
+.stat-controls select{text-transform:none;text-overflow:ellipsis}
+.stat-controls :is(select,input){min-height:44px}
+.draw-tool{grid-column:1/-1}
+.draw-tool .stat-controls{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
+.draw-tool [aria-invalid=true]{border-color:var(--danger)}
+#draw-status:empty{margin:0}
+.draw-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;font-variant-numeric:tabular-nums}
+.draw-table :is(th,td){text-align:right;padding:8px 0 8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.draw-table th:first-child{text-align:left;padding-left:0;white-space:normal;overflow-wrap:anywhere}
+.draw-table th{font-weight:550}
 @media(min-width:961px){#deck-tracker{position:sticky;top:var(--nav-height,76px);align-self:start;height:calc(100dvh - var(--nav-height,76px));min-height:0}}
 @media(max-width:600px){.stats-view{grid-template-columns:minmax(0,1fr);gap:28px}}
 

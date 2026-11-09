@@ -314,7 +314,7 @@ test('mana symbols retain accessible colors and distinguish colorless, generic a
   for(const symbol of ['2','X','U/B','G/P'])assert.match(html,new RegExp('aria-label="'+symbol+'"'));
   assert.match(html,/aria-label="&lt;bad&gt;"/);
   assert.doesNotMatch(html,/<bad>/);
-  const statsHtml=vm.runInContext('statPanel(stats(decks[0]))',w.context);
+  const statsHtml=vm.runInContext('statPanel(stats(decks[0], { detailed: true }), decks[0])',w.context);
   for(const color of ['White','Blue','Black','Red','Green','Colorless'])assert.match(statsHtml,new RegExp('aria-label="'+color+'"'));
   assert.match(vm.runInContext('guidedControls()',w.context),/mana-symbol/);
   assert.equal(w.writes.length,0);
@@ -325,9 +325,9 @@ test('statistics tool board renders existing weighted playing-deck values and es
   d.cards[1].tags=['<custom>'];
   d.cards.push({...structuredClone(d.cards[1]),zone:'sideboard',qty:50},{...structuredClone(d.cards[1]),zone:'maybeboard',qty:50});
   const w=workspace({savedDecks:JSON.stringify([d])}),s=core.stats(d);
-  const html=vm.runInContext('statPanel(stats(decks[0]))',w.context);
+  const html=vm.runInContext('statPanel(stats(decks[0], { detailed: true }), decks[0])',w.context);
   assert.match(html,/<section class="stat-tool"><h3>Mana curve<\/h3>/);
-  assert.match(html,/<div class="stat-tools"><section class="stat-tool"><h3>Card types/);
+  assert.match(html,/<div class="stat-tools">\s*<section class="stat-tool"><h3>Card types/);
   assert.match(html,new RegExp('Average mana value</span><b>'+s.average.toFixed(2).replace('.','\\.')));
   assert.match(html,/<span>&lt;custom&gt;<\/span><b>2<\/b>/);
   assert.match(html,new RegExp('aria-label="Mana curve: '+s.curve.map((n,i)=>`${i===7?'7\\+':i} mana: ${n}`).join(', ')+'"'));

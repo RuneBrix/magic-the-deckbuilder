@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck statistics
+
+- Calculate draw chances by primary function or card type for a chosen number of draws and matches from Main deck (#103).
+- Show total and median nonland mana value alongside the average, with mana curves by color, type, primary function, power, toughness and rarity (#106).
+
 ## Explore sorting and function filters
 
 - Sort Explore results by USD price in either direction across pages and label unavailable quotes (#131).
