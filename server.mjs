@@ -18,8 +18,11 @@ export const server = createServer(async (req, res) => {
         const q = url.searchParams.get('q')?.trim();
         const page = Number(url.searchParams.get('page') || 1);
         const order = url.searchParams.get('order') || 'edhrec';
-        if (!q || q.length > 1500 || !Number.isInteger(page) || page < 1 || page > 1000 || !['name', 'cmc', 'edhrec', 'usd'].includes(order)) throw Object.assign(new Error('Invalid search parameters.'), { status: 400 });
-        data = await scryfall('/cards/search?' + new URLSearchParams({ q, page, order, unique: 'cards' }));
+        const dir = url.searchParams.get('dir') ?? (order === 'usd' ? 'asc' : null);
+        if (!q || q.length > 1500 || !Number.isInteger(page) || page < 1 || page > 1000 || !['name', 'cmc', 'edhrec', 'usd'].includes(order) || (dir !== null && dir !== 'asc' && dir !== 'desc')) throw Object.assign(new Error('Invalid search parameters.'), { status: 400 });
+        const params = new URLSearchParams({ q, page, order, unique: 'cards' });
+        if (dir !== null) params.set('dir', dir);
+        data = await scryfall('/cards/search?' + params);
       } else if (url.pathname === '/api/printings' && req.method === 'GET') {
         const oracle = url.searchParams.get('oracle');
         const page = Number(url.searchParams.get('page') || 1);

@@ -90,13 +90,25 @@ test('stale alternative responses cannot overwrite restored results or their que
   assert.equal(vm.runInContext('resultContext.query',w.context),'otag:draw');
 });
 
-test('pagination uses the completed result query rather than unsent filter edits',async()=>{
+test('price pagination uses the completed result query and direction rather than unsent filter edits',async()=>{
   const w=workspace(), queries=[];
-  w.context.fetch=async url=>{queries.push(String(url));return {ok:true,json:async()=>({data:[],total_cards:300,has_more:true})};};
-  await vm.runInContext("filters=parseQuery('otag:ramp'); search()",w.context);
+  w.context.fetch=async url=>{queries.push(Object.fromEntries(new URL(url,'http://localhost').searchParams));return {ok:true,json:async()=>({data:[],total_cards:300,has_more:true})};};
+  await vm.runInContext("filters=parseQuery('otag:ramp'); order='usd-desc'; search()",w.context);
   await vm.runInContext("filters=parseQuery('otag:draw'); search(true)",w.context);
-  assert.equal(new URLSearchParams(queries[1].split('?')[1]).get('q'),'otag:ramp');
-  assert.equal(new URLSearchParams(queries[1].split('?')[1]).get('page'),'2');
+  assert.deepEqual(queries,[1,2].map(page=>({q:'otag:ramp',page:String(page),order:'usd',dir:'desc'})));
+});
+
+test('a late ascending price response cannot replace descending results', async () => {
+  const w = workspace();
+  let finish;
+  const response = data => ({ ok: true, json: async () => ({ data, total_cards: data.length, has_more: false }) });
+  w.context.fetch = () => new Promise(resolve => { finish = resolve; });
+  const stale = vm.runInContext("filters=parseQuery('otag:ramp'); order='usd-asc'; search()", w.context);
+  w.context.fetch = async () => response([editorCard('Expensive'), editorCard('Cheap')]);
+  await vm.runInContext("order='usd-desc'; search()", w.context);
+  finish(response([editorCard('Cheap'), editorCard('Expensive')]));
+  await stale;
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(results.map(card => card.name))', w.context)), ['Expensive', 'Cheap']);
 });
 
 test('applying unsent changes while sorting clears an obsolete relaxation explanation',async()=>{
