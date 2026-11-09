@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck counts, prices and previews
+
+- Emphasize type and Function headings and show copy counts across all four deck layouts (#90).
+- Show stored USD estimates for displayed groups and zones, with unpriced copies called out. Visual stacks show the card name, set code and per-copy quote on hover or keyboard focus (#95).
+- Show the primary Function and per-copy USD estimate beside the large deck preview (#94).
+
 ## Explore filter panels
 
 - Give Filters and Browse by function distinct panels. Expand filter families individually, see the active conditions in the header, and run the search from that header (#119).
