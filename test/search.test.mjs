@@ -23,23 +23,53 @@ test('supported Boolean groups project and edits preserve every unrelated source
 test('exact, all, any, subset, multicolor and colorless distinguish color from identity',()=>{
   for(const family of ['color','identity']){
     const prefix=family==='color'?'c':'id';
-    for(const [mode,values,expected] of [['exact',['W','U'],prefix+'=WU'],['exact',['W'],prefix+'=W'],['all',['W','U'],prefix+'>=WU'],['any',['W','U'],'('+prefix+':W OR '+prefix+':U)'],['subset',['W'],prefix+'<=W'],['multi',[],prefix+':m'],['colorless',[],prefix+':c']]){
+    for(const [mode,values,expected] of [['exact',['W','U'],prefix+'=WU'],['exact',['W'],prefix+'=W'],['all',['W','U'],prefix+'>=WU'],['any',['W','U'],'('+prefix+'>=W OR '+prefix+'>=U)'],['subset',['W'],prefix+'<=W'],['multi',[],prefix+':m'],['colorless',[],prefix+':c']]){
       const f=edit('',family,{[family]:{mode,values}});assert.equal(f.query,expected);assert.equal(f[family].mode,mode==='any'&&values.length===1?'all':mode);assert.deepEqual(f[family].values,values);
     }
   }
   const combined=parseQuery('c=W id<=WU');assert.equal(combined.color.mode,'exact');assert.equal(combined.identity.mode,'subset');
   assert.deepEqual(parseQuery('c:w c:u').color,{mode:'all',values:['W','U']});
+  const shorthand='id:w c:u f:commander';
+  assert.deepEqual(parseQuery(shorthand).identity,{mode:'subset',values:['W']});
+  assert.equal(edit(shorthand,'color',{color:{mode:'colorless',values:[]}}).query,'id:w c:c f:commander');
+  assert.ok(parseQuery('(id:w OR id:u) c:u').locked.includes('identity'));
 });
 
-test('types, ranges and literal symbol minimums round-trip without treating generic mana as colorless',()=>{
+test('type conjunctions and mana-value alternatives round-trip',()=>{
   assert.equal(edit('','type',{types:['artifact','creature'],typeMatch:'all'}).query,'(t:"artifact" t:"creature")');
   assert.deepEqual(parseQuery('t:elf').types,['elf']);
   assert.equal(edit('','mv',{values:[{op:'=',value:'2'},{op:'=',value:'4'}],valueMatch:'any'}).query,'(mv=2 OR mv=4)');
-  const f=edit('','symbols',{symbols:{C:1,U:2}});assert.equal(f.query,'m>={U}{U}{C}');assert.deepEqual(f.symbols,{U:2,C:1});
-  assert.deepEqual(parseQuery('m>={U} m>={C} m>={U}{U}').symbols,{U:2,C:1});
-  assert.equal(parseQuery('m:{1}{G}').cost,'{1}{G}');
-  const both=parseQuery('m:{1}{G} m>={C}');assert.equal(both.cost,'{1}{G}');assert.deepEqual(both.symbols,{C:1});
-  assert.throws(()=>conditionQuery({...parseQuery(''),symbols:{U:-1}},'symbols'));
+});
+
+test('mana cost comparisons count literal symbols and generic amounts with AND or OR',()=>{
+  const cost=[{symbol:'U',op:'=',amount:'1'},{symbol:'generic',op:'<=',amount:'2'},{symbol:'C',op:'>=',amount:'2'},{symbol:'U/B',op:'>=',amount:'1'}];
+  for(const costMatch of ['all','any']){
+    const join=costMatch==='all'?' ':' OR ';
+    const clause='('+['(m>={U} -m>={U}{U})','-m>={3}','m>={C}{C}','m>={U/B}'].join(join)+')';
+    const next=edit('id:w usd<5','cost',{cost,costMatch});
+    assert.equal(next.query,'id:w usd<5 '+clause);
+    assert.deepEqual(next.cost,cost);
+    assert.equal(next.costMatch,costMatch);
+    assert.deepEqual(parseQuery(clause).cost,cost);
+    assert.equal(relaxSearch(next,null,'cost').query,'id:w usd<5');
+  }
+  const single=edit('','cost',{cost:[cost[0]]});
+  assert.deepEqual(single.cost,[cost[0]]);
+  assert.deepEqual(parseQuery('mana>=uu mana>={X} -mana>={W/P}').cost,[
+    {symbol:'U',op:'>=',amount:'2'},{symbol:'X',op:'>=',amount:'1'},{symbol:'W/P',op:'<=',amount:'0'},
+  ]);
+  assert.equal(edit('','cost',{cost:[{symbol:'generic',op:'<=',amount:'20'}]}).query,'-m>={21}');
+  for(const amount of ['0','-1','1.5','21'])assert.throws(()=>edit('','cost',{cost:[{symbol:'U',op:'>=',amount}]}));
+});
+
+test('advanced mana clauses stay verbatim and lock only the mana-cost controls',()=>{
+  for(const query of ['m:{1}{G}','m>={U}{U}{C}','m<={C}','m={W}{W}','(t:creature OR m>={R})','m>={U} (m>={W} OR m>={B})']){
+    const next=edit(query,'identity',{identity:{mode:'subset',values:['W','U']}});
+    assert.ok(next.locked.includes('cost'),query);
+    assert.equal(next.query,`${query} id<=WU`);
+    assert.throws(()=>replaceCondition(next,'cost',''));
+  }
+  assert.ok(parseQuery('-mana>=').error);
 });
 
 test('complex/negated conditions lock affected controls and unrelated edits retain their meaning',()=>{

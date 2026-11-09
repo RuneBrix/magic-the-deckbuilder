@@ -4,7 +4,7 @@ import { COMMANDER_BRACKETS } from './commander-brackets.js';
 export { COMMANDER_BRACKETS };
 import { TAG_CATALOG } from './tag-catalog.js';
 import { replaceCondition, searchOptions } from './search.js';
-export { parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './search.js';
+export { parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES, COST_SYMBOLS, MAX_COST_AMOUNT } from './search.js';
 export { TAG_CATALOG };
 export const FORMATS = ['commander', 'standard', 'modern', 'pioneer', 'pauper', 'legacy', 'vintage'];
 export const TAGS = [

@@ -168,10 +168,10 @@ test('inactive matching preferences survive choosing a mode before its first col
 
 test('guided numeric input updates the same query without replacing its active form',()=>{
   const w=workspace(),form=w.node('#guided-form'),shell=w.node('#app').innerHTML;
-  formValues(w,{'symbol-U':'2','symbol-C':'1'});
-  form.input({target:{hasAttribute:()=>false,closest:()=>({dataset:{family:'symbols'}})}});
-  assert.equal(vm.runInContext('filters.query',w.context),'m>={U}{U}{C}');
-  assert.equal(w.node('#raw').value,'m>={U}{U}{C}');
+  formValues(w,{'cost-symbol-0':'U','cost-op-0':'=','cost-0':'2','cost-match':'all'});
+  form.input({target:{hasAttribute:()=>false,closest:()=>({dataset:{family:'cost'}})}});
+  assert.equal(vm.runInContext('filters.query',w.context),'(m>={U}{U} -m>={U}{U}{U})');
+  assert.equal(w.node('#raw').value,'(m>={U}{U} -m>={U}{U}{U})');
   assert.equal(w.node('#guided-form'),form);assert.equal(w.node('#app').innerHTML,shell);
   assert.equal(vm.runInContext('loading',w.context),false);
 });

@@ -1,8 +1,11 @@
 // A bounded Scryfall projection, not a replacement for Scryfall's search language.
 // Unknown expressions retain their source text; mixed Boolean groups lock affected controls.
-export const SEARCH_FAMILIES = ['name','oracle','type','keyword','mv','color','identity','cost','symbols','legal','tags'];
+export const SEARCH_FAMILIES = ['name','oracle','type','keyword','mv','color','identity','cost','legal','tags'];
+export const COST_SYMBOLS = ['generic', ...'WUBRGCSXYZ', 'W/U','W/B','B/R','B/G','U/B','U/R','R/G','R/W','G/W','G/U','G/U/P','G/W/P',
+  ...[...'WUBRG'].flatMap(color=>['C/'+color,'2/'+color,color+'/P']), 'C/P'];
+export const MAX_COST_AMOUNT = 20;
 const emptyColor = () => ({ mode: 'all', values: [] });
-const defaults = () => ({ name:'', oracle:[], oracleMatch:'all', types:[], excludedTypes:[], typeMatch:'all', keywords:[], keywordMatch:'all', values:[], valueMatch:'all', color:emptyColor(), identity:emptyColor(), cost:'', symbols:{}, legal:'', tags:[], match:'all' });
+const defaults = () => ({ name:'', oracle:[], oracleMatch:'all', types:[], excludedTypes:[], typeMatch:'all', keywords:[], keywordMatch:'all', values:[], valueMatch:'all', color:emptyColor(), identity:emptyColor(), cost:[], costMatch:'all', legal:'', tags:[], match:'all' });
 const unwrap = node => node?.kind === 'group' ? unwrap(node.child) : node;
 const unique = values => [...new Set(values)];
 const quote = value => JSON.stringify(value);
@@ -25,7 +28,7 @@ function tokenize(source) {
     }
     if(quoted||regex)throw Error('Finish the quoted text or regular expression before searching.');
     const text=source.slice(start,i);
-    if(/^(?:name|n|o|oracle|fo|fulloracle|t|type|-t|-type|kw|keyword|otag|f|format|c|color|id|identity|m|mana):$/i.test(text)||/^(?:mv|cmc|manavalue)[<>=!:]+$/i.test(text))throw Error('Finish the search condition before searching.');
+    if(/^(?:name|n|o|oracle|fo|fulloracle|t|type|-t|-type|kw|keyword|otag|f|format|c|color|id|identity):$/i.test(text)||/^-?(?:mv|cmc|manavalue|m|mana)[<>=!:]+$/i.test(text))throw Error('Finish the search condition before searching.');
     tokens.push({text,start,end:i});
   }
   return tokens;
@@ -45,6 +48,18 @@ function parse(source) {
   const root=or();if(position!==tokens.length)throw Error('Remove the unmatched closing parenthesis.');return root;
 }
 function textValue(value){if(value.startsWith('"')){try{return JSON.parse(value);}catch{return null;}}return /["/]/.test(value)?null:value;}
+function costThreshold(text) {
+  const match=text.match(/^(-?)(?:m|mana)>=(.+)$/i);
+  if(!match)return null;
+  const body=match[2].toUpperCase();
+  const generic=body.match(/^\{([1-9]\d*)\}$|^([1-9]\d*)$/);
+  const tokens=body.startsWith('{')?body.match(/\{[A-Z0-9/]+\}/g):[...body];
+  if(!generic&&(!tokens||tokens.join('')!==body||!tokens.every(token=>token===tokens[0])))return null;
+  const symbol=generic?'generic':tokens[0].replace(/[{}]/g,'');
+  const op=match[1]?'<=':'>=';
+  const amount=(generic?Number(generic[1]||generic[2]):tokens.length)-(match[1]?1:0);
+  return COST_SYMBOLS.includes(symbol)&&amount<=MAX_COST_AMOUNT?{symbol,op,amount:String(amount)}:null;
+}
 function term(text){
   let m;
   if((m=text.match(/^(name|n|o|oracle|fo|fulloracle|-?t|-?type|kw|keyword|otag|f|format):(.+)$/i))){
@@ -61,13 +76,11 @@ function term(text){
   if((m=text.match(/^(c|color|id|identity)(<=|>=|=|:)([wubrg]+|c|colorless|m|multicolor)$/i))){
     const value=m[3].toUpperCase(),family=/^(c|color)$/i.test(m[1])?'color':'identity';
     if(['C','COLORLESS','M','MULTICOLOR'].includes(value))return [':','='].includes(m[2])?{family,mode:value.startsWith('C')?'colorless':'multi',values:[]}:null;
-    return {family,mode:({'<=':'subset','>=':'all','=':'exact',':':'all'})[m[2]],values:unique([...value])};
+    const mode=({'<=':'subset','>=':'all','=':'exact',':':family==='identity'?'subset':'all'})[m[2]];
+    return {family,mode,values:unique([...value])};
   }
-  if((m=text.match(/^(?:m|mana)>=(?:(\{[wubrgc]\})+|([wubrgc]+))$/i))){
-    const symbols=text.slice(text.indexOf('=')+1).replace(/[{}]/g,'').toUpperCase();
-    return {family:'symbols',mode:'all',values:[...symbols]};
-  }
-  if((m=text.match(/^(?:m|mana):((?:\{[a-z0-9/]+\}|[a-z0-9])+)$/i)))return {family:'cost',mode:'all',values:[m[1]]};
+  const threshold=costThreshold(text);
+  if(threshold)return {family:'cost',mode:'all',values:[threshold]};
   return null;
 }
 function combineTypes(parts, mode) {
@@ -83,8 +96,13 @@ function classify(node){
   const parts=node.children.map(classify);if(parts.some(p=>!p)||parts.some(p=>p.family!==parts[0].family))return null;
   const family=parts[0].family,mode=node.kind==='or'?'any':'all';
   if(family==='type')return combineTypes(parts,mode);
-  if(family==='symbols')return mode==='all'?{family,mode,values:[...'WUBRGC'].flatMap(s=>Array(Math.max(...parts.map(p=>p.values.filter(x=>x===s).length))).fill(s))}:null;
-  if(['name','legal','cost'].includes(family))return null;
+  if(['name','legal'].includes(family))return null;
+  if(family==='cost'&&mode==='all'&&parts.length===2&&parts.every(part=>part.values.length===1)){
+    const [lower,upper]=parts.map(part=>part.values[0]);
+    if(lower.op==='>='&&upper.op==='<='&&lower.symbol===upper.symbol&&lower.amount===upper.amount){
+      return {family,mode,values:[{...lower,op:'='}]};
+    }
+  }
   if(['color','identity'].includes(family)){
     if(parts.some(p=>p.mode!=='all'||(mode==='any'&&p.values.length!==1)))return null;
     return {family,mode,values:unique(parts.flatMap(p=>p.values))};
@@ -98,7 +116,7 @@ function affected(node){
     const known=term(text);if(known)return [known.family];
     const m=text.match(/^(name|n|o|oracle|fo|fulloracle|t|type|kw|keyword|otag|f|format|legal|c|color|id|identity|m|mana|mv|cmc|manavalue)(?:[<>=!:])/i);
     if(!m)return [];
-    const key=m[1].toLowerCase();return /^(m|mana)$/.test(key)?['cost','symbols']:[({n:'name',o:'oracle',fo:'oracle',fulloracle:'oracle',t:'type',kw:'keyword',otag:'tags',f:'legal',format:'legal',c:'color',id:'identity',mana:'cost',cmc:'mv',manavalue:'mv'})[key]||key];
+    const key=m[1].toLowerCase();return [({n:'name',o:'oracle',fo:'oracle',fulloracle:'oracle',t:'type',kw:'keyword',otag:'tags',f:'legal',format:'legal',c:'color',id:'identity',m:'cost',mana:'cost',cmc:'mv',manavalue:'mv'})[key]||key];
   }
   return unique((node.children||[node.child]).filter(Boolean).flatMap(affected));
 }
@@ -108,7 +126,7 @@ export function parseQuery(query='') {
   try{
     if(query.length>1500)throw Error('Keep the query within 1,500 characters.');
     const parsed=parse(query),root=unwrap(parsed);if(!root)return result;
-    const nodes=root.kind==='and'?root.children:[parsed];
+    const nodes=root.kind==='and'&&!(parsed.kind==='group'&&classify(parsed)?.family==='cost')?root.children:[parsed];
     result.parts=nodes.map(node=>({text:query.slice(node.start,node.end),or:node.kind==='or',condition:classify(node),affected:affected(node)}));
     const groups=new Map();
     for(const part of result.parts){if(part.condition){const key=part.condition.family;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(part.condition);}else result.locked.push(...part.affected);}
@@ -119,16 +137,15 @@ export function parseQuery(query='') {
         result.types=type.values;result.excludedTypes=type.excluded;result.typeMatch=type.mode;
         continue;
       }
-      let values=parts.flatMap(p=>p.values);const mode=parts.length===1?parts[0].mode:'all';
+      const values=parts.flatMap(p=>p.values),mode=parts.length===1?parts[0].mode:'all';
       const multiple=parts.length>1;
-      if(multiple&&(!['keyword','tags','mv','oracle','symbols','color','identity'].includes(family)||parts.some(p=>p.mode!=='all'))){result.locked.push(family);continue;}
-      if(family==='symbols'&&multiple)values=[...'WUBRGC'].flatMap(s=>Array(Math.max(...parts.map(p=>p.values.filter(x=>x===s).length))).fill(s));
+      if(multiple&&(!['keyword','tags','mv','oracle','cost','color','identity'].includes(family)||parts.some(p=>p.mode!=='all'))){result.locked.push(family);continue;}
       if(family==='keyword'){result.keywords=unique(values);result.keywordMatch=mode;}
       else if(family==='tags'){result.tags=unique(values);result.match=mode;}
       else if(family==='mv'){result.values=values;result.valueMatch=mode;}
       else if(family==='oracle'){result.oracle=values;result.oracleMatch=mode;}
       else if(family==='color'||family==='identity')result[family]={mode,values};
-      else if(family==='symbols'){result.symbols=Object.fromEntries(unique(values).map(s=>[s,values.filter(x=>x===s).length]));if(Object.values(result.symbols).some(n=>n>20))result.locked.push(family);}
+      else if(family==='cost'){result.cost=values;result.costMatch=mode;}
       else result[family]=values[0];
     }
     result.locked=unique(result.locked);
@@ -149,12 +166,21 @@ export function replaceCondition(state,family,clause) {
   return parseQuery(query);
 }
 const combine=(values,mode)=>values.length>1?'('+values.join(mode==='any'?' OR ':' ')+')':values[0]||'';
+function costClause({symbol,op,amount}) {
+  const count=Number(amount);
+  if(!COST_SYMBOLS.includes(symbol)||!['>=','<=','='].includes(op)||!Number.isInteger(count)||count<(op==='>='?1:0)||count>MAX_COST_AMOUNT){
+    throw Error(`Use a whole mana amount from ${op==='>='?1:0} to ${MAX_COST_AMOUNT}.`);
+  }
+  // Scryfall's direct equality compares the full cost. Negate the next minimum for a per-symbol ceiling.
+  const minimum=n=>'m>='+(symbol==='generic'?`{${n}}`:`{${symbol}}`.repeat(n));
+  if(op==='>=')return minimum(count);
+  const ceiling='-'+minimum(count+1);
+  return op==='='&&count>0?`(${minimum(count)} ${ceiling})`:ceiling;
+}
 export function conditionQuery(state,family){
   if(family==='type'&&[...state.types,...state.excludedTypes].some(t=>!chipValue(t)))throw Error('Use type or subtype names.');
   if(family==='keyword'&&state.keywords.some(t=>!chipValue(t)))throw Error('Use keyword ability names.');
   if(family==='mv'&&state.values.some(v=>v.value!==''&&(!Number.isFinite(Number(v.value))||Number(v.value)<0||!['<','>','<=','>=','=','!='].includes(v.op))))throw Error('Use a nonnegative mana value and a supported comparison.');
-  if(family==='symbols'&&Object.values(state.symbols).some(n=>!Number.isInteger(n)||n<0||n>20))throw Error('Use whole symbol counts from 0 to 20.');
-  if(family==='cost'&&state.cost.trim()&&!/^(?:\{[a-z0-9/]+\}|[a-z0-9])+$/i.test(state.cost.trim()))throw Error('Use mana symbols such as {1}{G} or {U/B}, without spaces.');
   if(family==='name')return state.name.trim()?'name:'+quote(state.name.trim()):'';
   if(family==='oracle'){
     if(state.oracle.some(row=>!['o','fo'].includes(row.mode)))throw Error('Choose Oracle or Full oracle for each phrase.');
@@ -165,16 +191,15 @@ export function conditionQuery(state,family){
   if(family==='tags')return combine(state.tags.map(t=>'otag:'+t),state.match);
   if(family==='mv')return combine(state.values.filter(v=>v.value!=='').map(v=>'mv'+v.op+Number(v.value)),state.valueMatch);
   if(family==='legal')return state.legal?'f:'+state.legal:'';
-  if(family==='cost')return state.cost.trim()?'m:'+state.cost.trim():'';
-  if(family==='symbols'){const cost=[...'WUBRGC'].map(s=>('{'+s+'}').repeat(state.symbols[s]||0)).join('');return cost?'m>='+cost:'';}
+  if(family==='cost')return combine(state.cost.filter(row=>row.amount!=='').map(costClause),state.costMatch);
   if(family==='color'||family==='identity'){
     const {mode,values}=state[family],prefix=family==='color'?'c':'id';
     if(mode==='multi')return prefix+':m';if(mode==='colorless')return prefix+':c';if(!values.length)return '';
-    if(mode==='any')return combine(values.map(c=>prefix+':'+c),'any');
+    if(mode==='any')return combine(values.map(c=>prefix+'>='+c),'any');
     return prefix+({all:'>=',exact:'=',subset:'<='})[mode]+values.join('');
   }
   return '';
 }
 export function searchOptions(state){
-  return SEARCH_FAMILIES.filter(key=>!state.locked.includes(key)&&state.parts.some(p=>p.condition?.family===key)).map(key=>({key,label:({name:'Card name',oracle:'Oracle phrase',type:'Types',keyword:'Keywords',mv:'Mana values',color:'Card colors',identity:'Color identity',cost:'Mana cost',symbols:'Mana-symbol minimums',legal:'Format legality',tags:'Function tags'})[key]}));
+  return SEARCH_FAMILIES.filter(key=>!state.locked.includes(key)&&state.parts.some(p=>p.condition?.family===key)).map(key=>({key,label:({name:'Card name',oracle:'Oracle phrase',type:'Types',keyword:'Keywords',mv:'Mana values',color:'Card colors',identity:'Color identity',cost:'Mana cost',legal:'Format legality',tags:'Function tags'})[key]}));
 }
