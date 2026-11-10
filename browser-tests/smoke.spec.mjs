@@ -339,7 +339,7 @@ test('card menus keep deletion available by keyboard and touch', async ({ page, 
   await expect(action).toBeVisible();
 });
 
-test('commander minus confirms from the deck, tracker and card details', async ({ page, isMobile }) => {
+test('commander minus confirms from the deck and tracker', async ({ page, isMobile }) => {
   const activate = button => isMobile ? button.tap() : button.press('Enter');
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   const minus = page.getByRole('button', { name: 'Remove one Smoke Card 1 from Command zone', exact: true });
@@ -357,24 +357,13 @@ test('commander minus confirms from the deck, tracker and card details', async (
   await page.getByRole('button', { name: 'Find cards to add', exact: true }).click();
   await activate(minus);
   await expect(keep).toBeFocused();
-  await activate(keep);
+  await page.keyboard.press('Escape');
   await expect(minus).toBeFocused();
   expect(await storedDeck()).toEqual(original);
-  await page.getByRole('button', { name: 'Open full deck', exact: true }).click();
-
-  await activate(page.getByRole('button', { name: 'Inspect Smoke Card 1 in Command zone', exact: true }));
-  const details = page.locator('#dialog');
-  const detailMinus = details.getByRole('button', { name: 'Remove one Smoke Card 1 from Smoke Garden · Command zone' });
-  await activate(detailMinus);
-  await expect(keep).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(detailMinus).toBeFocused();
-  expect(await storedDeck()).toEqual(original);
-  await activate(detailMinus);
+  await activate(minus);
   await activate(confirmation.getByRole('button', { name: 'Remove commander', exact: true }));
-  await expect(details.locator('#detail-quantity')).toHaveText('0');
-  await expect(details.locator('#detail-add')).toBeFocused();
-  expect((await storedDeck()).cards).toEqual(original.cards.slice(1));
+  await expect(minus).toHaveCount(0);
+  expect((await storedDeck()).cards.map(entry=>entry.card.id)).toEqual(original.cards.slice(1).map(entry=>entry.card.id));
 });
 
 test('visual card controls use opaque high-contrast surfaces in all palettes', async ({ page, isMobile }) => {
@@ -411,7 +400,7 @@ test('search, printing dialog, keyboard dismissal and reload retain deck data', 
   await page.locator('#search-form').getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('button', { name: `Inspect ${cards[0].name}`, exact: true }).click();
   await dialogFits(page);
-  await page.getByRole('button', { name: 'Browse printings', exact: true }).click();
+  await expect(page.locator('#printing-status')).toContainText('1 printing loaded');
   await expect(page.locator('#view-printing option')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -419,6 +408,67 @@ test('search, printing dialog, keyboard dismissal and reload retain deck data', 
   await expect(page.getByRole('button', { name: 'Smoke Garden', exact: true })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].cards.length)).toBe(40);
   await noPageOverflow(page);
+});
+
+test('card details, additive Add and the entry editor preserve distinct printings and finishes', async ({ page, isMobile }, testInfo) => {
+  const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('arcana.workspace.v2')));
+  const printCard = cards[1];
+  const alternate = { ...printCard, id: 'second-printing', set_name: 'Second Release', prices: { usd:'2.50', usd_foil:'6.00' } };
+  await page.route('**/api/printings?**', route=>route.fulfill({ json:{data:[printCard,alternate],has_more:false} }));
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  await page.locator('#editor-layout').selectOption('text-vertical');
+  const inspect=page.locator(`[data-inspect="${printCard.id}"]`);
+  await inspect.click();
+  const dialog=page.getByRole('dialog');
+  await dialogFits(page);
+  await expect(dialog).toContainText('3 copies owned of this printing.');
+  await page.screenshot({path:testInfo.outputPath('card-details.png')});
+  await page.locator('#view-printing').selectOption(alternate.id);
+  await expect(dialog).toContainText('No copies owned of this printing.');
+  await dialog.getByRole('button',{name:'Add this card to collection',exact:true}).click();
+  const back=dialog.getByRole('button',{name:'Back to card details',exact:true});
+  await back.click();
+  await expect(dialog.locator('#view-printing')).toHaveValue(alternate.id);
+  await expect(dialog.locator('#detail-add-owned')).toBeFocused();
+  await dialog.getByRole('button',{name:'Add card to deck',exact:true}).click();
+  await dialogFits(page);
+  await expect(dialog.getByLabel('Destination deck')).toHaveValue('smoke-deck');
+  await expect(dialog.locator('#add-existing')).toContainText('all zones and printings: 2');
+  await dialog.getByLabel('Finish',{exact:true}).selectOption('foil');
+  await expect(dialog.locator('#deck-card-price')).toHaveText('6.00 USD per copy');
+  await expect(dialog.locator('#load-printings')).toBeHidden();
+  await page.screenshot({path:testInfo.outputPath('add-card.png')});
+  await dialog.getByLabel('Quantity to add').fill('2');
+  await dialog.getByLabel('Primary function').fill('Removal');
+  expect((await stored()).decks[0].cards).toHaveLength(40);
+  await dialog.getByRole('button',{name:'Add card(s) to deck',exact:true}).click();
+  await expect(dialog.locator('#view-printing')).toHaveValue(alternate.id);
+  await page.keyboard.press('Escape');
+  await expect(inspect).toBeFocused();
+
+  const menu=page.locator('article.deck-entry').filter({has:inspect}).getByRole('button',{name:'Card actions for Smoke Card 2 in Main deck',exact:true});
+  if(isMobile)await menu.tap();else await menu.press('Enter');
+  await page.getByRole('menuitem',{name:'Change in-deck card details',exact:true}).click();
+  await dialogFits(page);
+  await dialog.getByLabel('Finish',{exact:true}).selectOption('foil');
+  await expect(dialog.locator('#deck-card-price')).toContainText('Price unavailable');
+  await expect(dialog.locator('#load-printings')).toBeHidden();
+  await page.screenshot({path:testInfo.outputPath('edit-printing.png')});
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+  expect((await stored()).decks[0].cards[1].finish).toBeUndefined();
+  if(isMobile)await menu.tap();else await menu.press('Enter');
+  await page.getByRole('menuitem',{name:'Change in-deck card details',exact:true}).click();
+  await dialog.getByLabel('Finish',{exact:true}).selectOption('foil');
+  await dialog.getByRole('button',{name:'Save printing and finish',exact:true}).click();
+  await expect(dialog).toBeHidden();
+  await page.reload();
+  const result=await stored();
+  expect(result.decks[0].cards.filter(entry=>entry.card.oracle_id===printCard.oracle_id)
+    .map(entry=>[entry.card.id,entry.qty,entry.finish,entry.tags])).toEqual([
+    [printCard.id,2,'foil',['Draw']],
+    [alternate.id,2,'foil',['Removal']],
+  ]);
+  expect(result.collection[0].qty).toBe(3);
 });
 
 test('collection table and staged editor cancel preserve quantities', async ({ page }) => {
@@ -449,7 +499,7 @@ test('Explore navigation starts fresh and tracker guidance follows the selector'
   await expect(raw).toBeFocused();
   await expect(raw).toHaveValue('');
   const target = page.locator('.exploration-target');
-  await expect(target.getByText('Quick add: Smoke Garden · Main deck')).toBeVisible();
+  await expect(target.getByText('Default destination: Smoke Garden · Main deck')).toBeVisible();
   const hide = target.getByRole('button', { name: 'Hide tracker' });
   await hide.focus();
   await hide.press('Enter');
