@@ -219,6 +219,10 @@ export function stats(deck, { detailed = false } = {}) {
   if (detailed) {
     result.breakdowns = Object.fromEntries(['color', 'type', 'function', 'power', 'toughness', 'rarity'].map(key => [key, new Map()]));
     result.draw = { total: 0, types: new Map(), functions: new Map() };
+    result.functions = new Map();
+    result.manaCosts = manaDistribution();
+    result.manaSources = manaDistribution();
+    result.tokens = { references: new Map(), unavailable: 0 };
   }
   let value = 0;
   for (const entry of deck.cards) {
@@ -233,6 +237,11 @@ export function stats(deck, { detailed = false } = {}) {
     for (const tag of tags) result.tags[tag] = (result.tags[tag] || 0) + qty;
     for (const c of colors) result.colors[c] += qty;
     const primary = detailed ? primaryRole({ tags }) : null;
+    if (detailed) {
+      if (tags[0]) addWeight(result.functions, primary, qty);
+      countMana(card, qty, result.manaCosts, result.manaSources);
+      collectTokens(card, qty, result.tokens);
+    }
     if (detailed && zone === 'main') {
       result.draw.total += qty;
       addWeight(result.draw.types, type, qty);
@@ -270,6 +279,48 @@ export function stats(deck, { detailed = false } = {}) {
   }
   return result;
 }
+
+const coloredMana = /^[WUBRG]$/;
+const manaDistribution = () => ({ colors: Object.fromEntries([...'WUBRG'].map(color => [color, 0])), unavailable: 0 });
+
+function countMana(card, qty, costs, sources) {
+  const faceCosts = card.card_faces?.map(face => face.mana_cost) ?? [];
+  const manaCosts = typeof card.mana_cost === 'string' ? [card.mana_cost] : faceCosts;
+  if (!manaCosts.length || manaCosts.some(cost => typeof cost !== 'string')) costs.unavailable += qty;
+  for (const cost of manaCosts.filter(value => typeof value === 'string')) {
+    for (const [, symbol] of cost.matchAll(/\{([^{}]+)\}/g)) {
+      const options = [...new Set(symbol.split('/').filter(part => coloredMana.test(part)))];
+      for (const color of options) costs.colors[color] += qty / options.length;
+    }
+  }
+  if (Array.isArray(card.produced_mana) && card.produced_mana.every(color => typeof color === 'string' && /^[WUBRGC]$/.test(color))) {
+    for (const color of new Set(card.produced_mana.filter(color => coloredMana.test(color)))) sources.colors[color] += qty;
+  } else if (card.produced_mana !== undefined || card.object !== 'card') {
+    sources.unavailable += qty;
+  }
+}
+
+function collectTokens(card, qty, tokens) {
+  const parts = card.all_parts;
+  if (parts === undefined && card.object === 'card') return;
+  if (!Array.isArray(parts)) {
+    tokens.unavailable += qty;
+    return;
+  }
+  let incomplete = false;
+  for (const part of parts) {
+    if (typeof part?.component !== 'string') incomplete = true;
+    if (part?.component !== 'token') continue;
+    if (typeof part.id !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(part.id)
+        || typeof part.name !== 'string' || !part.name.trim() || typeof part.type_line !== 'string' || !part.type_line.trim()) {
+      incomplete = true;
+      continue;
+    }
+    tokens.references.set(part.id.toLowerCase(), { name: part.name, type: part.type_line });
+  }
+  if (incomplete) tokens.unavailable += qty;
+}
+
 function addWeight(groups, key, qty) {
   groups.set(key, (groups.get(key) ?? 0) + qty);
 }

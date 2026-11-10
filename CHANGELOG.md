@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck review
+
+- Compare colored mana costs and production in Statistics and show primary assignments under Card functions (#105).
+- List distinct Scryfall token references for the playing deck, with links to the exact token printings (#104).
+- Show About bracket data directly in Commander Checks (#113).
+
 ## Deck library and creation
 
 - Distinguish placeholder examples from entered text across the app (#87).
