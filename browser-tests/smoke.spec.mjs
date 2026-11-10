@@ -14,6 +14,53 @@ async function dialogFits(page) {
 }
 test.beforeEach(async ({ page }) => prepareApp(page));
 
+test('deck library uses available width and commander suggestions are optional until creation', async ({ page, isMobile }) => {
+  if (!isMobile) await page.setViewportSize({ width: 1920, height: 900 });
+  const columns = await page.locator('.deck-library').evaluate(grid => getComputedStyle(grid).gridTemplateColumns.split(' ').length);
+  expect(columns).toBe(isMobile ? 1 : 6);
+  await noPageOverflow(page);
+
+  await page.route('**/api/search?**', route => {
+    expect(new URL(route.request().url()).searchParams.get('q')).toBe('game:paper is:commander f:commander name:/Smoke/');
+    return route.fulfill({ json: { data: cards.slice(0, 10) } });
+  });
+  await page.getByRole('button', { name: 'New deck' }).click();
+  const dialog = page.getByRole('dialog');
+  const name = dialog.getByRole('textbox', { name: 'Deck name' });
+  await expect(name).toHaveValue('');
+  expect(await name.evaluate(input => {
+    const placeholder = getComputedStyle(input, '::placeholder');
+    return placeholder.fontStyle === 'italic' && placeholder.color !== getComputedStyle(input).color && placeholder.opacity === '1';
+  })).toBe(true);
+  await name.fill('Commander draft');
+  const input = dialog.getByRole('combobox', { name: 'Search commander names' });
+  await input.fill('Smoke');
+  const options = dialog.getByRole('listbox', { name: 'Commander suggestions' }).getByRole('option');
+  await expect(options).toHaveCount(8);
+  await dialogFits(page);
+  await input.press('Escape');
+  await expect(input).toHaveAttribute('aria-expanded', 'false');
+  await expect(dialog).toBeVisible();
+  await input.press('ArrowDown');
+  await expect(dialog.getByRole('option', { name: 'Smoke Card 1', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await input.press('Enter');
+  await expect(input).toHaveValue('Smoke Card 1');
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Choose later' }).click();
+  await expect(input).toHaveValue('');
+  const create = dialog.getByRole('button', { name: 'Create deck' });
+  await expect(create).toBeFocused();
+  await input.fill('Smoke');
+  await dialog.getByRole('option', { name: 'Smoke Card 1', exact: true }).click();
+  await expect(input).toHaveValue('Smoke Card 1');
+  await create.click();
+  await expect(page.getByRole('heading', { name: 'Commander draft' })).toBeVisible();
+  const commandZone = page.getByRole('heading', { name: /Command zone/ }).locator('..');
+  await expect(commandZone).toContainText('Smoke Card 1');
+  await noPageOverflow(page);
+});
+
 test('deck navigation, sticky header, statistics and budget fit the viewport', async ({ page }) => {
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Smoke Garden', exact: true })).toBeVisible();
