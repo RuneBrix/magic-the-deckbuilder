@@ -3,7 +3,8 @@ import { esc, mana, printingLabel } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
-import { deckPrintingPrice, COST_SYMBOLS, MAX_COST_AMOUNT } from './core.js';
+import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT } from './core.js';
+import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
 const $ = s => document.querySelector(s);
@@ -64,7 +65,8 @@ let previewKey = '', previewDeck = '', cardActionTrigger = null;
 let cardDrag = null, cardDragPress = null, suppressCardClick = false;
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
-const priceStates = new Map();
+const priceStates = new WeakMap();
+const cheapestPriceStates = new WeakMap();
 let detail = null;
 const current = () => decks.find(d => d.id === (view === 'explore' ? tracker.id : active));
 function saveTracker() {
@@ -553,7 +555,7 @@ function deckWorkspace(d, statistics, previousStatistics) {
   if(!d)return `<div class="library"><h1>No deck selected</h1><button class="secondary" data-view="decks">Back to My decks</button></div>`;
   const s=statistics ?? stats(d), report=legalityReport(d);
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['planning','Ownership & budget'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d.id)):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['planning','Ownership & budget'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d)):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
 }
 function bracketControl(d) {
   if(d.format!=='commander')return '';
@@ -1292,6 +1294,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='restore')restore();
   if(action==='refresh')refresh();
   if(action==='refresh-prices')await refreshPrices();
+  if(action==='cheapest-prices')await checkCheapestPrices();
   if(action==='add-owned')collectionLotDialog();
   if(action==='import-collection')collectionImport();
   if(action==='clear-collection')clearCollection();
@@ -1589,20 +1592,56 @@ function inspect(id,entryId) {
 async function fetchCollection(values,key='names') {const cards=[],missing=[];for(let i=0;i<values.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[key]:values.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x[key==='ids'?'id':'name']));}return {cards,missing};}
 async function refreshPrices(d=current()){
   if(!d)return;
-  if(priceStates.get(d.id)?.status==='refreshing')return;
+  if(priceStates.get(d)?.status==='refreshing')return;
   const zones=d.budgetZones??DEFAULT_BUDGET_ZONES;
   const entries=d.cards.filter(entry=>zones.includes(zoneFor(entry))).map(entry=>({entry,id:entry.card.id})),ids=[...new Set(entries.map(snapshot=>snapshot.id))];
   if(!ids.length){toast('No scoped cards to refresh.');return;}
-  priceStates.set(d.id,{status:'refreshing'});render();
+  priceStates.set(d,{status:'refreshing'});render();
   try{
     const {cards,missing}=await fetchCollection(ids,'ids'),byId=new Map(cards.map(card=>[card.id,card]));
     if(missing.length||ids.some(id=>!byId.has(id)))throw Error('Some stored printings could not be refreshed.');
     if(!decks.includes(d))return;
-    const updates=entries.filter(snapshot=>d.cards.includes(snapshot.entry)&&snapshot.entry.card.id===snapshot.id).map(snapshot=>({entry:snapshot.entry,eur:byId.get(snapshot.id).prices?.eur??null}));
-    for(const update of updates)update.entry.card={...update.entry.card,prices:{...(update.entry.card.prices||{}),eur:update.eur}};
-    if(updates.length){d.priceUpdatedAt=new Date().toISOString();d.updated=d.priceUpdatedAt;}
-    priceStates.set(d.id,{status:'fresh'});save();render();toast(storageError?'Prices kept for this session. Export a workspace copy.':'Regular EUR prices refreshed.');
-  }catch(error){priceStates.set(d.id,{status:'failed',error:error.message});render();}
+    const updates=entries.filter(snapshot=>d.cards.includes(snapshot.entry)&&snapshot.entry.card.id===snapshot.id);
+    let kept=0;
+    for(const {entry,id} of updates){
+      const source=byId.get(id),{field,cents}=storedEuroPrice(entry);
+      if(cents!==null&&parseEuroQuote(source.prices?.[field])===null)kept++;
+      entry.card=refreshEuroQuote(entry.card,source);
+    }
+    if(updates.length){d.priceUpdatedAt=new Date().toISOString();d.updated=d.priceUpdatedAt;save();}
+    priceStates.set(d,{status:'fresh',kept});render();toast(storageError?'Prices kept for this session. Export a workspace copy.':'Stored EUR prices checked.');
+  }catch(error){priceStates.set(d,{status:'failed',error:error.message});render();}
+}
+async function checkCheapestPrices(d=current()) {
+  if (!d) return;
+  const previous=cheapestPriceStates.get(d);
+  if (previous?.status==='checking') {
+    previous.controller.abort();
+    previous.status='cancelled';
+    render();
+    return;
+  }
+  const controller=new AbortController();
+  const state={quotes:previous?.quotes,checkedAt:previous?.checkedAt,status:'checking',controller};
+  cheapestPriceStates.set(d,state);
+  render();
+  try {
+    const quotes=await cheapestPrintings(d.cards.map(entry=>entry.card),async(q,page)=>{
+      if (!decks.includes(d)) controller.abort();
+      controller.signal.throwIfAborted();
+      try {return await api('/api/search?'+new URLSearchParams({q,page,order:'name'}),{signal:controller.signal});}
+      catch(error){
+        if(error.status===404&&/no cards|0 cards|didn.t match any cards/i.test(error.message))return {data:[],has_more:false};
+        throw error;
+      }
+    });
+    if(controller.signal.aborted||!decks.includes(d))return;
+    Object.assign(state,{quotes,checkedAt:new Date().toISOString(),status:'done'});
+  } catch(error) {
+    if(controller.signal.aborted||!decks.includes(d))return;
+    Object.assign(state,{status:'failed',error:error.message});
+  }
+  if(view==='deck'&&current()===d&&deckTab==='planning')render();
 }
 function importDialog(target=current()){
   showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste Archidekt text using “1 Card Name” and generic Commander, Mainboard, Sideboard or Maybeboard headings. Main deck and Command zone also work. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><div id="import-preview" aria-live="polite"></div><button class="primary">Review import</button></form>`);

@@ -1,5 +1,10 @@
 # Changelog
 
+## EUR deck pricing
+
+- Compare stored unit and line costs with the cheapest quoted regular English paper printings in Ownership & budget (#111).
+- Use available foil EUR quotes for foil entries, keep saved quotes when refresh finds no replacement and link missing quotes to exact Cardmarket products when mapped (#109).
+
 ## Browse by function
 
 - Page through 40 function matches at a time in a responsive grid with direct Scryfall tagging counts (#128).

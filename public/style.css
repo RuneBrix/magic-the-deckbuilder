@@ -1031,6 +1031,7 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .collection-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.5fr) auto auto;gap:18px;align-items:center;padding:14px 16px;border:1px solid var(--line);background:var(--surface)}
 .collection-row>div:first-child{display:grid;gap:3px;min-width:0}.collection-row span{color:var(--muted);font-size:12px;overflow-wrap:anywhere}.collection-row .row-actions{display:flex;gap:6px}
 .planning{max-width:1100px}.planning-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-bottom:14px}
+.planning-actions{display:flex;flex-wrap:wrap;gap:8px}
 .planning-scope{min-width:0;margin:0 0 12px;padding:0;border:0}.planning-scope legend{padding:0;font-size:12px;font-weight:600}
 .planning-scope>div{display:flex;flex-wrap:wrap;gap:0 16px}.planning-scope label{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--ink);cursor:pointer}.planning-scope input{margin:0}
 .planning-totals{display:flex;flex-wrap:wrap;gap:10px 24px;margin:0 0 14px;padding:10px 12px;background:var(--surface);border:1px solid var(--line)}
@@ -1038,6 +1039,7 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .planning-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 14px;margin-bottom:12px}.budget-comparison{font-weight:600;margin-bottom:8px}
 .planning-controls select{text-transform:none}
 .planning-table{overflow-x:auto;border-top:1px solid var(--line)}.planning-table table{width:100%;min-width:32rem;border-collapse:collapse;font-size:12px}.planning-table th,.planning-table td{padding:8px;border-bottom:1px solid var(--line);text-align:left}.planning-table thead{color:var(--muted);background:var(--surface)}.planning-table th:first-child{overflow-wrap:anywhere}.planning-table :is(th,td):nth-child(n+3){text-align:right;white-space:nowrap}.planning-totals dd,.planning-table td{font-variant-numeric:tabular-nums}
+.planning-table td:last-child small{max-width:15rem;white-space:normal;overflow-wrap:anywhere}
 @media(max-width:800px){.planning-controls{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){
   .planning-scope>div{display:grid;grid-template-columns:repeat(2,max-content);column-gap:20px}
