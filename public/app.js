@@ -1259,20 +1259,100 @@ globalThis.addEventListener?.('beforeunload',e=>{if(detail?.invalidRoles){e.prev
 $('#dialog').addEventListener('close',()=>{detail=null;});
 function deckForm(deck,after) {
   if(!deck&&decks.length>=200){toast('Maximum 200 decks per workspace.');return;}
-  let choices=[],selectionRequest=0;
-  showDialog(`<h2>${deck?'Rename / format':'Create a deck'}</h2><p>You can change the format later and build an incomplete deck.</p><form id="deck-form"><label>Deck name<input name="name" required maxlength="100" value="${esc(deck?.name||'')}" placeholder="e.g. The garden grows"></label><label>Format<select name="format" id="deck-format">${FORMATS.map(f=>`<option ${f===(deck?.format||'commander')?'selected':''}>${f}</option>`).join('')}</select></label>${!deck?`<fieldset id="commander-choice"><legend>Commander (optional)</legend><label>Find a card<input id="commander-name" placeholder="e.g. Tatyova" maxlength="200"></label><button type="button" class="secondary" id="find-commander">Find commander</button><label>Designate a card<select id="commander-card"><option value="">Choose later</option></select></label><p class="hint">Selection puts one copy in the command zone. Eligibility and pairings still need review; this is not validation.</p><p id="commander-status" role="status"></p></fieldset>`:''}<p id="deck-form-error" role="alert"></p><button class="primary" type="submit">${deck?'Save changes':'Create deck'}</button></form>`);
+  let commander=null;
+  showDialog(`<h2>${deck?'Rename / format':'Create a deck'}</h2><p>You can change the format later and build an incomplete deck.</p><form id="deck-form"><label>Deck name<input name="name" required maxlength="100" value="${esc(deck?.name||'')}" placeholder="e.g. The garden grows"></label><label>Format<select name="format" id="deck-format">${FORMATS.map(f=>`<option ${f===(deck?.format||'commander')?'selected':''}>${f}</option>`).join('')}</select></label>${!deck?`<fieldset id="commander-choice"><legend>Commander (optional)</legend>
+    <label>Search commander names<input id="commander-name" role="combobox" aria-autocomplete="list" aria-controls="commander-matches" aria-expanded="false" autocomplete="off" placeholder="e.g. Tatyova" maxlength="200"></label>
+    <div id="commander-matches" role="listbox" aria-label="Commander suggestions" hidden></div>
+    <p id="commander-status" role="status"></p>
+    <div class="commander-actions"><span class="hint">You can add pairings later.</span><button type="button" class="text-button" id="choose-commander-later">Choose later</button></div>
+  </fieldset>`:''}<p id="deck-form-error" role="alert"></p><button class="primary" type="submit">${deck?'Save changes':'Create deck'}</button></form>`);
   if(!deck){
-    $('#deck-format').onchange=e=>{$('#commander-choice').hidden=e.target.value!=='commander';};
-    $('#find-commander').onclick=async()=>{
-      const q=$('#commander-name').value.trim();if(!q){$('#commander-status').textContent='Enter a card name to search.';return;}
-      const id=++selectionRequest,select=$('#commander-card'),status=$('#commander-status');status.textContent='Finding cards…';
-      try{const data=await api('/api/search?'+new URLSearchParams({q,order:'name'}));if(id!==selectionRequest)return;choices=data.data;select.innerHTML='<option value="">Choose later</option>'+choices.map(c=>`<option value="${esc(c.id)}">${esc(c.name)} — ${esc(c.type_line)}</option>`).join('');status.textContent=`${choices.length} cards shown. Choose a card, or leave it for later.`;}
-      catch(error){if(id===selectionRequest)status.textContent=error.message;}
+    const dialog=$('#dialog'),field=$('#commander-choice'),input=$('#commander-name');
+    const matches=$('#commander-matches'),status=$('#commander-status');
+    let revision=0,timer,choices=[],activeOption=-1;
+    const option=index=>matches.querySelector('#commander-option-'+index);
+    const setExpanded=expanded=>{
+      matches.hidden=!expanded;
+      input.setAttribute('aria-expanded',String(expanded));
+      if(!expanded){
+        option(activeOption)?.setAttribute('aria-selected','false');
+        input.removeAttribute('aria-activedescendant');
+        activeOption=-1;
+      }
     };
+    const resetSuggestions=()=>{
+      revision++;
+      clearTimeout(timer);
+      setExpanded(false);
+      choices=[];
+      matches.innerHTML='';
+      status.textContent='';
+    };
+    const choose=card=>{
+      resetSuggestions();
+      commander=card;
+      input.value=card?.name??'';
+      if(card)status.textContent='Commander selected.';
+    };
+    $('#deck-format').onchange=e=>{
+      field.hidden=e.target.value!=='commander';
+      if(field.hidden)choose(null);
+    };
+    input.oninput=e=>{
+      resetSuggestions();
+      commander=null;
+      const value=input.value.trim();
+      if(e.isComposing||!value)return;
+      if(value.length<2){status.textContent='Type at least two characters.';return;}
+      const version=revision;
+      const current=()=>version===revision&&input.isConnected&&dialog.open;
+      status.textContent='Searching…';
+      timer=setTimeout(async()=>{
+        if(!current())return;
+        try{
+          const literal=value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\//g,'\\/');
+          const q='game:paper is:commander f:commander name:/'+literal+'/';
+          const data=await api('/api/search?'+new URLSearchParams({q,order:'name'}));
+          if(!current())return;
+          choices=data.data.slice(0,8);
+          matches.innerHTML=choices.map((card,i)=>`<button type="button" role="option" tabindex="-1" id="commander-option-${i}" data-commander-option="${i}" aria-selected="false">${esc(card.name)}</button>`).join('');
+          setExpanded(choices.length>0&&document.activeElement===input);
+          status.textContent=choices.length?'':'No commanders match that name.';
+        }catch(error){
+          if(current())status.textContent=error.status===404?'No commanders match that name.':'Could not search commanders. Edit the name to try again.';
+        }
+      },250);
+    };
+    input.onfocus=()=>{if(choices.length)setExpanded(true);};
+    input.onblur=e=>{if(!matches.contains(e.relatedTarget))setExpanded(false);};
+    matches.onclick=e=>{
+      const button=e.target.closest('[data-commander-option]');
+      if(button){choose(choices[Number(button.dataset.commanderOption)]);input.focus();}
+    };
+    input.onkeydown=e=>{
+      if(e.isComposing)return;
+      if(e.key==='Escape'&&!matches.hidden){e.preventDefault();e.stopPropagation();setExpanded(false);}
+      if(e.key==='Enter'){
+        e.preventDefault();
+        if(activeOption>=0)choose(choices[activeOption]);
+      }
+      if((e.key==='ArrowDown'||e.key==='ArrowUp')&&choices.length){
+        e.preventDefault();
+        option(activeOption)?.setAttribute('aria-selected','false');
+        const step=e.key==='ArrowDown'?1:-1;
+        activeOption=activeOption<0?(step===1?0:choices.length-1):(activeOption+step+choices.length)%choices.length;
+        setExpanded(true);
+        const active=option(activeOption);
+        active.setAttribute('aria-selected','true');
+        input.setAttribute('aria-activedescendant',active.id);
+        active.scrollIntoView({block:'nearest'});
+      }
+    };
+    $('#choose-commander-later').onclick=()=>{choose(null);$('#deck-form button[type=submit]').focus();};
   }
   $('#deck-form').onsubmit=e=>{e.preventDefault();const data=new FormData(e.target),name=String(data.get('name')).trim(),format=String(data.get('format'));if(!name||!FORMATS.includes(format))return;
     if(deck){if(!decks.includes(deck))return;deck.name=name;deck.format=format;deck.updated=new Date().toISOString();save();$('#dialog').close();render();}
-    else{if(decks.length>=200){$('#deck-form-error').textContent='Maximum 200 decks per workspace.';return;}const d=blankDeck(name,format),commander=format==='commander'?choices.find(c=>c.id===$('#commander-card').value):null;if(commander)d.cards.push({card:commander,qty:1,tags:[],zone:'command'});decks.push(d);save();$('#dialog').close();openDeck(d.id);}
+    else{if(decks.length>=200){$('#deck-form-error').textContent='Maximum 200 decks per workspace.';return;}const d=blankDeck(name,format);if(format==='commander'&&commander)d.cards.push({card:commander,qty:1,tags:[],zone:'command'});decks.push(d);save();$('#dialog').close();openDeck(d.id);}
     after?.(deck || decks.at(-1));
   };
 }

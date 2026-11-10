@@ -91,9 +91,26 @@ test('duplicate is a deep independent backup-compatible copy; delete requires ex
 test('new Commander decks designate an optional selected card and other formats omit it',async()=>{
   for(const format of ['commander','modern']){
     const w=workspace();formValues(w,{name:'New deck',format});
-    w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Leader','Legendary Creature')]})});
-    vm.runInContext('deckForm()',w.context);w.node('#commander-name').value='Leader';
-    await w.node('#find-commander').onclick();w.node('#commander-card').value='Leader';
+    w.node('#dialog').open=true;
+    const input=w.node('#commander-name');
+    input.removeAttribute=()=>{};
+    w.document.activeElement=input;
+    let searched;
+    w.context.fetch=async url=>{
+      searched=new URL(url,'http://localhost').searchParams.get('q');
+      return {ok:true,json:async()=>({data:[editorCard('Leader','Legendary Creature')]})};
+    };
+    vm.runInContext('deckForm()',w.context);
+    input.value='Lead';
+    input.oninput({});
+    assert.equal(searched,undefined);
+    assert.equal(w.timers.at(-1).ms,250);
+    await w.timers.at(-1).fn();
+    assert.equal(searched,'game:paper is:commander f:commander name:/Lead/');
+    w.node('#commander-matches').onclick({target:{closest:()=>({dataset:{commanderOption:'0'}})}});
+    assert.equal(input.value,'Leader');
+    assert.equal(vm.runInContext('decks.length',w.context),0);
+    if(format==='modern')w.node('#deck-format').onchange({target:{value:format}});
     w.node('#deck-form').onsubmit({preventDefault(){},target:{}});
     assert.equal(vm.runInContext('view',w.context),'deck');
     assert.equal(vm.runInContext('decks[0].cards.length',w.context),format==='commander'?1:0);
@@ -101,6 +118,29 @@ test('new Commander decks designate an optional selected card and other formats 
   }
   const w=workspace();formValues(w,{name:'Incomplete',format:'commander'});vm.runInContext('deckForm()',w.context);
   w.node('#deck-form').onsubmit({preventDefault(){},target:{}});assert.equal(vm.runInContext('decks[0].cards.length',w.context),0);
+});
+
+test('commander autocomplete ignores results from an earlier query',async()=>{
+  const w=workspace();
+  w.node('#dialog').open=true;
+  const input=w.node('#commander-name');
+  input.removeAttribute=()=>{};
+  w.document.activeElement=input;
+  let resolveEarlier;
+  const earlier=new Promise(resolve=>{resolveEarlier=resolve;});
+  const response=name=>({ok:true,json:async()=>({data:[editorCard(name)]})});
+  w.context.fetch=async url=>url.includes('Earlier')?earlier:response('Latest result');
+  vm.runInContext('deckForm()',w.context);
+  input.value='Earlier';
+  input.oninput({});
+  const pending=w.timers.at(-1).fn();
+  input.value='Latest';
+  input.oninput({});
+  await w.timers.at(-1).fn();
+  resolveEarlier(response('Earlier result'));
+  await pending;
+  assert.match(w.node('#commander-matches').innerHTML,/Latest result/);
+  assert.doesNotMatch(w.node('#commander-matches').innerHTML,/Earlier result/);
 });
 
 test('startup and reload open My decks, including an empty library, without changing stored decks', () => {

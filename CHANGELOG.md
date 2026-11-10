@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck library and creation
+
+- Distinguish placeholder examples from entered text across the app (#87).
+- Let the My decks grid grow with the available page width (#88).
+- Suggest eligible paper commanders by name while creating a deck, with keyboard selection and the option to choose later (#89).
+
 ## Explore color and mana cost filters
 
 - Edit card color and color identity in one Colors panel while keeping both query clauses independent (#122).
