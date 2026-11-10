@@ -477,6 +477,17 @@ function parseCurrencyCents(value) {
   return Number.isSafeInteger(result) ? result : null;
 }
 export const parseEuroCents = parseCurrencyCents;
+export function parseEuroQuote(value) {
+  const cents = parseEuroCents(value);
+  // Keep totals exact even for a backup with 1,000 entries of 500 copies.
+  return cents !== null && cents <= 1_000_000_000 ? cents : null;
+}
+
+export function storedEuroPrice(entry) {
+  const finish = entry.finish ?? deckPrintingPrice(entry.card).finish;
+  const field = finish === 'regular' ? 'eur' : finish === 'foil' ? 'eur_foil' : null;
+  return { finish, field, cents: field ? parseEuroQuote(entry.card.prices?.[field]) : null };
+}
 
 export function collectionReport(deck, collection) {
   validateBackup([deck]);validateCollection(collection);
@@ -487,8 +498,9 @@ export function collectionReport(deck, collection) {
   for(const lot of collection){const key=matchKey(lot.card);if(key)available.set(key,(available.get(key)||0)+lot.qty);}
   let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0;
   const rows=entries.map(entry=>{
-    const key=matchKey(entry.card),zone=zoneFor(entry),included=zones.includes(zone),unitCents=parseEuroCents(entry.card.prices?.eur);
-    const row={entry,zone,included,demand:entry.qty,unitCents,identityResolved:Boolean(key)};
+    const key=matchKey(entry.card),zone=zoneFor(entry),included=zones.includes(zone);
+    const { cents: unitCents, finish } = storedEuroPrice(entry);
+    const row={entry,zone,included,demand:entry.qty,unitCents,finish,identityResolved:Boolean(key)};
     if(!included)return {...row,owned:null,missing:null};
     const have=available.get(key)||0,used=Math.min(entry.qty,have),needed=entry.qty-used;
     if(key)available.set(key,have-used);

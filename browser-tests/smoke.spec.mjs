@@ -261,6 +261,61 @@ test('budget zones keep every card visible and compare known costs across scope 
   await expect(comparison).toContainText('over budget from known costs alone');
 });
 
+test('budget compares selected and cheapest printings without changing deck cards', async ({ page }, testInfo) => {
+  await page.evaluate(() => {
+    const key = 'arcana.workspace.v2';
+    const data = JSON.parse(localStorage.getItem(key));
+    const [commander, main, maybe] = data.decks[0].cards;
+    commander.card.finishes = ['foil'];
+    commander.card.cardmarket_id = 41;
+    main.card.prices.eur = '2.25';
+    maybe.zone = 'maybeboard';
+    data.decks[0].cards = [commander, main, maybe];
+    localStorage.setItem(key, JSON.stringify(data));
+  });
+  await page.reload();
+  let attempts = 0;
+  let release;
+  const waitForCancel = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/search?**', async route => {
+    if (++attempts === 1) await waitForCancel;
+    const query = new URL(route.request().url()).searchParams.get('q');
+    expect(query).toContain('game:paper lang:en is:nonfoil unique:prints');
+    for (const card of cards.slice(0,3)) expect(query).toContain(`oracleid:${card.oracle_id}`);
+    const data = ['0.50','0.33','0.25'].map((eur,i)=>({...cards[i],games:['paper'],set_name:'Cheaper set',prices:{eur}}));
+    await route.fulfill({ json: { data, has_more: false } });
+  });
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.getByRole('tab', { name: 'Checks', exact: true }).click();
+  await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
+  await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
+  const before = await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
+  const check = page.getByRole('button', { name: 'Check cheapest printings', exact: true });
+  const cancel = page.getByRole('button', { name: 'Cancel price check', exact: true });
+  const request = page.waitForRequest('**/api/search?**');
+  await check.press('Enter');
+  await request;
+  await expect(cancel).toBeFocused();
+  await cancel.press('Enter');
+  release();
+  await expect(page.getByText('Cheapest-printing check cancelled.')).toBeVisible();
+  await check.press('Enter');
+  await expect(page.getByText(/Cheapest printings checked/)).toBeVisible();
+  await expect(check).toBeFocused();
+  const row = page.getByRole('row').filter({ hasText: 'Smoke Card 2' });
+  await expect(row.getByRole('cell').nth(4)).toContainText(/2[.,]25/);
+  await expect(row.getByRole('cell').nth(5)).toContainText(/4[.,]50/);
+  await expect(row.getByRole('cell').nth(6)).toContainText(/0[.,]33.*Cheaper set/);
+  await expect(page.getByRole('link', { name: 'Cardmarket' })).toHaveAttribute('href', /idProduct=41&isFoil=Y$/);
+  const cheapestTotal = page.locator('.planning-totals > div').filter({ hasText: 'Cheapest printings estimate' });
+  await expect(cheapestTotal).toContainText(/1[.,]16/);
+  expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(before);
+  await page.getByRole('checkbox', { name: 'Maybeboard' }).check();
+  await expect(cheapestTotal).toContainText(/1[.,]41/);
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('budget-comparison.png') });
+});
+
 test('deck drag destinations stay still across gaps and let the page scroll outside', async ({ page, isMobile }, testInfo) => {
   test.skip(isMobile, 'Direct dragging uses a desktop pointer');
   if (testInfo.project.name === 'desktop-dark') await page.setViewportSize({ width: 760, height: 720 });

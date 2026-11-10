@@ -151,19 +151,24 @@ test('large collection review resumes after cooldown without repeating completed
   time+=61_000;await form.onsubmit({preventDefault(){}});assert.equal(calls,3);assert.equal(vm.runInContext('collection.length',w.context),80);
 });
 
-test('EUR refresh is atomic on failure and updates only stored regular prices after complete exact-id coverage',async()=>{
+test('EUR refresh keeps the last good finish quote and updates only exact stored printings',async()=>{
   const d=editorDeck();for(const entry of d.cards)entry.card.prices={eur:'1.00',usd:'9.99'};
-  d.budgetZones=['maybeboard'];d.cards.push({card:{...editorCard('idea'),prices:{eur:null,usd:'9.99'}},qty:1,tags:[],zone:'maybeboard'});
+  d.budgetZones=['maybeboard'];d.cards.push({card:{...editorCard('idea'),finishes:['foil'],prices:{eur:null,usd:'9.99'}},qty:2,tags:[],zone:'maybeboard'});
   const w=workspace({savedDecks:JSON.stringify([d]),initialView:null});vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
   w.context.fetch=async()=>{throw Error('Offline');};
   await vm.runInContext('refreshPrices()',w.context);
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards)',w.context)),d.cards);
   assert.match(w.node('#app').innerHTML,/last usable prices were retained/i);
   const requests=[];
-  w.context.fetch=async(_url,options)=>{const ids=JSON.parse(options.body).ids;requests.push(ids);return {ok:true,json:async()=>({data:ids.map(id=>({...editorCard(id),prices:{eur:'2.50',usd:'0.01'}})),not_found:[]})};};
+  w.context.fetch=async(_url,options)=>{const ids=JSON.parse(options.body).ids;requests.push(ids);return {ok:true,json:async()=>({data:ids.map(id=>({...editorCard(id),cardmarket_id:41,prices:{eur:null,eur_foil:requests.length===1?'2.50':null,usd:'0.01'}})),not_found:[]})};};
   await vm.runInContext('refreshPrices()',w.context);
   assert.deepEqual(requests,[['idea']]);
-  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.map(e=>e.card.prices))',w.context)),[{eur:'1.00',usd:'9.99'},{eur:'1.00',usd:'9.99'},{eur:'2.50',usd:'9.99'}]);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards.map(e=>e.card.prices))',w.context)),[{eur:'1.00',usd:'9.99'},{eur:'1.00',usd:'9.99'},{eur:null,usd:'9.99',eur_foil:'2.50'}]);
+  assert.equal(vm.runInContext('collectionReport(decks[0],collection).fullCents',w.context),500);
+  assert.equal(vm.runInContext('decks[0].cards[2].card.cardmarket_id',w.context),41);
+  await vm.runInContext('refreshPrices()',w.context);
+  assert.match(w.node('#app').innerHTML,/Kept the saved quote for 1 entry/);
+  assert.equal(vm.runInContext('decks[0].cards[2].card.prices.eur_foil',w.context),'2.50');
   assert.equal(typeof vm.runInContext('decks[0].priceUpdatedAt',w.context),'string');
 });
 
