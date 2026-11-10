@@ -9,11 +9,14 @@ test('bundled taxonomy has unique canonical tags and resolvable relationships', 
   assert.ok(Number.isFinite(Date.parse(TAG_CATALOG.updated)));
   for (const t of TAG_CATALOG.tags) {
     assert.match(t.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    assert.ok(Number.isSafeInteger(t.cardCount) && t.cardCount >= 0, `${t.id}: ${t.cardCount}`);
     for (const id of [...t.parents, ...t.children]) assert.ok(tagById.has(id), `${t.id}: ${id}`);
   }
   for (const [id] of TAGS) assert.ok(tagById.has(id), `Starting point ${id} exists`);
   assert.ok(tagById.get('sweeper').parents.includes('removal'));
   assert.ok(tagById.get('removal').children.includes('sweeper'));
+  assert.ok(tagById.get('ramp').cardCount > 0);
+  assert.ok(TAG_CATALOG.tags.some(tag => tag.cardCount === 0));
 });
 
 test('discovery searches aliases, names and curated labels with exact matches first', () => {

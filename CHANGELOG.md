@@ -1,5 +1,10 @@
 # Changelog
 
+## Browse by function
+
+- Page through 40 function matches at a time in a responsive grid with direct Scryfall tagging counts (#128).
+- Open Related to browse broader and narrower functions and preview up to eight paper-card matches before applying a filter (#130).
+
 ## Deck review
 
 - Compare colored mana costs and production in Statistics and show primary assignments under Card functions (#105).

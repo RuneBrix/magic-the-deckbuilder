@@ -25,7 +25,7 @@ export async function prepareApp(page) {
       localStorage.setItem('arcana-smoke-seeded', 'yes');
     }
   }, workspace);
-  await page.route('https://**', route => route.fulfill({
+  await page.route(/^https:\/\//, route => route.fulfill({
     contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="488" height="680"><rect width="488" height="680" fill="#326747"/></svg>',
   }));
   await page.route('**/api/**', async route => {
