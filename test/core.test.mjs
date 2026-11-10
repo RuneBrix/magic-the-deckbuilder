@@ -46,8 +46,41 @@ test('detailed statistics weight exact mana values and separate the playing deck
     ['toughness', 0, 2, 3], ['rarity', 'rare', 2, 3], ['rarity', 'Unknown', 7, 2],
   ]) assert.equal(s.breakdowns[axis].get(group)[bucket], copies, `${axis} / ${group}`);
   assert.deepEqual(s.draw, { total: 12, types: new Map([['Land', 8], ['Creature', 3], ['Instant', 1]]), functions: new Map([['Unassigned', 9], ['Draw', 3]]) });
+  assert.deepEqual([...s.functions], [['Draw', 3], ['Ramp', 2]]);
   assert.equal(stats({ ...deck, format: 'modern' }, { detailed: true }).median, 2);
   assert.equal(stats({ cards: [deck.cards[0]] }, { detailed: true }).median, null);
+  assert.deepEqual(deck, before);
+});
+
+test('colored mana stats count weighted symbols and possible sources across playing zones', () => {
+  const land = card('Dual land', 'Land', 0, [], { mana_cost: '', produced_mana: ['G', 'U', 'C', 'U'] });
+  const spell = card('Ritual', 'Instant', 4, [], { mana_cost: '{W/U}{B/P}{2/R}{X}{C}', produced_mana: ['B'] });
+  const commander = card('Two faces', 'Legendary Creature', 2, [], {
+    object: 'card', card_faces: [{ mana_cost: '{G}' }, { mana_cost: '{R}{R}' }],
+  });
+  const deck = { format: 'commander', cards: [entry(land, 3), entry(spell, 3), entry(commander, 1, { zone: 'command' }),
+    entry(card('Legacy', 'Artifact', 0), 2), entry(spell, 20, { zone: 'sideboard' }), entry(land, 20, { zone: 'maybeboard' })] };
+  const s = stats(deck, { detailed: true });
+  assert.deepEqual(s.manaCosts, { colors: { W: 1.5, U: 1.5, B: 3, R: 5, G: 1 }, unavailable: 2 });
+  assert.deepEqual(s.manaSources, { colors: { W: 0, U: 3, B: 3, R: 0, G: 3 }, unavailable: 2 });
+  assert.equal(stats({ ...deck, format: 'modern' }, { detailed: true }).manaCosts.colors.G, 0);
+});
+
+test('token stats deduplicate exact references, exclude other components and report incomplete records', () => {
+  const id = 'ca8e8a9a-d673-4644-9eec-f4f549307d9b';
+  const token = { id, name: 'Beast', type_line: 'Token Creature — Beast', component: 'token' };
+  const deck = { format: 'commander', cards: [
+    entry(card('First maker', 'Creature', 2, [], { all_parts: [token, { ...token, component: 'combo_piece' }] }), 4),
+    entry(card('Second maker', 'Legendary Creature', 3, [], { all_parts: [{ ...token, id: id.toUpperCase() }] }), 1, { zone: 'command' }),
+    entry(card('Legacy', 'Creature', 2), 3),
+    entry(card('Malformed', 'Creature', 2, [], { all_parts: [{ ...token, id: 'invalid' }] })),
+    entry(card('No token', 'Creature', 2, [], { object: 'card' })),
+    entry(card('Side token', 'Creature', 2, [], { all_parts: [{ ...token, id: '00000000-0000-4000-8000-000000000002' }] }), 2, { zone: 'sideboard' }),
+  ] };
+  const before = structuredClone(deck);
+  assert.deepEqual(stats(deck, { detailed: true }).tokens, {
+    references: new Map([[id, { name: 'Beast', type: 'Token Creature — Beast' }]]), unavailable: 4,
+  });
   assert.deepEqual(deck, before);
 });
 

@@ -34,6 +34,8 @@ Investigated on **2026-11-02**, before changing the presentation:
 
 **Selected behavior:** keep the bundled list and policy developer-maintained. There is no automatic or user-triggered in-app bracket refresh. UI **Last updated** means the last developer review of the bundled list and guidance (`verifiedAt`), not an announcement's publication date, opening the source link, a successful card-legality lookup, or this feasibility investigation. The last complete snapshot review remains **2026-10-29**; this work does not advance that date or change the 53 names, bracket rules or 90-day application review policy. Updates arrive through app versions.
 
+About bracket data appears directly in Commander Checks with the review date, update explanation and official source link. [#113](https://github.com/RuneBrix/magic-the-deckbuilder/issues/113)
+
 Any future refresh must stage a complete, validated list and a compatible reviewed policy before applying it. Success may advance retrieval metadata only for the data actually verified; a membership-only lookup must not renew the policy-review date. Missing/partial/invalid data or network errors must retain last-good data, report failure, and preserve player assignments and decks. Cancellation must do nothing. Until that path has a verified contract and tests, the current official link is a source reference, not a refresh action.
 
 ## Data preservation

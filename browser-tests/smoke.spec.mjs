@@ -75,25 +75,32 @@ test('deck navigation, sticky header, statistics and budget fit the viewport', a
   await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Ownership & budget', exact: true })).toBeVisible();
   await noPageOverflow(page);
+  await page.getByRole('tab', { name: 'Checks', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'About bracket data' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Current official Commander brackets and Game Changers' })).toBeVisible();
+  await noPageOverflow(page);
   await page.getByRole('button', { name: 'My decks', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
 });
 
 test('statistics breakdowns and draw chances work with long labels, keyboard and empty decks', async ({ page, isMobile }) => {
   const longFunction = 'Ramp'.repeat(20);
-  const saved = await page.evaluate(label => {
+  const tokenId = 'ca8e8a9a-d673-4644-9eec-f4f549307d9b';
+  const saved = await page.evaluate(({ label, tokenId }) => {
     const key = 'arcana.workspace.v2';
     const workspace = JSON.parse(localStorage.getItem(key));
     const entries = workspace.decks[0].cards;
     Object.assign(entries[0].card, { cmc: 9 });
     entries[0].tags = ['Commander only'];
     entries[2].tags = [label, 'Draw'];
-    Object.assign(entries[2].card, { cmc: 4, type_line: 'Artifact Creature', colors: ['G', 'U'], power: '0' });
+    const token = { id: tokenId, name: 'Beast', type_line: 'Token Creature — Beast', component: 'token' };
+    Object.assign(entries[1].card, { produced_mana: ['U'], all_parts: [token] });
+    Object.assign(entries[2].card, { cmc: 4, type_line: 'Artifact Creature', colors: ['G', 'U'], power: '0', mana_cost: '{G/U}', produced_mana: ['G', 'U'], all_parts: [token] });
     entries.push({ ...entries[2], qty: 10, zone: 'sideboard' }, { ...entries[2], qty: 10, zone: 'maybeboard' });
     workspace.decks.push({ id: 'empty-statistics', name: 'Empty Statistics', format: 'modern', cards: [] });
     localStorage.setItem(key, JSON.stringify(workspace));
     return JSON.stringify([workspace.decks, workspace.collection]);
-  }, longFunction);
+  }, { label: longFunction, tokenId });
   await page.reload();
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
@@ -110,6 +117,17 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   }
   const toolHeights = await board.locator('.stat-tools > section').evaluateAll(tools => tools.map(tool => tool.offsetHeight));
   expect(toolHeights[1]).toBeGreaterThan(toolHeights[0]);
+  await expect(board.getByRole('heading', { name: 'Card functions' })).toBeVisible();
+  await expect(board.locator('.mana-pie')).toHaveCount(2);
+  const charts = board.locator('.mana-distributions > section');
+  const [costBox, productionBox] = await Promise.all([charts.nth(0).boundingBox(), charts.nth(1).boundingBox()]);
+  if (isMobile) expect(productionBox.y).toBeGreaterThan(costBox.y + costBox.height);
+  else expect(productionBox.x).toBeGreaterThan(costBox.x + costBox.width);
+  const beast = board.getByRole('link', { name: 'Beast', exact: true });
+  await expect(beast).toHaveCount(1);
+  await expect(beast).toHaveAttribute('href', `https://scryfall.com/card/${tokenId}`);
+  await beast.focus();
+  await expect(beast).toBeFocused();
 
   const breakdown = page.getByRole('combobox', { name: 'Breakdown', exact: true });
   await breakdown.focus();
@@ -143,6 +161,8 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await page.getByRole('button', { name: 'Empty Statistics', exact: true }).click();
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
   await expect(page.getByText('Add cards to Main deck to calculate draw chances.')).toBeVisible();
+  await expect(page.getByText('No referenced tokens.')).toBeVisible();
+  await expect(page.getByText('No recorded colored mana costs.')).toBeVisible();
   await expect(drawn).toBeDisabled();
   await noPageOverflow(page);
   // The automatic legality refresh can update the workspace timestamp.

@@ -802,7 +802,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .bracket-review p,.bracket-review ul{margin-top:14px;line-height:1.7;overflow-wrap:anywhere}
 .bracket-review .bracket-suggestion{padding:14px 16px;border-radius:4px}
 .bracket-review .bracket-conflict{color:var(--warning)}
-.bracket-review summary{margin-top:18px;cursor:pointer;min-height:36px}
+.bracket-review h4{margin-top:22px;font-size:13px;font-weight:650}
 
 @media(max-width:600px){.explorer .page-heading{align-items:flex-start;flex-wrap:wrap}.bracket-control{max-width:none}}
 
@@ -978,7 +978,19 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .stat-controls label{min-width:0}
 .stat-controls select{text-transform:none;text-overflow:ellipsis}
 .stat-controls :is(select,input){min-height:44px}
-.draw-tool{grid-column:1/-1}
+.mana-tool,.token-tool,.draw-tool{grid-column:1/-1}
+.mana-distributions{--chart-W:#eee7d0;--chart-U:#70add0;--chart-B:#635471;--chart-R:#ca6a53;--chart-G:#729a6c;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 32px;margin-top:16px}
+.mana-distributions h4{font-size:13px;margin:0 0 12px}
+.mana-chart{display:flex;align-items:center;flex-wrap:wrap;gap:12px 20px}
+.mana-pie{width:112px;height:112px;border-radius:50%;border:1px solid var(--line)}
+.mana-legend{display:grid;gap:4px;list-style:none;padding:0;margin:0;font-size:13px;font-variant-numeric:tabular-nums}
+.mana-legend li{display:grid;grid-template-columns:12px minmax(48px,1fr) auto;align-items:center;gap:8px}
+.mana-legend b{text-align:right}
+.mana-swatch{width:12px;height:12px;border:1px solid var(--line);background:var(--swatch)}
+.token-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:8px 24px;list-style:none;padding:0;margin:12px 0}
+.token-list li{border-top:1px solid var(--line);padding:8px 0;overflow-wrap:anywhere}
+.token-list a{display:inline-block;padding:4px 0}
+.token-list span{display:block;color:var(--muted);font-size:13px}
 .draw-tool .stat-controls{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
 .draw-tool [aria-invalid=true]{border-color:var(--danger)}
 #draw-status:empty{margin:0}
@@ -987,7 +999,7 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .draw-table th:first-child{text-align:left;padding-left:0;white-space:normal;overflow-wrap:anywhere}
 .draw-table th{font-weight:550}
 @media(min-width:961px){#deck-tracker{position:sticky;top:var(--nav-height,76px);align-self:start;height:calc(100dvh - var(--nav-height,76px));min-height:0}}
-@media(max-width:600px){.stats-view{grid-template-columns:minmax(0,1fr);gap:28px}}
+@media(max-width:600px){.stats-view,.mana-distributions{grid-template-columns:minmax(0,1fr)}.stats-view{gap:28px}}
 
 /* Local collection and deck planning (#70 / #71). */
 .collection-actions{display:flex;align-items:center;justify-content:flex-start;gap:8px;white-space:nowrap;min-width:110px}.collection-actions button{display:inline-block;padding:6px 8px;min-height:32px;border:0;border-radius:3px}.collection-actions button:hover{background:var(--soft)}.collection-table-scroll{width:100%;overflow-x:auto}.collection-table{width:100%;border-collapse:collapse;font-size:12px;text-align:left;table-layout:auto}.collection-table th,.collection-table td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}.collection-table th{font-size:11px;color:var(--muted);white-space:nowrap}.collection-table th button{padding:4px 0;text-align:left}.collection-table td:nth-child(2){min-width:180px;max-width:260px}.collection-table td:nth-child(4){min-width:150px;max-width:240px}.collection-table td:nth-child(n+5){white-space:nowrap}.collection-table .text-button{text-align:left;padding:0}.collection-table .collection-actions button{padding:6px 8px}.collection-table tbody tr:hover{background:var(--soft)}.collection-page .collection-view-visual .collection-actions{flex-direction:row;min-width:0;width:100%}.import-examples{margin:12px 0;color:var(--muted)}.import-examples pre{padding:10px 12px;border-left:2px solid var(--line);background:var(--soft);font:12px/1.6 monospace;white-space:pre-wrap}.import-examples p{font-size:12px}.import-confirm{display:flex;gap:8px;align-items:center;margin:14px 0}.import-confirm input{flex-shrink:0}#collection-notices ul{padding-left:22px;max-height:160px;overflow:auto}#collection-mapping{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}#collection-mapping h3{grid-column:1/-1}#collection-syntax{margin:14px 0;font-size:12px}
