@@ -22,15 +22,14 @@ test('search disclosures start closed and preserve the opened state and selected
   assert.doesNotMatch(html, /data-action="backup"|data-action="restore"/);
 });
 
-test('tag discovery renders aliases, verified relationships, visible counts and inline unlisted tags', () => {
+test('tag discovery pages through alias matches with snapshot counts and inline unlisted tags', () => {
   const w = workspace();
-  vm.runInContext("tagSearch = 'blink'; browsedTag = 'flicker'; filters=parseQuery('otag:unknown-arcana-tag'); render()", w.context);
+  vm.runInContext("tagSearch = 'blink'; filters=parseQuery('otag:unknown-arcana-tag'); render()", w.context);
   const html = w.node('#app').innerHTML;
   assert.match(html, /Add flicker filter/);
-  assert.match(html, /Aliases: blink/);
-  assert.match(html, /Broader tags/);
-  assert.match(html, /Narrower tags/);
-  assert.match(html, /data-browse-tag="flicker-creature"/);
+  assert.match(html, /data-browse-tag="flicker"/);
+  assert.match(html, /Directly tagged cards/);
+  assert.match(html, /class="tag-card-count">[\d,.]+ cards?/);
   assert.match(html, /outside this snapshot/);
   assert.match(html, /id="tag-match-count"[^>]*>[\d,.]+ matching tags?/);
   assert.match(html, /Matching all \(AND\)/);
@@ -38,12 +37,21 @@ test('tag discovery renders aliases, verified relationships, visible counts and 
   w.node('#tag-search').input({target:{value:'unknown arcana function'}});
   assert.equal(w.node('#tag-match-count').textContent,'0 matching tags');
   assert.match(w.node('#tag-options').innerHTML,/data-tag="unknown-arcana-function"[^>]*>Add “unknown arcana function” as an unlisted function/);
-  assert.doesNotMatch(w.node('#tag-options').innerHTML,/Tag relationships/);
+  assert.doesNotMatch(w.node('#tag-options').innerHTML,/tag-page/);
   w.node('#tag-search').input({target:{value:'tag:unexpected'}});
   assert.doesNotMatch(w.node('#tag-options').innerHTML,/data-tag=/);
   assert.match(w.node('#tag-options').innerHTML,/Use up to 80 letters/);
   w.node('#tag-search').input({target:{value:'a'}});
-  assert.match(w.node('#tag-options').innerHTML,/Show next \d+ matching tags/);
+  const matching=core.findTags('a').map(tag=>tag.id);
+  const pageIds=()=>Array.from(w.node('#tag-options').innerHTML.matchAll(/data-browse-tag="([^"]+)"/g),match=>match[1]);
+  assert.match(w.node('#tag-options').innerHTML,/id="tag-page"/);
+  assert.deepEqual(pageIds(),matching.slice(0,40));
+  vm.runInContext('tagPage=2; refreshTagOptions()',w.context);
+  assert.deepEqual(pageIds(),matching.slice(40,80));
+  w.node('#tag-search').input({target:{value:'a '}});
+  assert.deepEqual(pageIds(),matching.slice(0,40));
+  assert.equal(vm.runInContext('tagCardCount({cardCount:0})',w.context),'0 cards');
+  assert.equal(vm.runInContext('tagCardCount({})',w.context),'Count unavailable');
 });
 
 test('upstream no-match responses explain recovery and possible unsupported custom tags', async () => {

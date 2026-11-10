@@ -56,7 +56,8 @@ const SEARCH_SORTS = {
   'usd-desc': { label: 'USD: high first', params: { order: 'usd', dir: 'desc' } },
 };
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
-let browsedTag = '', tagLimit = 30;
+const TAG_PAGE_SIZE = 40;
+let tagPage = 1;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
 let previewKey = '', previewDeck = '', cardActionTrigger = null;
@@ -267,11 +268,107 @@ function applySelectedFunctions(model, focusSelector) {
   refreshFunctionFilters();
   $(focusSelector)?.focus({ preventScroll: true });
 }
+const tagName = id => TAGS.find(([slug])=>slug===id)?.[1] || id.replaceAll('-',' ');
+const tagFilterAction = id => filters.tags.includes(id) ? 'Remove' : 'Add';
+const toggleFunction = id => ({...filters,tags:filters.tags.includes(id)?filters.tags.filter(tag=>tag!==id):[...filters.tags,id]});
+function tagCardCount(tag) {
+  return Number.isSafeInteger(tag.cardCount) ? `${tag.cardCount.toLocaleString()} ${tag.cardCount===1?'card':'cards'}` : 'Count unavailable';
+}
 function tagOptions(matches) {
-  const shown=matches.slice(0,tagLimit),detail=tagById.get(browsedTag),locked=filters.locked.includes('tags');
-  const browse=id=>`<button class="text-button" data-browse-tag="${esc(id)}">${esc(id.replaceAll('-',' '))}</button>`;
-  const relation=(label,ids)=>`<div class="tag-relations"><strong>${label}</strong><div>${ids.map(browse).join('')||'<span class="hint">None recorded in this snapshot.</span>'}</div></div>`;
-  return `${locked?'<p class="hint">Function expressions in a complex query group must be edited in the query above.</p>':''}<div class="tag-options">${shown.map(t=>`<span class="tag-choice"><button class="tag-option ${filters.tags.includes(t.id)?'selected':''}" data-tag="${esc(t.id)}" aria-pressed="${filters.tags.includes(t.id)}" aria-label="${filters.tags.includes(t.id)?'Remove':'Add'} ${esc(t.id)} filter" ${locked?'disabled':''}>${esc(TAGS.find(([id])=>id===t.id)?.[1]||t.id.replaceAll('-',' '))} <span>${filters.tags.includes(t.id)?'Remove filter':'Add filter'}</span></button><button class="tag-browse" data-browse-tag="${esc(t.id)}" aria-label="Browse ${esc(t.id)} relationships">Related ${icon('arrow',14)}</button></span>`).join('')}</div>${!matches.length?unlistedFunctionOption(locked):''}${matches.length>shown.length?`<button class="text-button tag-more" data-action="more-tags">Show next ${Math.min(30,matches.length-shown.length)} matching tags</button>`:''}${detail?`<section class="tag-detail" aria-label="Tag relationships"><h3>${esc(detail.id.replaceAll('-',' '))}</h3><p class="hint">${detail.aliases.length?'Aliases: '+esc(detail.aliases.join(', '))+'. ':''}<a href="https://tagger.scryfall.com/tags/card/${encodeURIComponent(detail.id)}" target="_blank" rel="noreferrer">View on Tagger</a></p>${relation('Broader tags',detail.parents)}${relation('Narrower tags',detail.children)}<p class="hint">Browsing relationships leaves the card query unchanged. Use Add filter to search a function.</p><button class="secondary" data-tag="${esc(detail.id)}" ${locked?'disabled':''}>${filters.tags.includes(detail.id)?'Remove filter':'Add filter'}</button></section>`:''}${filters.tags.filter(t=>!tagById.has(t)).map(t=>`<p class="hint">Existing tag “${esc(t)}” is outside this snapshot. Scryfall may accept it, reject it, or return no cards.</p>`).join('')}`;
+  const pages=Math.max(1,Math.ceil(matches.length/TAG_PAGE_SIZE));
+  tagPage=Math.min(tagPage,pages);
+  const start=(tagPage-1)*TAG_PAGE_SIZE,shown=matches.slice(start,start+TAG_PAGE_SIZE);
+  const locked=filters.locked.includes('tags');
+  return `${locked?'<p class="hint">Function expressions in a complex query group must be edited in the query above.</p>':''}
+    ${shown.length?`<div class="tag-grid-heading"><p class="hint">Directly tagged cards · ${esc(TAG_CATALOG.updated.slice(0,10))} snapshot</p>
+      ${pages>1?`<label for="tag-page">Page <select id="tag-page">${Array.from({length:pages},(_,i)=>`<option value="${i+1}" ${i+1===tagPage?'selected':''}>${i+1} of ${pages}</option>`).join('')}</select></label>`:''}</div>
+    <ul class="tag-options">${shown.map(tag=>{
+      const action=tagFilterAction(tag.id);
+      return `<li class="tag-choice"><strong>${esc(tagName(tag.id))}</strong><span class="tag-card-count">${tagCardCount(tag)}</span>
+        <div class="tag-choice-actions"><button class="tag-option ${action==='Remove'?'selected':''}" data-tag="${esc(tag.id)}" aria-pressed="${action==='Remove'}" aria-label="${action} ${esc(tag.id)} filter" ${locked?'disabled':''}>${action} filter</button>
+        <button class="tag-browse" data-browse-tag="${esc(tag.id)}" aria-label="Browse ${esc(tag.id)} relationships">Related ${icon('arrow',14)}</button></div></li>`;
+    }).join('')}</ul>`:unlistedFunctionOption(locked)}
+    ${filters.tags.filter(t=>!tagById.has(t)).map(t=>`<p class="hint">Existing tag “${esc(t)}” is outside this snapshot. Scryfall may accept it, reject it, or return no cards.</p>`).join('')}`;
+}
+
+function browseFunctions(id) {
+  if (!tagById.has(id)) return;
+  showDialog(`<h2>Related functions</h2><section class="function-discovery">
+    <h3 id="browsed-function" tabindex="-1"></h3>
+    <nav class="tag-history" aria-label="Function browsing history"><button class="secondary" data-tag-step="-1">Back</button><button class="secondary" data-tag-step="1">Forward</button></nav>
+    <div id="tag-relationships"></div>
+    <section aria-label="Example cards"><h4>Example cards</h4><p class="hint">Paper cards from Scryfall search, which can include related tags.</p>
+      <p id="tag-example-status" role="status"></p><div id="tag-examples"></div></section></section>`);
+  const dialog=$('#dialog'),overlay=$('.function-discovery'),heading=$('#browsed-function');
+  const examples=$('#tag-examples'),status=$('#tag-example-status');
+  const back=overlay.querySelector('[data-tag-step="-1"]'),forward=overlay.querySelector('[data-tag-step="1"]');
+  const history=[id];
+  let index=0,controller,timer;
+  function cancelExamples() {
+    clearTimeout(timer);
+    controller?.abort();
+  }
+  function loadExamples(tag) {
+    cancelExamples();
+    const {signal}=controller=new AbortController();
+    examples.innerHTML='';
+    status.textContent='Loading example cards…';
+    timer=setTimeout(async()=>{
+      const isCurrent=()=>!signal.aborted && dialog.open && overlay.isConnected;
+      try {
+        const {data}=await api('/api/search?'+new URLSearchParams({q:'game:paper otag:'+tag,order:'edhrec'}),{signal});
+        if (!isCurrent()) return;
+        status.textContent=data.length?'':'No paper cards matched this function.';
+        examples.innerHTML=data.length?`<ul class="tag-example-grid">${data.slice(0,8).map(card=>{
+          const image=safeUrl(card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || imageFor(card),true);
+          return `<li>${image?`<img src="${esc(image)}" alt="" width="488" height="680">`:''}<span>${esc(card.name)}</span></li>`;
+        }).join('')}</ul>`:'';
+      } catch (error) {
+        if (!isCurrent()) return;
+        const empty=error.status===404&&/no cards|0 cards|didn.t match any cards/i.test(error.message);
+        status.textContent=empty?'No paper cards matched this function.':'Example cards are unavailable.';
+        if (!empty) examples.innerHTML='<button class="secondary" data-tag-retry>Try again</button>';
+      }
+    },150);
+  }
+  function showTag() {
+    const tag=tagById.get(history[index]);
+    heading.textContent=tagName(tag.id);
+    back.disabled=index===0;
+    forward.disabled=index===history.length-1;
+    $('#tag-relationships').innerHTML=`<p class="tag-snapshot-count">${tagCardCount(tag)} · Direct taggings in the ${esc(TAG_CATALOG.updated.slice(0,10))} snapshot</p>
+      <div class="tag-relations"><div><h4>Broader functions</h4>${tag.parents.length?`<ul>${tag.parents.map(parent=>`<li><button class="text-button" data-tag-navigate="${esc(parent)}">${esc(tagName(parent))}</button></li>`).join('')}</ul>`:'<p class="hint">None recorded.</p>'}</div>
+      <label>Narrower functions<select id="tag-child" ${tag.children.length?'':'disabled'}><option value="">${tag.children.length?'Choose a narrower function':'None recorded'}</option>${tag.children.map(child=>`<option value="${esc(child)}">${esc(tagName(child))}</option>`).join('')}</select></label></div>
+      ${tag.aliases.length?`<p>Aliases: ${esc(tag.aliases.join(', '))}</p>`:''}
+      <div class="tag-discovery-actions"><button class="primary" id="tag-apply" ${filters.locked.includes('tags')?'disabled':''}>${tagFilterAction(tag.id)} filter</button>
+      <a href="https://tagger.scryfall.com/tags/card/${encodeURIComponent(tag.id)}" target="_blank" rel="noreferrer">View on Tagger</a></div>
+      ${filters.locked.includes('tags')?'<p class="hint">Edit complex function expressions in the Scryfall query.</p>':''}`;
+    loadExamples(tag.id);
+    dialog.scrollTop=0;
+    heading.focus({preventScroll:true});
+  }
+  function navigate(tag) {
+    index+=1;
+    history.splice(index,history.length-index,tag);
+    showTag();
+  }
+  overlay.onchange=e=>{if(e.target.id==='tag-child'&&e.target.value)navigate(e.target.value);};
+  overlay.onclick=e=>{
+    const button=e.target.closest('button');
+    if (!button) return;
+    if (button.dataset.tagStep) {index+=Number(button.dataset.tagStep);showTag();}
+    else if (button.dataset.tagNavigate) navigate(button.dataset.tagNavigate);
+    else if (button.hasAttribute('data-tag-retry')) {loadExamples(history[index]);heading.focus();}
+    else if (button.id==='tag-apply'&&setCondition('tags',toggleFunction(history[index]),true,true)) {
+      refreshFunctionFilters();
+      closeDialog();
+    }
+  };
+  dialog.onclose=()=>{
+    cancelExamples();
+    (document.querySelector(`[data-browse-tag="${id}"]`) || $('#tag-search'))?.focus({preventScroll:true});
+  };
+  showTag();
 }
 function broadeningTools() {
   const options=relaxationOptions(broadening?.original || filters,current());
@@ -868,8 +965,7 @@ function clearSearch(){
   filters=parseQuery('');
   colorTarget='';
   tagSearch='';
-  browsedTag='';
-  tagLimit=30;
+  tagPage=1;
   resetResults();
 }
 function resetExplore(){
@@ -1079,7 +1175,7 @@ function bind() {
   $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected)tagsOpen=e.target.open;});
   $('#search-form')?.addEventListener('submit',e=>{e.preventDefault();readFilters();search();});
   $('#raw')?.addEventListener('input',e=>{filters=parseQuery(e.target.value);colorTarget='';++requestId;loading=false;error='';broadening=null;if(!filters.query.trim())resetResults();refreshSearchTools();});
-  $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagLimit=30;browsedTag='';refreshTagOptions();});
+  $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagPage=1;refreshTagOptions();});
   bindGuided();bindSearchOutput();
 }
 addEventListener('click',e=>{
@@ -1098,6 +1194,10 @@ $('#app').addEventListener('keydown',e=>{
 $('#app').addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
 $('#app').addEventListener('focusin',e=>{const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
 $('#app').addEventListener('change',e=>{
+  if(e.target.id==='tag-page'){
+    tagPage=Number(e.target.value);refreshTagOptions();$('#tag-page').focus({preventScroll:true});
+    return;
+  }
   if(e.target.id==='tag-match'){
     applySelectedFunctions({...filters,match:e.target.value}, '#tag-match');
     return;
@@ -1145,9 +1245,9 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.manage){const menu=button.closest?.('.deck-menu');if(menu){menu.open=false;menu.querySelector('summary').focus();}const d=decks.find(d=>d.id===button.dataset.target);if(!d)return;const action=button.dataset.manage;if(action==='rename')deckForm(d);if(action==='duplicate')duplicateDeck(d);if(action==='delete')deleteDeck(d);if(action==='import')importDialog(d);if(action==='export')exportDialog(d);return;}
   if(button.dataset.tab){deckTab=button.dataset.tab;render();return;}
   if(button.dataset.relax){await broaden(button.dataset.relax);return;}
-  if(button.dataset.browseTag){browsedTag=button.dataset.browseTag;refreshTagOptions();$('#tag-options .tag-detail h3').tabIndex=-1;$('#tag-options .tag-detail h3').focus();return;}
+  if(button.dataset.browseTag){browseFunctions(button.dataset.browseTag);return;}
   if(button.dataset.tag){
-    const t=button.dataset.tag, model={...filters,tags:filters.tags.includes(t)?filters.tags.filter(x=>x!==t):[...filters.tags,t]};
+    const model=toggleFunction(button.dataset.tag);
     if(button.closest?.('#selected-functions')) applySelectedFunctions(model, '#tag-search');
     else setCondition('tags',model);
     return;
@@ -1184,10 +1284,6 @@ $('#app').addEventListener('click',async e=>{
   if(action==='retry')search(false,true);
   if(action==='restore-search')await restoreSearch();
   if(action==='more')search(true);
-  if(action==='more-tags'){
-    const previousLimit=tagLimit;tagLimit+=30;refreshTagOptions();
-    document.querySelectorAll('#tag-options .tag-choice .tag-option')[previousLimit]?.focus();
-  }
   if(action==='sample')sample();
   if(action==='import')importDialog();
   if(action==='import-new')importDialog(null);

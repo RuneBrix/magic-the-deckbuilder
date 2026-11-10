@@ -59,7 +59,7 @@ Comparison broadening removes only a representable independent condition (the en
 
 ## Function discovery
 
-Find a function searches names and aliases and shows the match count beneath the field as you type. An empty field shows curated starting points. Add filter / Remove filter changes the query. Related browses recorded relationships and focuses the detail heading. Show next adds another batch of matching tags. The snapshot date is in workspace Help.
+Find a function searches names and aliases and shows the match count beneath the field as you type. An empty field shows curated starting points. Use Page to browse up to 40 matches at a time with direct tagging counts. Related opens recorded relationships and example cards in a dialog. Add filter or Remove filter updates the query using the current matching mode. [Tagging counts and example scope](TAG_TAXONOMY.md).
 
 Selected functions and their all/any choice sit inside Browse by function. A valid name with zero catalog matches offers Add as an unlisted function in the same panel. The action adds an `otag:` filter and runs the current query. The panel labels unlisted tags and explains that Scryfall may reject them or return no cards. Catalog results use the canonical tag slug. See [Tag taxonomy](TAG_TAXONOMY.md).
 

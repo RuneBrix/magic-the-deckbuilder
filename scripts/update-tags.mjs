@@ -18,11 +18,13 @@ const slugs = new Map(rows.map(t => [t.id, t.slug]));
 const tags = rows.map(t => {
   const aliases = t.aliases ?? [];
   if (t.type !== 'oracle' || typeof t.id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t.slug) || !Array.isArray(aliases) || aliases.some(a => typeof a !== 'string')) throw Error('Unexpected tag schema.');
+  if (!Array.isArray(t.taggings) || t.taggings.some(entry => typeof entry?.oracle_id !== 'string' || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(entry.oracle_id))) throw Error(`Missing or invalid taggings: ${t.slug}`);
+  const cardCount = new Set(t.taggings.map(entry => entry.oracle_id.toLowerCase())).size;
   const links = ids => (ids ?? []).map(id => {
     if (!slugs.has(id)) throw Error(`Missing relationship: ${id}`);
     return slugs.get(id);
   }).sort();
-  return { uuid: t.id, id: t.slug, aliases, parents: links(t.parent_ids), children: links(t.child_ids) };
+  return { uuid: t.id, id: t.slug, aliases, parents: links(t.parent_ids), children: links(t.child_ids), cardCount };
 }).sort((a, b) => a.id.localeCompare(b.id, 'en'));
 if (!tags.length || slugs.size !== tags.length || new Set(tags.map(t => t.id)).size !== tags.length || !Number.isFinite(Date.parse(bulk.updated_at))) throw Error('Invalid tag catalog.');
 const catalog = { source, updated: bulk.updated_at, tags };

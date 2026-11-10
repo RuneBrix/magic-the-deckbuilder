@@ -567,6 +567,97 @@ test('Explore fills available width and keeps selected functions inside their di
   await expect(page.locator('#search-output')).toBeEmpty();
 });
 
+test('function pages and related browsing preserve the search until a filter is applied', async ({ page }, testInfo) => {
+  const queries = [];
+  const exampleQuery = slug => `game:paper otag:${slug}`;
+  let removalAttempts = 0;
+  let releaseSweeper;
+  const waitForNavigation = new Promise(resolve => { releaseSweeper = resolve; });
+  await page.route('**/api/search?**', async route => {
+    const query = new URL(route.request().url()).searchParams.get('q');
+    queries.push(query);
+    if (query === exampleQuery('sweeper')) {
+      await waitForNavigation;
+      return route.fulfill({ json: { data: [cards[20]], total_cards: 1, has_more: false } });
+    }
+    if (query === exampleQuery('removal') && ++removalAttempts === 1) {
+      return route.fulfill({ status: 502, json: { error: 'Fixture unavailable' } });
+    }
+    return route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } });
+  });
+  await page.getByRole('button', { name: 'Explore cards' }).click();
+  const raw = page.locator('#raw');
+  await raw.fill('t:creature (otag:ramp OR otag:draw)');
+  await page.locator('#function-tags > summary').press('Enter');
+  const lookup = page.getByRole('searchbox', { name: 'Find a function' });
+  const grid = page.locator('.tag-options');
+  const tiles = grid.locator('li');
+  const pager = page.locator('#tag-page');
+  await lookup.fill('a');
+  await expect(tiles).toHaveCount(40);
+  await expect(tiles.first()).toContainText(/\d+ cards?/);
+  const phone = page.viewportSize().width < 600;
+  const geometry = await tiles.evaluateAll(nodes => nodes.map(node => {
+    const { x, y, width, height } = node.getBoundingClientRect();
+    return { x, y, width, height };
+  }));
+  expect(new Set(geometry.map(rect => rect.x)).size).toBe(phone ? 2 : 5);
+  expect(new Set(geometry.map(rect => rect.y)).size).toBe(phone ? 20 : 8);
+  expect(Math.max(...geometry.map(rect => rect.width)) - Math.min(...geometry.map(rect => rect.width))).toBeLessThan(1);
+  expect(Math.max(...geometry.map(rect => rect.height)) - Math.min(...geometry.map(rect => rect.height))).toBeLessThan(1);
+  const firstTag = await tiles.first().getByRole('button', { name: /relationships/ }).getAttribute('data-browse-tag');
+  await pager.focus();
+  await pager.press('ArrowDown');
+  await pager.press('Enter');
+  await expect(pager).toBeFocused();
+  await expect(pager).toHaveValue('2');
+  await expect(tiles.first().getByRole('button', { name: /relationships/ })).not.toHaveAttribute('data-browse-tag', firstTag);
+  await lookup.fill('a ');
+  await expect(pager).toHaveValue('1');
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('function-grid.png') });
+  expect(queries).toEqual([]);
+
+  await lookup.fill('sweeper');
+  const trigger = page.getByRole('button', { name: 'Browse sweeper relationships', exact: true });
+  await trigger.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Related functions' });
+  const heading = dialog.locator('#browsed-function');
+  await expect(heading).toBeFocused();
+  await expect(dialog.getByText('Loading example cards…')).toBeVisible();
+  await expect.poll(() => queries.includes(exampleQuery('sweeper'))).toBe(true);
+  await dialog.getByRole('button', { name: 'Removal', exact: true }).click();
+  await expect(dialog.getByText('Example cards are unavailable.')).toBeVisible();
+  releaseSweeper();
+  await dialog.getByRole('button', { name: 'Try again' }).click();
+  const examples = dialog.locator('.tag-example-grid li');
+  await expect(examples).toHaveCount(8);
+  await expect(examples.first()).toHaveText('Smoke Card 1');
+  await expect.poll(() => examples.locator('img').evaluateAll(images => images.filter(img => img.naturalWidth > 0).length)).toBe(8);
+  const rowPositions = await examples.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
+  expect(new Set(rowPositions).size).toBe(2);
+  await expect(dialog.getByText(/Direct taggings in the/)).toBeVisible();
+  await dialogFits(page);
+  await dialog.screenshot({ path: testInfo.outputPath('function-overlay.png') });
+  await dialog.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(heading).toHaveText(/board wipes|sweeper/i);
+  await dialog.getByRole('button', { name: 'Forward', exact: true }).click();
+  await expect(heading).toHaveText('Removal');
+  await dialog.getByLabel('Narrower functions').selectOption('sweeper');
+  await expect(heading).toBeFocused();
+  await expect(heading).toHaveText(/board wipes|sweeper/i);
+  await expect(raw).toHaveValue('t:creature (otag:ramp OR otag:draw)');
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await dialog.getByRole('button', { name: 'Add filter', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(raw).toHaveValue('t:creature (otag:ramp OR otag:draw OR otag:sweeper)');
+  await expect(trigger).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Remove sweeper filter', exact: true })).toHaveCount(2);
+});
+
 test('Explore panels submit independently and add unlisted functions inline', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
   const filters = page.locator('#search-filters'), raw = page.locator('#raw');
