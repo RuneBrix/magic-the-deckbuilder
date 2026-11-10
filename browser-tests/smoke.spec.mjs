@@ -86,7 +86,11 @@ test('deck navigation, sticky header, statistics and budget fit the viewport', a
 test('statistics breakdowns and draw chances work with long labels, keyboard and empty decks', async ({ page, isMobile }) => {
   const longFunction = 'Ramp'.repeat(20);
   const tokenId = 'ca8e8a9a-d673-4644-9eec-f4f549307d9b';
-  const saved = await page.evaluate(({ label, tokenId }) => {
+  const savedDeckData = () => page.evaluate(() => {
+    const { decks, collection } = JSON.parse(localStorage.getItem('arcana.workspace.v2'));
+    return [decks, collection];
+  });
+  await page.evaluate(({ label, tokenId }) => {
     const key = 'arcana.workspace.v2';
     const workspace = JSON.parse(localStorage.getItem(key));
     const entries = workspace.decks[0].cards;
@@ -99,10 +103,12 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
     entries.push({ ...entries[2], qty: 10, zone: 'sideboard' }, { ...entries[2], qty: 10, zone: 'maybeboard' });
     workspace.decks.push({ id: 'empty-statistics', name: 'Empty Statistics', format: 'modern', cards: [] });
     localStorage.setItem(key, JSON.stringify(workspace));
-    return JSON.stringify([workspace.decks, workspace.collection]);
   }, { label: longFunction, tokenId });
   await page.reload();
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.getByRole('tab', { name: 'Checks', exact: true }).click();
+  await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
+  const saved = await savedDeckData();
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
   const board = page.locator('.stats-view');
   await expect(board.getByText('Total mana value').locator('..').getByText('91', { exact: true })).toBeVisible();
@@ -165,12 +171,7 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await expect(page.getByText('No recorded colored mana costs.')).toBeVisible();
   await expect(drawn).toBeDisabled();
   await noPageOverflow(page);
-  // The automatic legality refresh can update the workspace timestamp.
-  const dataPreserved = await page.evaluate(before => {
-    const { decks, collection } = JSON.parse(localStorage.getItem('arcana.workspace.v2'));
-    return JSON.stringify([decks, collection]) === before;
-  }, saved);
-  expect(dataPreserved).toBe(true);
+  expect(await savedDeckData()).toEqual(saved);
 });
 
 test('deck groups show copy counts and prices, and visual stacks reveal card metadata', async ({ page, isMobile }, testInfo) => {
