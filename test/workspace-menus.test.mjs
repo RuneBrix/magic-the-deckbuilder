@@ -58,7 +58,7 @@ test('function submenu lists only the named deck labels, assigns a primary witho
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   await click({cardAction:'function-menu'});
   const html=w.node('#card-submenu').innerHTML;
-  assert.match(html,/data-function="Draw"/);assert.match(html,/data-function="Ramp"/);
+  assert.match(html,/data-function="Draw"/);assert.doesNotMatch(html,/data-function="Ramp"/);
   assert.match(html,/data-function="Removal"[^>]*aria-checked="true"/);
   assert.match(html,/role="menuitemradio"/);
   assert.doesNotMatch(html,/Other deck only|<p\b/);

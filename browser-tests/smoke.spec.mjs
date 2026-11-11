@@ -14,6 +14,73 @@ async function dialogFits(page) {
 }
 test.beforeEach(async ({ page }) => prepareApp(page));
 
+test('primary function editing and temporary reverse faces preserve stored card data', async ({page,isMobile},testInfo)=>{
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2', data=JSON.parse(localStorage.getItem(key));
+    const entry=data.decks[0].cards[1];
+    entry.tags=['Draw','Legacy secondary'];
+    delete entry.card.image_uris;
+    entry.card.card_faces=[
+      {name:'Smoke front',image_uris:{normal:'https://cards.scryfall.io/front.jpg'}},
+      {name:'Smoke reverse',image_uris:{normal:'https://cards.scryfall.io/back.jpg'}},
+    ];
+    data.decks[0].cards=data.decks[0].cards.slice(0,3);
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.route('https://cards.scryfall.io/{front,back}.jpg',route=>route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="488" height="680"><rect width="488" height="680" fill="${route.request().url().includes('back')?'#263c61':'#326747'}"/><text x="30" y="340" fill="white" font-size="48">${route.request().url().includes('back')?'Reverse face':'Front face'}</text></svg>`}));
+  await page.reload();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  await page.getByRole('tab',{name:'Checks',exact:true}).click();
+  await expect(page.locator('.freshness')).toContainText('Legality refreshed this session');
+  await page.getByRole('tab',{name:'Cards',exact:true}).click();
+  const row=page.locator('.visual-card').filter({has:page.getByRole('button',{name:'Inspect Smoke Card 2 in Main deck',exact:true})});
+  const flip=row.getByRole('button',{name:'Flip Smoke Card 2',exact:true});
+  const before=await row.getAttribute('data-preview-entry');
+  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].cards);
+  const original=await stored();
+  await flip.focus();await flip.press('Enter');
+  await expect(row.locator('.card-art img')).toHaveAttribute('src',/back.jpg$/);
+  await expect(flip).toHaveAttribute('aria-pressed','true');
+  await expect(flip).toBeFocused();
+  if(isMobile){
+    const box=await flip.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(44);expect(box.height).toBeGreaterThanOrEqual(44);
+    await flip.tap();await expect(row.locator('.card-art img')).toHaveAttribute('src',/front.jpg$/);
+    await flip.tap();await expect(row.locator('.card-art img')).toHaveAttribute('src',/back.jpg$/);
+  }
+  if(!isMobile){
+    const preview=page.locator('#deck-card-preview');
+    await preview.getByRole('button',{name:'Flip Smoke Card 2',exact:true}).click();
+    await expect(preview.locator('img')).toHaveAttribute('alt','Smoke reverse');
+    await page.getByRole('heading',{name:'Smoke Garden'}).hover();
+    await expect(preview.locator('img')).toHaveAttribute('src',/front.jpg$/);
+  }
+  await page.locator('#editor-layout').focus();
+  await expect(row.locator('.card-art img')).toHaveAttribute('src',/front.jpg$/);
+  expect(await row.getAttribute('data-preview-entry')).toBe(before);
+  expect(await stored()).toEqual(original);
+  await page.screenshot({path:testInfo.outputPath('card-faces.png'),fullPage:true});
+  await page.locator('#editor-layout').selectOption('visual-vertical');
+  await flip.focus();await flip.press('Space');
+  await expect(row.locator('.card-art img')).toHaveAttribute('src',/back.jpg$/);
+  await page.locator('#editor-layout').selectOption('text-horizontal');
+  await expect(page.locator('[data-flip-card]')).toHaveCount(0);
+  await page.getByRole('button',{name:'Smoke Card 2',exact:true}).click();
+  const primary=page.getByRole('textbox',{name:'Primary function',exact:true});
+  await expect(primary).toHaveValue('Draw');
+  await primary.fill('Removal');
+  await expect(primary).toBeFocused();
+  expect((await stored())[1].tags).toEqual(['Removal','Draw','Legacy secondary']);
+  await dialogFits(page);
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab',{name:'Statistics',exact:true}).click();
+  await expect(page.locator('#app')).not.toContainText('Legacy secondary');
+  await page.reload();
+  expect((await stored())[1].tags).toEqual(['Removal','Draw','Legacy secondary']);
+  expect((await stored())[1].card.card_faces).toEqual(original[1].card.card_faces);
+  await noPageOverflow(page);
+});
+
 test('deck library uses available width and commander suggestions are optional until creation', async ({ page, isMobile }) => {
   if (!isMobile) await page.setViewportSize({ width: 1920, height: 900 });
   const columns = await page.locator('.deck-library').evaluate(grid => getComputedStyle(grid).gridTemplateColumns.split(' ').length);

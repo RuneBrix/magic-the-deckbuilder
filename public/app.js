@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, editEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 import { esc, mana, printingLabel } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
@@ -8,7 +8,7 @@ import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
 const $ = s => document.querySelector(s);
-const icon = (name, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${({ search: '<path d="m10 2 8 8-8 8-8-8zM10 6v8M6 10h8m2 6 6 6"/>', cards: '<path d="M8 3h12v16H8zM4 7v14h12M11 8l3-2 3 2-3 4z"/>' , settings: '<path d="M4 7h16M4 17h16M8 4v6M16 14v6"/>' , filters: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>', leaf: '<path d="M20 4C8 2 2 10 7 16s14-1 13-12ZM5 21 16 10"/>', check: '<path d="m5 12 4 4L19 6"/>', down: '<path d="m6 9 6 6 6-6"/>', upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>', download: '<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>', chart: '<path d="M4 20V4m0 16h17M9 16v-5m5 5V7m5 9v-8"/>', more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>', book: '<path d="M12 5C8 2 4 3 2 4v15c4-2 7-1 10 1 3-2 6-3 10-1V4c-4-2-7-1-10 1Zm0 0v15"/>' })[name] || ''}</svg>`;
+const icon = (name, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${({ search: '<path d="m10 2 8 8-8 8-8-8zM10 6v8M6 10h8m2 6 6 6"/>', cards: '<path d="M8 3h12v16H8zM4 7v14h12M11 8l3-2 3 2-3 4z"/>' , settings: '<path d="M4 7h16M4 17h16M8 4v6M16 14v6"/>' , filters: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', flip: '<path d="M20 7a8 8 0 0 0-14-2L3 8m0-5v5h5M4 17a8 8 0 0 0 14 2l3-3m0 5v-5h-5"/>', plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>', leaf: '<path d="M20 4C8 2 2 10 7 16s14-1 13-12ZM5 21 16 10"/>', check: '<path d="m5 12 4 4L19 6"/>', down: '<path d="m6 9 6 6 6-6"/>', upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>', download: '<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>', chart: '<path d="M4 20V4m0 16h17M9 16v-5m5 5V7m5 9v-8"/>', more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>', book: '<path d="M12 5C8 2 4 3 2 4v15c4-2 7-1 10 1 3-2 6-3 10-1V4c-4-2-7-1-10 1Zm0 0v15"/>' })[name] || ''}</svg>`;
 const blankDeck = (name = 'Untitled deck', format = 'commander') => ({ id: crypto.randomUUID(), name, format, cards: [], updated: new Date().toISOString() });
 const DARK_PALETTES = [['green','Dark green'],['blue','Dark blue'],['white','Black / white'],['orange','Black / orange']];
 let palette = 'green';
@@ -597,13 +597,27 @@ function stackCardMeta(card) {
   const setCode = typeof card.set === 'string' && card.set.trim() ? card.set.toUpperCase() : 'Set unknown';
   return `<div class="stack-card-meta"><span>${esc(card.name)}</span><span>${esc(setCode)} · ${cents === null ? 'Price unavailable' : usd(cents)}</span></div>`;
 }
+function faceAttributes(card, enabled=true) {
+  const front=safeUrl(imageFor(card),true), back=safeUrl(card.card_faces?.[1]?.image_uris?.normal,true);
+  return enabled && front && back ? ` data-card-faces data-front="${esc(front)}" data-back="${esc(back)}" data-front-name="${esc(card.card_faces?.[0]?.name||card.name)}" data-back-name="${esc(card.card_faces[1].name||card.name)}"` : '';
+}
+function flipControl(card) {
+  return `<button type="button" class="card-flip" data-flip-card aria-label="Flip ${esc(card.name)}" aria-pressed="false" title="View other face">${icon('flip',18)}</button>`;
+}
+function showCardFace(container, reversed) {
+  const image=container.querySelector('img'), button=container.querySelector('[data-flip-card]');
+  image.src=reversed?container.dataset.back:container.dataset.front;
+  image.alt=reversed?container.dataset.backName:container.dataset.frontName;
+  button.setAttribute('aria-pressed',String(reversed));
+}
 function previewMarkup(d) {
   const entry=deckEntries(d,editorOptions).find(e=>entryKey(e)===previewKey);
   if(!entry)return '<p class="hint">Point to a card or focus its name to preview.</p>';
   const image=safeUrl(imageFor(entry.card),true);
   const { cents, finish } = deckPrintingPrice(entry.card);
   const price = cents === null ? 'Price unavailable' : `${usd(cents)} per copy`;
-  return `<figure>${image?`<img src="${esc(image)}" alt="${esc(entry.card.name)}">`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}<span>Function: ${esc(primaryRole(entry))}</span><span>${price}${finish ? ' · ' + finish : ''}</span></figcaption></figure>`;
+  const faces=faceAttributes(entry.card,editorOptions.layout.startsWith('visual'));
+  return `<figure${faces}>${faces?flipControl(entry.card):''}${image?`<img src="${esc(image)}" alt="${esc(entry.card.name)}">`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}<span>Function: ${esc(primaryRole(entry))}</span><span>${price}${finish ? ' · ' + finish : ''}</span></figcaption></figure>`;
 }
 function deckCards(d) {
   if(previewDeck!==d.id || !deckEntries(d,editorOptions).some(e=>entryKey(e)===previewKey)){previewKey='';previewDeck=d.id;}
@@ -617,12 +631,13 @@ function previewEntry(key) {
 }
 function deckEntry(e) {
   const key=entryKey(e),visual=editorOptions.layout.startsWith('visual'),image=safeUrl(imageFor(e.card),true),zone=ZONES[zoneFor(e)];
+  const faces=faceAttributes(e.card,visual);
   const minus=`<button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">${icon('minus',14)}</button>`,plus=`<button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${e.qty>=500?'disabled':''}>${icon('plus',14)}</button>`;
   const quantity=`<div class="card-quantity">${visual?plus+minus:minus+plus}</div>`;
   const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
   const badge=`<span class="entry-quantity${visual&&e.qty>=100?' three-digits':''}" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>`;
   const art=`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
-  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}</div>${art}${stackCardMeta(e.card)}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e.card)}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckList(d, full=false) {
   const filtered = full ? deckEntries(d, editorOptions) : d.cards;
@@ -817,7 +832,7 @@ function showCardSubmenu(type,focus=false) {
     const action=(value,label,attributes='',role='menuitem')=>`<button role="${role}" data-card-action="${value}" ${attributes}>${label}</button>`;
     let items;
     if(type==='function') {
-      const functions=[...new Set(d.cards.flatMap(e=>e.tags))].sort((a,b)=>a.localeCompare(b));
+      const functions=[...new Set(d.cards.map(e=>e.tags[0]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
       items=functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join('')+action('new-function','Add new function…');
     } else {
       items=Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
@@ -854,7 +869,7 @@ function focusCardEntry(d,key) {
 }
 function assignFunctionDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
-  showDialog(`<h2>Add a function</h2><p>${esc(entry.card.name)} · ${esc(d.name)} · ${ZONES[zoneFor(entry)]}. The new function becomes primary; other functions stay assigned.</p><form id="function-form"><label>Function name<input name="new-function" required maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Create and assign</button></form>`);
+  showDialog(`<h2>Add a function</h2><p>${esc(entry.card.name)} · ${esc(d.name)} · ${ZONES[zoneFor(entry)]}. Choose the primary function for this card.</p><form id="function-form"><label>Function name<input name="new-function" required maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Create and assign</button></form>`);
   $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${name.trim()}`);}catch(error){$('#function-error').textContent=error.message;}};
   $('#function-form input').focus();
 }
@@ -896,7 +911,7 @@ $('#card-actions').addEventListener('click',async e=>{
     if(action==='details')inspect(entry.card.id,key);
     if(action==='new-function')assignFunctionDialog(d,key);
     if(action==='assign-function'){
-      if(!d.cards.some(e=>e.tags.includes(button.dataset.function)))throw Error('This function is no longer in this deck. Reopen the menu.');
+      if(!d.cards.some(e=>e.tags[0]===button.dataset.function))throw Error('This function is no longer in this deck. Reopen the menu.');
       changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${button.dataset.function}`);
     }
     if(action==='copy-deck')copyEntryDialog(d,key);
@@ -1195,6 +1210,11 @@ $('#app').addEventListener('keydown',e=>{
 });
 $('#app').addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
 $('#app').addEventListener('focusin',e=>{const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
+for(const event of ['pointerout','focusout'])$('#app').addEventListener(event,e=>{
+  if(event==='pointerout' && e.pointerType==='touch')return;
+  const container=e.target.closest('[data-card-faces]');
+  if(container && !container.contains(e.relatedTarget))showCardFace(container,false);
+});
 $('#app').addEventListener('change',e=>{
   if(e.target.id==='tag-page'){
     tagPage=Number(e.target.value);refreshTagOptions();$('#tag-page').focus({preventScroll:true});
@@ -1210,7 +1230,9 @@ $('#app').addEventListener('change',e=>{
 });
 $('#app').addEventListener('click',async e=>{
   if(e.detail>0 && suppressCardClick){suppressCardClick=false;e.preventDefault();return;}
-  const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;readFilters();
+  const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
+  if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
+  readFilters();
   if(button.dataset.removeFilter){
     const family=button.dataset.removeFilter,key=repeatableFilters[family].key,index=Number(button.dataset.filterIndex);
     if(filters.locked.includes(family)||!Number.isInteger(index)||index<0||filters[key].length<2||index>=filters[key].length)return;
@@ -1485,9 +1507,11 @@ function saveDetailRoles() {
     if(!decks.includes(s.deck))throw Error('This deck no longer exists. Your function text is kept below.');
     const entry=detailEntry(s);if(!entry)throw Error('This entry changed or was removed. Your function text is kept below.');
     const raw=$('#detail-roles').value;
-    // Keep the raw input intact while typing; only the validated functions are stored.
+    // Keep the raw input intact while typing; only the validated primary function is stored.
     const before=JSON.stringify(entry.tags);
-    editEntry(s.deck,s.key,raw,zoneFor(entry));
+    const draft={...entry,tags:[...s.roleMemberships]};
+    assignEntryFunction({cards:[draft]},s.key,raw);
+    entry.tags=draft.tags;
     if(before!==JSON.stringify(entry.tags)) {s.deck.updated=new Date().toISOString();save();render();}
     s.invalidRoles=false;
     detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Saved to '+s.deck.name+' · '+ZONES[s.zone],Boolean(storageError));
@@ -1551,7 +1575,8 @@ function renderDetailDeck() {
 }
 function renderDetailRoles() {
   const entry=detailEntry();
-  $('#detail-roles-section').innerHTML=entry?`<label for="detail-roles">Functions</label><input id="detail-roles" maxlength="500" value="${esc(entry.tags.join(', '))}" placeholder="e.g. Ramp, Removal" aria-describedby="detail-roles-help detail-save-status"><p class="hint" id="detail-roles-help">Separate functions with commas; the first sets the group. Saves as you type.</p>`:'';
+  detail.roleMemberships=[...(entry?.tags||[])];
+  $('#detail-roles-section').innerHTML=entry?`<label for="detail-roles">Primary function</label><input id="detail-roles" maxlength="80" value="${esc(entry.tags[0]||'')}" placeholder="e.g. Removal" aria-describedby="detail-roles-help detail-save-status"><p class="hint" id="detail-roles-help">Saves as you type. Leave blank for Unassigned.</p>`:'';
   $('#detail-roles')?.addEventListener('input',()=>saveDetailRoles());
   $('#detail-roles')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveDetailRoles();}});
 }

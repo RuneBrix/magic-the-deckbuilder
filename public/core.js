@@ -64,11 +64,13 @@ export function editEntry(deck, key, roles, zone) {
   return moved;
 }
 export function assignEntryFunction(deck, key, name) {
-  if(typeof name!=='string' || !name.trim() || name.trim().length>80 || name.includes(','))throw Error('Use one function name of 1–80 characters, without commas.');
+  if(typeof name!=='string' || name.trim().length>80 || name.includes(','))throw Error('Use one function name of at most 80 characters, without commas.');
   const entry=deck.cards.find(e=>entryKey(e)===key);
   if(!entry)throw Error('This card entry no longer exists.');
   name=name.trim();
-  return editEntry(deck,key,[name,...entry.tags.filter(t=>t!==name)].join(', '),zoneFor(entry));
+  if(name===entry.tags[0] || (!name&&!entry.tags.length))return entry;
+  entry.tags=[name,...entry.tags.filter(t=>t && t!==name)];
+  return entry;
 }
 export function copyEntryToDeck(source, key, target, qty, zone) {
   if(source===target || source.id===target.id)throw Error('Choose another deck.');
@@ -159,8 +161,8 @@ export function deckEntries(deck, { type = '', role = '', search = '', order = '
     return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
   };
   return deck.cards.filter(e=>{
-    const text=[e.card.name,deckTypeLine(e.card),category(e.card),primaryRole(e),...e.tags].join(' ').toLocaleLowerCase('en');
-    return (!type || (TYPE_PRIORITY.includes(type)?cardTypes(e.card).includes(type):deckTypeLine(e.card).includes(type))) && (!role || e.tags.includes(role)) && terms.every(term=>text.includes(term));
+    const text=[e.card.name,deckTypeLine(e.card),category(e.card),primaryRole(e)].join(' ').toLocaleLowerCase('en');
+    return (!type || (TYPE_PRIORITY.includes(type)?cardTypes(e.card).includes(type):deckTypeLine(e.card).includes(type))) && (!role || primaryRole(e)===role) && terms.every(term=>text.includes(term));
   }).sort((a,b)=>{
     const av=value(a),bv=value(b);
     // Missing values always sort last, including in descending order.
@@ -234,7 +236,7 @@ export function stats(deck, { detailed = false } = {}) {
     const knownColors = Array.isArray(storedColors) ? storedColors.filter(color => typeof color === 'string' && /^[WUBRG]$/.test(color)) : [];
     const colors = knownColors.length ? knownColors : ['C'];
     result.types[type] = (result.types[type] || 0) + qty;
-    for (const tag of tags) result.tags[tag] = (result.tags[tag] || 0) + qty;
+    if(tags[0]) result.tags[tags[0]] = (result.tags[tags[0]] || 0) + qty;
     for (const c of colors) result.colors[c] += qty;
     const primary = detailed ? primaryRole({ tags }) : null;
     if (detailed) {

@@ -4,21 +4,23 @@ import vm from 'node:vm';
 import * as core from '../public/core.js';
 import { workspace, editorCard, editorDeck, formValues, chooseWorkspaceFile, startCardDrag, dropCard } from '../test-support/workspace.mjs';
 
-test('card details bind the named deck and row printing; roles autosave without replacing raw text',()=>{
+test('card details bind the named deck and row printing; primary function autosaves without replacing raw text',()=>{
   const d=editorDeck();d.cards[1].card.set_name='Stored release';
   const w=workspace({savedDecks:JSON.stringify([d,{...editorDeck(),id:'other',name:'Other'}])});
   vm.runInContext("results=[{...decks[0].cards[1].card,set_name:'Search release'}];inspect('Ramp spell',entryKey(decks[0].cards[1]));",w.context);
   assert.match(w.node('#detail-facts').innerHTML,/Stored release/);
   assert.match(w.node('#detail-deck').innerHTML,/selected>Garden/);
   assert.doesNotMatch(w.node('#dialog').innerHTML,/Save zone and roles/);
-  const input=w.node('#detail-roles');input.value='Draw, Ramp, ';
+  const input=w.node('#detail-roles');input.value=' Draw ';
   input.input();
-  assert.equal(input.value,'Draw, Ramp, ');
-  assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Draw,Ramp');
+  assert.equal(input.value,' Draw ');
+  assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Draw,Removal,Ramp');
   vm.runInContext("trackDeck('other')",w.context);
   input.value='Removal';input.input();
   assert.equal(vm.runInContext('decks[0].cards[1].tags[0]',w.context),'Removal');
   assert.equal(vm.runInContext('decks[1].cards[1].tags[0]',w.context),'Removal');
+  input.value='S';input.input();input.value='Synergy';input.input();
+  assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Synergy,Removal,Ramp');
   assert.match(w.node('#detail-save-status').textContent,/Saved to Garden/);
 });
 
@@ -48,7 +50,7 @@ test('details select deck and zone without moving copies or replacing the previe
   const d=editorDeck();d.cards.push({...structuredClone(d.cards[1]),qty:3,tags:['Destination'],zone:'sideboard',card:{...d.cards[1].card,id:'side-print'}});
   const other={...editorDeck(),id:'other',name:'Other'};
   const w=workspace({savedDecks:JSON.stringify([d,other])});vm.runInContext("inspect('Ramp spell')",w.context);
-  w.node('#detail-roles').value='Removal, Ramp';
+  w.node('#detail-roles').value='Removal';
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   w.node('#detail-zone').change({target:{value:'sideboard'}});
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
@@ -79,7 +81,7 @@ test('details select deck and zone without moving copies or replacing the previe
 
 test('printing browsing paginates safely, ignores dismissed responses, and preview/apply preserves entry metadata and backup',async()=>{
   const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("inspect('Ramp spell')",w.context);
-  w.node('#detail-roles').value='Removal, Ramp';let calls=[];
+  w.node('#detail-roles').value='Removal';let calls=[];
   w.context.fetch=async url=>{calls.push(url);return {ok:true,json:async()=>({data:[{...d.cards[1].card,id:'new-print',set_name:'New release',collector_number:'123',prices:{usd:'2.50'}}],has_more:calls.length===1})};};
   await w.node('#load-printings').onclick();
   assert.equal(calls.length,1);assert.match(calls[0],/page=1/);
@@ -110,7 +112,7 @@ test('printing failures retain viewed/stored cards and show retry; invalid ident
     assert.equal(vm.runInContext('detail.card.id',w.context),'Ramp spell');
     assert.equal(vm.runInContext('decks[0].cards[1].card.id',w.context),'Ramp spell');
   }
-  vm.runInContext("detail.card={...detail.card,oracle_id:'different'}",w.context);w.node('#detail-roles').value='Removal, Ramp';w.node('#apply-printing').click();
+  vm.runInContext("detail.card={...detail.card,oracle_id:'different'}",w.context);w.node('#detail-roles').value='Removal';w.node('#apply-printing').click();
   assert.match(w.node('#detail-save-status').textContent,/rules identity/);
   assert.equal(vm.runInContext('decks[0].cards[1].card.id',w.context),'Ramp spell');
 });
@@ -136,7 +138,7 @@ test('details apply a preview only to the selected deck and zone and reject stal
   other.cards[1].zone='maybeboard';other.cards[1].qty=500;other.cards[1].tags=['Private'];
   const w=workspace({savedDecks:JSON.stringify([d,other])});
   vm.runInContext("inspect('Ramp spell');detail.card={...detail.card,id:'new-print',set_name:'New release'}",w.context);
-  w.node('#detail-roles').value='Removal, Ramp';
+  w.node('#detail-roles').value='Removal';
   w.node('#detail-target').change({target:{value:'other'}});
   w.node('#detail-zone').change({target:{value:'maybeboard'}});
   assert.match(w.node('#detail-deck').innerHTML,/id="detail-add"[^>]*disabled/);

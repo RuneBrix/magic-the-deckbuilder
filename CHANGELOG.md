@@ -1,5 +1,10 @@
 # Changelog
 
+## Primary functions and reverse faces
+
+- Edit one primary deck function while retaining all stored memberships; grouping, filtering and statistics use the primary (#100).
+- Flip a double-faced card in visual stacks or the large preview, with temporary face state that resets on pointer/focus exit (#97).
+
 ## EUR deck pricing
 
 - Compare stored unit and line costs with the cheapest quoted regular English paper printings in Ownership & budget (#111).
