@@ -852,6 +852,9 @@ dialog:has(.function-discovery){width:690px}
 .deck-rows{min-width:0}
 .deck-hover-preview{display:none}
 .deck-hover-preview figure{margin:0}
+.deck-hover-preview figure[data-card-faces]{position:relative}
+.card-flip{display:grid;place-items:center;padding:0;min-width:36px;min-height:36px;border:1px solid var(--ink);background:var(--surface);color:var(--ink)}
+.deck-hover-preview .card-flip{position:absolute;z-index:1;top:8px;right:8px}
 .deck-hover-preview img{display:block;width:100%;height:auto;max-height:calc(100dvh - 110px);object-fit:contain;border-radius:9px}
 .deck-hover-preview figcaption{margin-top:10px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;color:var(--muted)}
 .deck-hover-preview figcaption span{display:block}
