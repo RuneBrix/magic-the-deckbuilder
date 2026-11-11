@@ -1,5 +1,10 @@
 # Changelog
 
+## Quick add and automatic primary functions
+
+- Search card names directly in the open deck after three characters, with keyboard suggestions and the shared Add card confirmation (#114).
+- Initialize supported primary functions from the dated offline Oracle Tags memberships, including Beast Within / Removal, while retaining personal overrides and complete source memberships (#46).
+
 ## Card details and deck printing workflows
 
 - Browse printings and exact-printing ownership in a global card details dialog (#99).

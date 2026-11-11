@@ -3,7 +3,7 @@ import { esc, mana, printingLabel } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
-import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT } from './core.js';
+import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions } from './core.js';
 import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -559,7 +559,68 @@ function deckWorkspace(d, statistics, previousStatistics) {
   if(!d)return `<div class="library"><h1>No deck selected</h1><button class="secondary" data-view="decks">Back to My decks</button></div>`;
   const s=statistics ?? stats(d), report=legalityReport(d);
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['planning','Ownership & budget'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d)):deckTab==='checks'?checksPanel(d,report):`<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['planning','Ownership & budget'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
+}
+function quickAddMarkup(d) {
+  return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p class="hint">Destination: ${esc(d.name)} · Main deck by default.</p><p id="quick-add-status" class="hint" role="status">Type at least three characters.</p></section>`;
+}
+function bindQuickAdd(deck) {
+  const input=$('#quick-add-name'),matches=$('#quick-add-matches'),status=$('#quick-add-status');
+  let revision=0,timer,controller,choices=[],activeOption=-1;
+  const option=index=>matches.querySelector('#quick-add-option-'+index);
+  const expanded=value=>{
+    matches.hidden=!value;input.setAttribute('aria-expanded',String(value));
+    if(!value){option(activeOption)?.setAttribute('aria-selected','false');activeOption=-1;input.removeAttribute('aria-activedescendant');}
+  };
+  const reset=()=>{
+    revision++;clearTimeout(timer);controller?.abort();expanded(false);choices=[];matches.innerHTML='';
+  };
+  const choose=card=>{
+    if(!card || !decks.includes(deck))return;
+    reset();input.value='';status.textContent='Type at least three characters.';
+    deckCardDialog(card,{deck});
+    $('#dialog').onclose=()=>{if(view==='deck' && current()===deck)$('#quick-add-name')?.focus();};
+  };
+  input.oninput=e=>{
+    reset();
+    const value=input.value.trim();
+    status.textContent='Type at least three characters.';
+    if(e.isComposing || value.length<3)return;
+    const version=revision;
+    const live=()=>version===revision && input.isConnected && view==='deck' && deckTab==='cards' && current()===deck;
+    status.textContent='Searching card names…';
+    timer=setTimeout(async()=>{
+      if(!live())return;
+      controller=new AbortController();
+      try{
+        const literal=value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\//g,'\\/');
+        const data=await api('/api/search?'+new URLSearchParams({q:'game:paper name:/'+literal+'/',order:'name'}),{signal:controller.signal});
+        if(!live())return;
+        choices=data.data.slice(0,8);
+        matches.innerHTML=choices.map((card,i)=>`<button type="button" role="option" tabindex="-1" id="quick-add-option-${i}" data-quick-add-option="${i}" aria-selected="false">${esc(card.name)}</button>`).join('');
+        expanded(choices.length>0 && document.activeElement===input);
+        status.textContent=choices.length?`${choices.length} suggestions. Use Up or Down, then Enter to choose.`:'No cards match that name.';
+      }catch(error){if(live())status.textContent=error.status===404?'No cards match that name.':'Could not search card names. Edit the name to try again.';}
+    },250);
+  };
+  input.onfocus=()=>{if(choices.length)expanded(true);};
+  input.onblur=e=>{if(!matches.contains(e.relatedTarget))expanded(false);};
+  matches.onclick=e=>{
+    const button=e.target.closest('[data-quick-add-option]');
+    if(button)choose(choices[Number(button.dataset.quickAddOption)]);
+  };
+  input.onkeydown=e=>{
+    if(e.isComposing)return;
+    if(e.key==='Escape'){e.preventDefault();reset();status.textContent='Suggestions dismissed. Edit the name to search again.';}
+    if(e.key==='Enter'){e.preventDefault();if(!matches.hidden && activeOption>=0)choose(choices[activeOption]);}
+    if(['ArrowDown','ArrowUp'].includes(e.key) && choices.length){
+      e.preventDefault();option(activeOption)?.setAttribute('aria-selected','false');
+      const step=e.key==='ArrowDown'?1:-1;
+      activeOption=activeOption<0?(step===1?0:choices.length-1):(activeOption+step+choices.length)%choices.length;
+      expanded(true);const selected=option(activeOption);selected.setAttribute('aria-selected','true');
+      input.setAttribute('aria-activedescendant',selected.id);selected.scrollIntoView({block:'nearest'});
+    }
+  };
 }
 function bracketControl(d) {
   if(d.format!=='commander')return '';
@@ -1184,6 +1245,7 @@ function bindTrackerResize() {
   });
 }
 function bind() {
+  if(view==='deck' && deckTab==='cards' && current())bindQuickAdd(current());
   for(const key of ['view','group','sort'])$('#collection-'+key)?.addEventListener('change',e=>{collectionOptions[key]=e.target.value;saveCollectionOptions();render();});
   $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage();$('#collection-results').innerHTML=container.querySelector('#collection-results').innerHTML;});
   $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
@@ -1478,7 +1540,7 @@ function deckForm(deck,after) {
   }
   $('#deck-form').onsubmit=e=>{e.preventDefault();const data=new FormData(e.target),name=String(data.get('name')).trim(),format=String(data.get('format'));if(!name||!FORMATS.includes(format))return;
     if(deck){if(!decks.includes(deck))return;deck.name=name;deck.format=format;deck.updated=new Date().toISOString();save();$('#dialog').close();render();}
-    else{if(decks.length>=200){$('#deck-form-error').textContent='Maximum 200 decks per workspace.';return;}const d=blankDeck(name,format);if(format==='commander'&&commander)d.cards.push({card:commander,qty:1,tags:[],zone:'command'});decks.push(d);save();$('#dialog').close();openDeck(d.id);}
+    else{if(decks.length>=200){$('#deck-form-error').textContent='Maximum 200 decks per workspace.';return;}const d=blankDeck(name,format);if(format==='commander'&&commander)addDeckCopies(d,commander,1,'command');decks.push(d);save();$('#dialog').close();openDeck(d.id);}
     after?.(deck || decks.at(-1));
   };
 }
@@ -1592,6 +1654,7 @@ function inspect(id,key,card) {
 
 function deckCardDialog(card, {deck,zone='main',source,edit,back,printings}={}) {
   const state=printings?{...printings}:printingState(card);
+  const suggestion=suggestedFunctions(card)[0];
   const selectedDeck=deck;
   const title=edit?'Change in-deck card details':'Add card to deck';
   if(!edit && !decks.length){
@@ -1609,7 +1672,8 @@ function deckCardDialog(card, {deck,zone='main',source,edit,back,printings}={}) 
       <div class="deck-card-printings">${printingControls}</div>
       <div class="deck-card-printings"><label for="deck-card-finish">Finish</label><select id="deck-card-finish" required></select></div>
       <p id="deck-card-price" role="status"></p>
-      ${edit?'':`<label>Primary function<input id="add-primary" maxlength="80" placeholder="e.g. Removal" value="${esc(source?.entry.tags[0]||'')}"></label>
+      ${edit?'':`<label>Primary function<input id="add-primary" maxlength="80" placeholder="e.g. Removal" value="${esc(source?.entry.tags[0]||'')}" aria-describedby="add-function-hint"></label>
+      <p id="add-function-hint" class="hint">${suggestion?`Automatic primary: ${esc(suggestion)}. Enter a function to override it.`:'No supported function in the offline snapshot; new cards start Unassigned unless you enter a function.'} Existing assignments stay in place when left blank. <a href="${TAG_CATALOG.source}" target="_blank" rel="noreferrer">Scryfall snapshot ${esc(TAG_CATALOG.updated.slice(0,10))}</a>.</p>
       <label>Quantity to add<input id="add-quantity" type="number" min="1" max="500" step="1" value="1" required></label>`}
       <p id="deck-card-error" role="alert"></p><div class="settings-actions"><button class="primary">${edit?'Save printing and finish':'Add card(s) to deck'}</button>
       <button class="secondary" type="button" id="deck-card-cancel">${back?'Back to card details':'Cancel'}</button></div>
@@ -1839,5 +1903,5 @@ function refresh(d=current()) {
   return task;
 }
 
-async function sample(){if(decks.length>=200){toast('Maximum 200 decks per workspace.');return;}toast('Loading a small example from Scryfall…');try{const names=['Tatyova, Benthic Druid','Sol Ring','Arcane Signet','Cultivate',"Kodama's Reach",'Llanowar Elves','Rampant Growth','Growth Spiral','Beast Within','Counterspell','Eternal Witness','Command Tower','Forest','Island'];const {cards,missing}=await fetchCollection(names);if(missing.length)throw new Error('Example cards could not be loaded. Try again.');const d=blankDeck('The garden grows');d.cards=cards.map(card=>({card,qty:card.name==='Forest'?12:card.name==='Island'?10:1,tags:['Cultivate',"Kodama's Reach",'Rampant Growth','Sol Ring','Arcane Signet','Llanowar Elves'].includes(card.name)?['Ramp']:[],zone:card.name==='Tatyova, Benthic Druid'?'command':'main'}));decks.push(d);active=d.id;save();openDeck(d.id);toast('Example loaded — an unfinished Commander deck to build on');}catch(e){toast(e.message);}}
+async function sample(){if(decks.length>=200){toast('Maximum 200 decks per workspace.');return;}toast('Loading a small example from Scryfall…');try{const names=['Tatyova, Benthic Druid','Sol Ring','Arcane Signet','Cultivate',"Kodama's Reach",'Llanowar Elves','Rampant Growth','Growth Spiral','Beast Within','Counterspell','Eternal Witness','Command Tower','Forest','Island'];const {cards,missing}=await fetchCollection(names);if(missing.length)throw new Error('Example cards could not be loaded. Try again.');const d=blankDeck('The garden grows');for(const card of cards)addDeckCopies(d,card,card.name==='Forest'?12:card.name==='Island'?10:1,card.name==='Tatyova, Benthic Druid'?'command':'main');decks.push(d);active=d.id;save();openDeck(d.id);toast('Example loaded — an unfinished Commander deck to build on');}catch(e){toast(e.message);}}
 render();

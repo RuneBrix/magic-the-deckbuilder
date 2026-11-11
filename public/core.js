@@ -22,6 +22,21 @@ export const TAGS = [
   ['protection', 'Protection', 'Keep your threats safe'],
 ];
 export const tagById = new Map(TAG_CATALOG.tags.map(t => [t.id, t]));
+// More specific interaction functions precede broad resource/value functions.
+const FUNCTION_PRECEDENCE = ['sweeper','counterspell','removal','ramp','draw','tutor','reanimate','sacrifice-outlet','protection','flicker','repeatable-token-generator','lifegain'];
+export function functionMemberships(card) {
+  return (TAG_CATALOG.memberships?.[card.oracle_id?.toLowerCase()] ?? []).map(index => TAG_CATALOG.tags[index]);
+}
+export function suggestedFunctions(card) {
+  const supported = new Set(), pending = functionMemberships(card).map(tag => tag.id);
+  while (pending.length) {
+    const id = pending.pop();
+    if (supported.has(id)) continue;
+    supported.add(id);
+    pending.push(...(tagById.get(id)?.parents ?? []));
+  }
+  return FUNCTION_PRECEDENCE.filter(id => supported.has(id)).map(id => TAGS.find(([slug]) => slug===id)[1]);
+}
 const normalizeTag = value => value.trim().toLowerCase().replace(/[-_\s]+/g, ' ');
 export function findTags(value) {
   const q = normalizeTag(value);
@@ -78,7 +93,7 @@ export function assignEntryFunction(deck, key, name) {
   const entry=deck.cards.find(e=>entryKey(e)===key);
   if(!entry)throw Error('This card entry no longer exists.');
   name=name.trim();
-  if(name===entry.tags[0] || (!name&&!entry.tags.length))return entry;
+  if(name===entry.tags[0])return entry;
   entry.tags=[name,...entry.tags.filter(t=>t && t!==name)];
   return entry;
 }
@@ -99,6 +114,7 @@ export function addDeckCopies(deck, card, qty, zone, finish, primary='', inherit
   const found=matchingEntry(deck,candidate);
   if(!found && deck.cards.length>=1000)throw Error('Maximum 1000 card entries per deck. Nothing added.');
   const memberships=[...new Set([...(found?.tags ?? []),...inheritedTags])];
+  if(!memberships.length)memberships.push(...suggestedFunctions(card).slice(0,1));
   const tags=primary.trim()?[primary.trim(),...memberships.filter(tag=>tag && tag!==primary.trim())]:memberships;
   if(found){
     found.qty+=qty;found.tags=tags;
