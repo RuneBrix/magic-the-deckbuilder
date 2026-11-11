@@ -39,16 +39,26 @@ export const ZONES = { main: 'Main deck', sideboard: 'Sideboard', command: 'Comm
 export const DEFAULT_BUDGET_ZONES = Object.freeze(['main','command','sideboard']);
 const BUDGET_ZONE_ORDER = [...DEFAULT_BUDGET_ZONES,'maybeboard'];
 export const zoneFor = entry => entry.zone ?? (entry.commander ? 'command' : 'main');
-export const entryKey = entry => JSON.stringify([entry.card.oracle_id || entry.card.id, zoneFor(entry)]);
+const deckCardIdentity = card => card.oracle_id || card.id;
+export const entryKey = entry => JSON.stringify([deckCardIdentity(entry.card), zoneFor(entry), ...(entry.finish === undefined ? [] : [entry.card.id, entry.finish])]);
+export const deckCardCopies = (deck, card, zone) => deck?.cards.reduce((total, entry) =>
+  total + (deckCardIdentity(entry.card) === deckCardIdentity(card) && (zone === undefined || zoneFor(entry) === zone) ? entry.qty : 0), 0) ?? 0;
+const variantKey = entry => JSON.stringify([deckCardIdentity(entry.card), zoneFor(entry), entry.card.id, entry.finish ?? defaultDeckFinish(entry.card)]);
+function matchingEntry(deck, candidate, except) {
+  const variant=variantKey(candidate);
+  return deck.cards.find(entry=>entry!==except && variantKey(entry)===variant)
+    || (candidate.finish===undefined && deck.cards.find(entry=>entry!==except && entryKey(entry)===entryKey(candidate)));
+}
 export const zoneCount = (deck, zone) => count({ cards: deck.cards.filter(e => zoneFor(e) === zone) });
 export function moveEntry(deck, key, zone) {
   if (typeof zone !== 'string' || !Object.hasOwn(ZONES, zone)) throw Error('Unknown deck zone.');
   const entry = deck.cards.find(e => entryKey(e) === key);
-  if (!entry || zoneFor(entry) === zone) return;
-  const target = deck.cards.find(e => e !== entry && zoneFor(e) === zone && (e.card.oracle_id || e.card.id) === (entry.card.oracle_id || entry.card.id));
-  if (target && target.qty + entry.qty > 500) throw Error('Maximum 500 copies per card in a zone. Nothing moved.');
+  if (!entry || zoneFor(entry) === zone) return entry;
+  const target = matchingEntry(deck, {...entry,zone}, entry);
+  if (deckCardCopies(deck, entry.card, zone) + entry.qty > 500) throw Error('Maximum 500 copies per card in a zone. Nothing moved.');
   if (target) { target.qty += entry.qty; target.tags = [...new Set([...target.tags, ...entry.tags])]; deck.cards = deck.cards.filter(e => e !== entry); }
   else { entry.zone = zone; entry.commander = zone === 'command'; }
+  return target || entry;
 }
 export function editEntry(deck, key, roles, zone) {
   if (typeof roles !== 'string' || roles.length > 500) throw Error('Use at most 500 characters for functions.');
@@ -56,7 +66,7 @@ export function editEntry(deck, key, roles, zone) {
   if (tags.some(t=>t.length>80)) throw Error('Each function must be 80 characters or fewer. Your text is kept for correction.');
   const entry=deck.cards.find(e=>entryKey(e)===key);
   if (!entry) throw Error('This deck entry no longer exists. Reopen the card from your deck.');
-  const other=deck.cards.find(e=>e!==entry && (e.card.oracle_id||e.card.id)===(entry.card.oracle_id||entry.card.id) && zoneFor(e)===zone);
+  const other=zoneFor(entry)===zone?null:matchingEntry(deck,{...entry,zone},entry);
   const otherTags=other?[...other.tags]:[];
   moveEntry(deck,key,zone);
   const moved=other || entry;
@@ -72,17 +82,33 @@ export function assignEntryFunction(deck, key, name) {
   entry.tags=[name,...entry.tags.filter(t=>t && t!==name)];
   return entry;
 }
-export function copyEntryToDeck(source, key, target, qty, zone) {
+export function copyEntryToDeck(source, key, target, qty, zone, selection) {
   if(source===target || source.id===target.id)throw Error('Choose another deck.');
-  if(!Number.isInteger(qty) || qty<1 || qty>500)throw Error('Choose 1–500 copies.');
-  if(typeof zone!=='string' || !Object.hasOwn(ZONES,zone))throw Error('Choose a destination zone.');
   const entry=source.cards.find(e=>entryKey(e)===key);
   if(!entry)throw Error('This card entry no longer exists.');
-  const found=target.cards.find(e=>entryKey(e)===entryKey({card:entry.card,zone}));
-  if(found && found.qty+qty>500)throw Error('Maximum 500 copies per card and zone. Nothing added.');
-  if(!found && target.cards.length>=1000)throw Error('Maximum 1000 card entries per deck. Nothing added.');
-  if(found){found.qty+=qty;found.tags=[...new Set([...found.tags,...entry.tags])];}
-  else target.cards.push({card:structuredClone(entry.card),qty,tags:[...entry.tags],zone});
+  const card=selection?.card && selection.card.id!==entry.card.id ? validatePrinting(entry.card,selection.card) : entry.card;
+  return addDeckCopies(target,card,qty,zone,selection?.finish ?? entry.finish,selection?.primary,entry.tags);
+}
+export function addDeckCopies(deck, card, qty, zone, finish, primary='', inheritedTags=[]) {
+  if(!Number.isInteger(qty) || qty<1 || qty>500)throw Error('Choose 1–500 copies.');
+  if(typeof zone!=='string' || !Object.hasOwn(ZONES,zone))throw Error('Choose a destination zone.');
+  if(finish!==undefined && !deckFinishOptions(card).includes(finish))throw Error('Choose a finish available for this printing.');
+  if(typeof primary!=='string' || primary.trim().length>80 || primary.includes(','))throw Error('Use one function name of up to 80 characters, without commas.');
+  if(deckCardCopies(deck,card,zone)+qty>500)throw Error('Maximum 500 copies per card and zone. Nothing added.');
+  const candidate={card,qty,tags:[],zone,...(finish===undefined?{}:{finish})};
+  const found=matchingEntry(deck,candidate);
+  if(!found && deck.cards.length>=1000)throw Error('Maximum 1000 card entries per deck. Nothing added.');
+  const memberships=[...new Set([...(found?.tags ?? []),...inheritedTags])];
+  const tags=primary.trim()?[primary.trim(),...memberships.filter(tag=>tag && tag!==primary.trim())]:memberships;
+  if(found){
+    found.qty+=qty;found.tags=tags;
+    if(finish!==undefined)found.finish=finish;
+    return found;
+  }
+  candidate.card=structuredClone(card);
+  candidate.tags=tags;
+  deck.cards.push(candidate);
+  return candidate;
 }
 export function removeCardCopies(deck, key) {
   const entry=deck.cards.find(e=>entryKey(e)===key);
@@ -102,11 +128,17 @@ export function validatePrinting(original, printing) {
   validateBackup([{id:'printing',name:'Printing',format:'commander',cards:[{card:printing,qty:1,tags:[],zone:'main'}]}]);
   return printing;
 }
-export function setEntryPrinting(deck, key, printing) {
+export function setEntryPrinting(deck, key, printing, finish) {
   const entry=deck.cards.find(e=>entryKey(e)===key);
   if (!entry) throw Error('This deck entry no longer exists. Reopen the card from your deck.');
-  printing=validatePrinting(entry.card,printing);
-  entry.card={...printing,legalities:entry.card.legalities || printing.legalities};
+  if(printing!==entry.card)printing=validatePrinting(entry.card,printing);
+  finish ??= entry.finish;
+  if(finish!==undefined && !deckFinishOptions(printing).includes(finish))throw Error('Choose a finish available for this printing.');
+  if(matchingEntry(deck,{...entry,card:printing,finish},entry))throw Error('This printing and finish already has an entry in this zone. Choose a different version.');
+  const {legalities,legalityUpdatedAt}=entry.card;
+  const keepLegality=legalities && (!printing.legalityUpdatedAt || legalityUpdatedAt>=printing.legalityUpdatedAt);
+  entry.card=keepLegality?{...printing,legalities,...(legalityUpdatedAt?{legalityUpdatedAt}:{})}:printing;
+  if(finish!==undefined)entry.finish=finish;
   return entry;
 }
 export const BRACKETS = {1:'Exhibition',2:'Core',3:'Upgraded',4:'Optimized',5:'cEDH'};
@@ -140,9 +172,15 @@ export const isLand = card => cardTypes(card).includes('Land');
 export const category = card => cardTypes(card)[0] || 'Other';
 // The first personal role is primary; keeping the ordered tags preserves legacy backups.
 export const primaryRole = entry => entry.tags[0] || 'Unassigned';
-export function deckPrintingPrice(card) {
-  const finishes = Array.isArray(card.finishes) ? card.finishes : [];
-  const finish = !finishes.length || finishes.includes('nonfoil') ? 'regular' : finishes.length === 1 ? finishes[0] : null;
+export function deckFinishOptions(card) {
+  if (!Array.isArray(card.finishes) || !card.finishes.length) return ['regular'];
+  return FINISHES.filter(finish=>card.finishes.includes(finish==='regular'?'nonfoil':finish));
+}
+function defaultDeckFinish(card) {
+  const options=deckFinishOptions(card);
+  return options.includes('regular')?'regular':options.length===1?options[0]:null;
+}
+export function deckPrintingPrice(card, finish=defaultDeckFinish(card)) {
   const field = finish === 'regular' ? 'usd' : finish === 'foil' ? 'usd_foil' : finish === 'etched' ? 'usd_etched' : null;
   const quote = field ? card.prices?.[field] : null;
   const cents = parseCurrencyCents(typeof quote === 'number' ? String(quote) : quote);
@@ -156,7 +194,7 @@ export function deckEntries(deck, { type = '', role = '', search = '', order = '
   const mode=order.replace(/-desc$/,''), descending=order.endsWith('-desc') || mode==='quantity';
   const value=entry=>{
     const c=entry.card;
-    if(mode==='price')return deckPrintingPrice(c).cents;
+    if(mode==='price')return deckPrintingPrice(c,entry.finish).cents;
     if(mode==='power' || mode==='toughness')return combatValue(c,mode);
     return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
   };
@@ -410,7 +448,11 @@ export function legalityReport(deck) {
 }
 export function legality(deck) { const report = legalityReport(deck); return [...report.failed, ...report.unavailable]; }
 export function exportDeckText(deck) {
-  return Object.entries(ZONES).filter(([z])=>zoneCount(deck,z)>0).map(([z,label])=>label+'\n'+deck.cards.filter(e=>zoneFor(e)===z).map(e=>`${e.qty} ${e.card.name}`).join('\n')).join('\n\n');
+  return Object.entries(ZONES).filter(([z])=>zoneCount(deck,z)>0).map(([z,label])=>{
+    const quantities=new Map();
+    for(const {card,qty} of deck.cards.filter(e=>zoneFor(e)===z))quantities.set(card.name,(quantities.get(card.name)||0)+qty);
+    return label+'\n'+[...quantities].map(([name,qty])=>`${qty} ${name}`).join('\n');
+  }).join('\n\n');
 }
 export function resolveImport(parsed, cards) {
   const entries=[], problems=[];
@@ -434,7 +476,7 @@ export function validateBackup(data) {
     if (d.ownershipMatch !== undefined && !['rules','printing'].includes(d.ownershipMatch)) throw Error('Invalid ownership match mode.');
     if (d.priceUpdatedAt !== undefined && (typeof d.priceUpdatedAt !== 'string' || !Number.isFinite(Date.parse(d.priceUpdatedAt)))) throw Error('Invalid price refresh date.');
     ids.add(d.id);
-    const cards = new Set();
+    const cards = new Set(), variants = new Set(), copies = new Map();
     for (const e of d.cards) {
       if (!e || (e.zone !== undefined && (typeof e.zone !== 'string' || !Object.hasOwn(ZONES, e.zone))) || (e.commander !== undefined && typeof e.commander !== 'boolean') || (e.commander === true && e.zone !== undefined && e.zone !== 'command')) throw new Error('Invalid deck zone.');
       const c = e.card;
@@ -444,7 +486,13 @@ export function validateBackup(data) {
       if (c.oracle_text !== undefined && typeof c.oracle_text !== 'string') throw new Error('Invalid Oracle text.');
       if (c.mana_cost !== undefined && typeof c.mana_cost !== 'string') throw new Error('Invalid mana cost.');
       if (c.card_faces !== undefined && (!Array.isArray(c.card_faces) || c.card_faces.some(f => !f || (f.oracle_text !== undefined && typeof f.oracle_text !== 'string')))) throw new Error('Invalid card faces.');
+      if (e.finish !== undefined && !FINISHES.includes(e.finish)) throw Error('Invalid deck card finish.');
+      if (variants.has(variantKey(e))) throw Error('Duplicate deck printing and finish.');
+      const scope=JSON.stringify([deckCardIdentity(c),zoneFor(e)]), qty=(copies.get(scope)||0)+e.qty;
+      if(qty>500)throw Error('Maximum 500 copies per card and zone.');
+      copies.set(scope,qty);
       cards.add(entryKey(e));
+      variants.add(variantKey(e));
     }
   }
   return data;

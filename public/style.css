@@ -792,20 +792,23 @@ dialog:has(.function-discovery){width:690px}
 .card-facts>div{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;margin:8px 0}
 .card-facts dt{color:var(--muted)}
 .card-facts dd{margin:0;overflow-wrap:anywhere}
-.detail-legality summary{font-size:12px;cursor:pointer;min-height:32px}
-.printing-browser,.detail-deck-context{border-top:1px solid var(--line);margin-top:24px;padding-top:20px}
+.detail-legality h3{font:600 12px/1.4 "Public Sans",sans-serif;margin:18px 0 8px}
+.detail-legality .legality-badges span{font-size:10px}
+.detail-legality .is-unknown{background:var(--soft);color:var(--muted)}
+.printing-browser,.detail-deck-context{border-top:1px solid var(--line);margin-top:18px;padding-top:15px}
 .printing-browser h3,.detail-deck-context h3{font-family:Newsreader,serif;font-size:21px;font-weight:500;margin-bottom:12px}
-.printing-browser label,.detail-deck-context label{display:block;margin:16px 0 7px}
-.printing-browser select,.detail-deck-context select,.detail-deck-context input{width:100%;min-width:0;background:var(--ground);color:var(--ink);border:1px solid var(--line);padding:10px;border-radius:3px}
+.printing-browser label,.deck-card-printings label{display:block;margin:0 0 7px}
+.printing-browser select,.deck-card-printings select{width:100%;min-width:0;background:var(--ground);color:var(--ink);border:1px solid var(--line);padding:10px;border-radius:3px;text-transform:none}
 .detail-deck-context button{max-width:100%;white-space:normal;text-align:left;line-height:1.5;margin:8px 8px 0 0}
-.detail-targets{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
-.detail-quantity{display:flex;align-items:center;gap:8px;margin-top:16px}
-.detail-quantity span{margin-right:auto}
-.detail-quantity output{min-width:3ch;text-align:center;font-variant-numeric:tabular-nums}
-.detail-deck-context .detail-quantity button{display:grid;place-items:center;width:44px;height:44px;padding:0;margin:0}
-.detail-deck-context button:disabled{cursor:default}
-.detail-information .detail-error{color:var(--danger)}
-.detail-information .detail-saved{color:var(--success)}
+.detail-deck-context h3 + p{margin:6px 0 8px}
+.detail-deck-context button + h3{margin-top:16px}
+#deck-card-form{gap:13px}
+#deck-card-form p{margin:0}
+#deck-card-form #printing-status{margin:8px 0}
+#load-printings[hidden]{display:none}
+#deck-card-form #deck-card-error{color:var(--danger)}
+#deck-card-form #deck-card-error:empty,#detail-scryfall:empty{display:none}
+#deck-card-form select{min-height:44px;text-transform:none}
 #discard-roles{color:var(--danger);text-decoration:underline}
 @media(max-width:600px){.detail-images{max-width:240px;margin:0 auto}.card-facts>div{grid-template-columns:85px minmax(0,1fr)}.card-detail{gap:24px}}
 
@@ -925,6 +928,7 @@ dialog:has(.function-discovery){width:690px}
 .text-card{display:grid;grid-template-columns:24px minmax(0,1fr) auto 60px 28px;gap:6px;align-items:center;padding:4px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
 .text-card .entry-quantity{text-align:center;font-size:inherit;font-weight:400;font-variant-numeric:tabular-nums}
 .text-card .deck-card-name{display:block;min-width:0;min-height:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:inherit;line-height:inherit}
+.deck-card-variant{display:block;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:10px}
 .text-card .row-mana{display:flex;flex-wrap:nowrap;grid-column:auto;grid-row:auto;min-width:0}
 .text-card .row-mana .mana{flex-shrink:0}
 .text-card .card-quantity button,.text-card .card-menu-trigger{min-width:28px;min-height:28px}

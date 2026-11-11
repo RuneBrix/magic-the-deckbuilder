@@ -165,13 +165,18 @@ test('function submenu handles empty decks, escapes labels, and rejects stale se
   assert.match(w.node('#toast').textContent,/no longer in this deck/);
 });
 
-test('card function creation is deck scoped, cross-deck copying requires a target, and all-zone removal can be cancelled', () => {
+test('card function creation is deck scoped, cross-deck copying uses shared Add, and all-zone removal can be cancelled', async () => {
   const d=editorDeck(),other={...editorDeck(),id:'other',name:'Other',cards:[]};
   const w=workspace({savedDecks:JSON.stringify([d,other])});w.context.key=core.entryKey(d.cards[1]);
   vm.runInContext('assignFunctionDialog(decks[0],key)',w.context);formValues(w,{'function':'','new-function':'Graveyard setup'});w.node('#function-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[0].cards[1].tags[0]',w.context),'Graveyard setup');assert.equal(vm.runInContext('decks[1].cards.length',w.context),0);
-  vm.runInContext('copyEntryDialog(decks[0],key)',w.context);formValues(w,{deck:'',quantity:'2',zone:'maybeboard'});w.node('#copy-entry-form').onsubmit({preventDefault(){}});assert.match(w.node('#copy-entry-error').textContent,/destination/);
-  formValues(w,{deck:'other',quantity:'2',zone:'maybeboard'});w.node('#copy-entry-form').onsubmit({preventDefault(){}});
+  vm.runInContext("openDeck('editor')",w.context);
+  w.node('#card-actions').dataset={deck:'editor',entry:w.context.key};
+  await w.node('#card-actions').click({target:{closest:()=>({dataset:{cardAction:'copy-deck'}})}});
+  assert.match(w.node('#dialog').innerHTML,/Add card to deck/);
+  w.node('#deck-card-form').onsubmit({preventDefault(){}});assert.match(w.node('#deck-card-error').textContent,/destination/);
+  w.node('#add-destination').value='other';w.node('#add-zone').value='maybeboard';w.node('#add-primary').value='Graveyard setup';w.node('#add-quantity').value='2';
+  w.node('#deck-card-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[1].cards[0].zone',w.context),'maybeboard');assert.equal(vm.runInContext('decks[1].cards[0].tags[0]',w.context),'Graveyard setup');
   vm.runInContext('removeCopiesDialog(decks[0],key)',w.context);assert.match(w.node('#dialog').innerHTML,/across all zones, including Maybeboard/);
   w.node('#keep-copies').onclick();assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);

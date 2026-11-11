@@ -1,5 +1,11 @@
 # Changelog
 
+## Card details and deck printing workflows
+
+- Browse printings and exact-printing ownership in a global card details dialog (#99).
+- Add a chosen quantity, printing, finish and primary function to an explicit deck and zone (#101).
+- Change a deck entry’s printing and finish with a separate confirmation and finish-specific USD quote (#102).
+
 ## Zone and navigation acceptance
 
 - Keep newly opened card menus available when a delayed focus/layout scroll leaves their anchor unchanged; moving the anchor still dismisses the menu (#61).

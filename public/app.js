@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, assignEntryFunction, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 import { esc, mana, printingLabel } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
@@ -67,7 +67,6 @@ const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
 const priceStates = new WeakMap();
 const cheapestPriceStates = new WeakMap();
-let detail = null;
 const current = () => decks.find(d => d.id === (view === 'explore' ? tracker.id : active));
 function saveTracker() {
   try { localStorage.setItem('arcana.explorer.v1', JSON.stringify(tracker)); }
@@ -232,7 +231,7 @@ function searchPanels() {
 }
 function explorer() {
   const d=current();
-  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Quick add: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div>${searchPanels()}<div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
+  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Default destination: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div>${searchPanels()}<div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
 }
 function searchResults(){
   if(!searched&&!loading&&!error)return '';
@@ -392,13 +391,13 @@ function restoreSearch() {
   return search().then(()=>$('#result-heading')?.focus());
 }
 function cardTile(c) {
-  const entry = current()?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');
+  const copies = deckCardCopies(current(),c,'main');
   const image = imageFor(c);
   const price = c.prices?.usd ? esc(c.prices.usd) + ' USD' : 'Price unavailable';
-  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${entry ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${entry ? `<span>${entry.qty}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${price}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}</article>`;
+  return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${copies ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${copies ? `<span>${copies}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${price}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}</article>`;
 }
 function deckPanel(d) {
-  return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Quick add goes to Main deck.</p>${freshnessNotice(d)}<button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use quick add on a result to add to this deck’s Main deck.</p>'}</div>`;
+  return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Adds default to Main deck.</p>${freshnessNotice(d)}<button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use Add on a result to choose copies for this deck.</p>'}</div>`;
 }
 function identitySummary(d, compact=false) {
   const colors=deckIdentity(d), names={W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'};
@@ -416,7 +415,7 @@ function openDeck(id) {
 const collectionOptions={view:'visual',group:'none',sort:'added',filter:''};
 try{const saved=JSON.parse(localStorage.getItem('arcana.collection-view.v1'));for(const key of ['view','group','sort'])if(collectionChoices[key].some(([value])=>value===saved?.[key]))collectionOptions[key]=saved[key];if(['list','visual-vertical'].includes(saved?.view))collectionOptions.view=saved.view==='list'?'text':'visual';if(typeof saved?.filter==='string')collectionOptions.filter=saved.filter.slice(0,300);}catch{}
 function saveCollectionOptions(){try{localStorage.setItem('arcana.collection-view.v1',JSON.stringify(collectionOptions));}catch{toast('Collection view kept for this session.');}}
-function collectionLotDialog(card=null,index=null){
+function collectionLotDialog(card=null,index=null,back=null){
   if(index!==null)card=collection[index]?.card;
   if(!card){
     showDialog('<h2>Add owned card</h2><div class="owned-search-wrap"><label>Search card names<input id="owned-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="owned-matches" aria-expanded="false" autocomplete="off" placeholder="Type a card name"></label><div id="owned-matches" class="owned-suggestions" role="listbox" hidden></div></div><p id="owned-search-status" role="status">Type a letter to search card names.</p><button class="secondary" id="owned-cancel">Cancel</button>');
@@ -441,10 +440,15 @@ function collectionLotDialog(card=null,index=null){
   for(const id of ['owned-finish','owned-condition'])$('#'+id).onchange=()=>{if(currentKey)draft.set(currentKey,{card:selected,finish:currentKey.split('|')[1],condition:currentKey.split('|')[2],qty:Number(qty.value)});display();};
   $('#owned-version').onchange=()=>{remember();selected=printings.find(c=>c.id===$('#owned-version').value)||selected;display();};
   $('#owned-minus').onclick=()=>qty.value=Math.max(0,Number(qty.value)-1);$('#owned-plus').onclick=()=>qty.value=Math.min(9999,Number(qty.value)+1);
-  $('#owned-cancel').onclick=()=>closeDialog();
+  $('#owned-cancel').onclick=back || closeDialog;
+  if(back){
+    $('#owned-cancel').textContent='Back to card details';
+    $('#dialog h2').textContent='Add this card to collection';
+    $('#dialog').setAttribute('aria-label','Add this card to collection');
+  }
   let versionsLoading=false,versionsComplete=false;
   $('#owned-load').onclick=async()=>{if(versionsLoading||versionsComplete)return;versionsLoading=true;const button=$('#owned-load');button.hidden=true;try{if(!card.oracle_id)throw Error('Versions unavailable for this stored card.');while(!versionsComplete&&form.isConnected&&$('#dialog').open!==false){$('#owned-status').textContent='Loading versions… '+printings.length+' available so far.';const data=await api('/api/printings?'+new URLSearchParams({oracle:card.oracle_id,page:page+1}));if(!form.isConnected||$('#dialog').open===false)return;page++;printings=[...new Map([...printings,...data.data].map(c=>[c.id,c])).values()];options();versionsComplete=!data.has_more;if(page>=1000&&!versionsComplete)throw Error('Version limit reached. Loaded versions remain available.');}if(form.isConnected)$('#owned-status').textContent=printings.length+' versions available in the dropdown.';}catch(error){if(form.isConnected){$('#owned-status').textContent=error.message;button.hidden=false;}}finally{versionsLoading=false;}};
-  form.onsubmit=e=>{e.preventDefault();try{remember();let next=structuredClone(collection);for(const [lotKey,lot] of draft){if(!Number.isInteger(lot.qty)||lot.qty<0||lot.qty>9999)throw Error('Enter a whole number from 0 to 9999.');const position=next.findIndex(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);if(lot.qty){const previous=collection.find(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);lot.addedAt=previous?previous.addedAt:new Date().toISOString();lot.updatedAt=new Date().toISOString();if(!lot.condition)delete lot.condition;if(position>=0)next[position]=lot;else next.push(lot);}else if(position>=0)next.splice(position,1);}validateCollection(next);collection=next;save();closeDialog();render();toast(storageError?'Collection kept for this session; save a workspace copy.':'Collection updated.');}catch(error){$('#owned-error').textContent=error.message;}};
+  form.onsubmit=e=>{e.preventDefault();try{remember();let next=structuredClone(collection);for(const [lotKey,lot] of draft){if(!Number.isInteger(lot.qty)||lot.qty<0||lot.qty>9999)throw Error('Enter a whole number from 0 to 9999.');const position=next.findIndex(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);if(lot.qty){const previous=collection.find(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);lot.addedAt=previous?previous.addedAt:new Date().toISOString();lot.updatedAt=new Date().toISOString();if(!lot.condition)delete lot.condition;if(position>=0)next[position]=lot;else next.push(lot);}else if(position>=0)next.splice(position,1);}validateCollection(next);collection=next;save();if(!back)closeDialog();render();if(back)back();toast(storageError?'Collection kept for this session; save a workspace copy.':'Collection updated.');}catch(error){$('#owned-error').textContent=error.message;}};
   options();display();$('#owned-load').onclick();
 }
 const importCardPool=new Map();
@@ -583,7 +587,7 @@ const usd = cents => usdAmount.format(cents / 100) + ' USD';
 function deckPriceTotal(entries) {
   let total = 0, unpriced = 0, priced = 0;
   for (const entry of entries) {
-    const { cents } = deckPrintingPrice(entry.card);
+    const { cents } = deckPrintingPrice(entry.card,entry.finish);
     if (cents === null) unpriced += entry.qty;
     else { total += cents * entry.qty; priced += entry.qty; }
   }
@@ -592,10 +596,10 @@ function deckPriceTotal(entries) {
   if (!unpriced) return usd(total);
   return priced ? `${usd(total)} known · ${unknownCopies}` : unknownCopies;
 }
-function stackCardMeta(card) {
-  const { cents } = deckPrintingPrice(card);
+function stackCardMeta({card,finish}) {
+  const { cents } = deckPrintingPrice(card,finish);
   const setCode = typeof card.set === 'string' && card.set.trim() ? card.set.toUpperCase() : 'Set unknown';
-  return `<div class="stack-card-meta"><span>${esc(card.name)}</span><span>${esc(setCode)} · ${cents === null ? 'Price unavailable' : usd(cents)}</span></div>`;
+  return `<div class="stack-card-meta"><span>${esc(card.name)}</span><span>${esc(setCode)}${finish ? ' · '+finish : ''} · ${cents === null ? 'Price unavailable' : usd(cents)}</span></div>`;
 }
 function faceAttributes(card, enabled=true) {
   const front=safeUrl(imageFor(card),true), back=safeUrl(card.card_faces?.[1]?.image_uris?.normal,true);
@@ -614,7 +618,7 @@ function previewMarkup(d) {
   const entry=deckEntries(d,editorOptions).find(e=>entryKey(e)===previewKey);
   if(!entry)return '<p class="hint">Point to a card or focus its name to preview.</p>';
   const image=safeUrl(imageFor(entry.card),true);
-  const { cents, finish } = deckPrintingPrice(entry.card);
+  const { cents, finish } = deckPrintingPrice(entry.card,entry.finish);
   const price = cents === null ? 'Price unavailable' : `${usd(cents)} per copy`;
   const faces=faceAttributes(entry.card,editorOptions.layout.startsWith('visual'));
   return `<figure${faces}>${faces?flipControl(entry.card):''}${image?`<img src="${esc(image)}" alt="${esc(entry.card.name)}">`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}<span>Function: ${esc(primaryRole(entry))}</span><span>${price}${finish ? ' · ' + finish : ''}</span></figcaption></figure>`;
@@ -629,15 +633,16 @@ function previewEntry(key) {
   previewDeck=d.id;previewKey=key;$('#deck-card-preview').innerHTML=previewMarkup(d);
   for(const row of document.querySelectorAll('[data-preview-entry]'))row.classList.toggle('is-previewed',row.dataset.previewEntry===key);
 }
-function deckEntry(e) {
+function deckEntry(e, atLimit) {
   const key=entryKey(e),visual=editorOptions.layout.startsWith('visual'),image=safeUrl(imageFor(e.card),true),zone=ZONES[zoneFor(e)];
   const faces=faceAttributes(e.card,visual);
-  const minus=`<button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">${icon('minus',14)}</button>`,plus=`<button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${e.qty>=500?'disabled':''}>${icon('plus',14)}</button>`;
+  const variant=e.finish?` · ${esc(printingLabel(e.card))} · ${e.finish}`:'';
+  const minus=`<button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">${icon('minus',14)}</button>`,plus=`<button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${atLimit?'disabled':''}>${icon('plus',14)}</button>`;
   const quantity=`<div class="card-quantity">${visual?plus+minus:minus+plus}</div>`;
-  const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
+  const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}${variant}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
   const badge=`<span class="entry-quantity${visual&&e.qty>=100?' three-digits':''}" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>`;
   const art=`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
-  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e.card)}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}${variant}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e)}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}${variant}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}${e.finish?`<small class="deck-card-variant">${esc(String(e.card.set||'').toUpperCase()||e.card.set_name||'Set unknown')} · #${esc(e.card.collector_number||'?')} · ${e.finish}</small>`:''}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckList(d, full=false) {
   const filtered = full ? deckEntries(d, editorOptions) : d.cards;
@@ -657,10 +662,11 @@ function deckList(d, full=false) {
     }
     const groupSections = [...groups].map(([group,items]) => {
       const cards = items.map(e => {
-        if (visual) return `<div class="card-slot">${deckEntry(e)}</div>`;
-        if (full) return deckEntry(e);
+        const atLimit=deckCardCopies(d,e.card,zone)>=500;
+        if (visual) return `<div class="card-slot">${deckEntry(e,atLimit)}</div>`;
+        if (full) return deckEntry(e,atLimit);
         const key = esc(entryKey(e)), name = esc(e.card.name);
-        return `<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${key}">${name}</button></span><div class="row-actions"><button data-zone-minus="${key}" aria-label="Remove one ${name} from ${label}">−</button><button data-zone-plus="${key}" aria-label="Add one ${name} to ${label}">+</button></div></div>`;
+        return `<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${key}">${name}</button></span><div class="row-actions"><button data-zone-minus="${key}" aria-label="Remove one ${name} from ${label}">−</button><button data-zone-plus="${key}" aria-label="Add one ${name} to ${label}" ${atLimit?'disabled':''}>+</button></div></div>`;
       }).join('');
       const target = grouping === 'role' && items.some(e => e.tags[0] === group)
         ? ` data-drop-zone="${zone}" data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"` : '';
@@ -673,7 +679,7 @@ function deckList(d, full=false) {
     const empty = `<p class="hint">${full && qty ? 'No cards match these filters.' : 'No cards in this zone.'}</p>`;
     return `<section class="deck-zone"${full ? ` data-drop-zone="${zone}"` : ''}><h3>${label} · ${qty}${shown}${price}</h3><div class="deck-group-list">${groupSections || empty}</div></section>`;
   }).join('');
-  const priceNote = full ? '<p class="deck-price-note">Stored USD estimates use the regular or sole printing finish.</p>' : '';
+  const priceNote = full ? '<p class="deck-price-note">Stored USD estimates use the selected finish or the default for older entries.</p>' : '';
   return `<div class="zone-counts" aria-label="Deck zone counts">${zoneCounts}</div>${priceNote}<div class="deck-zones ${full ? esc(editorOptions.layout) : 'tracker-zones'}">${zoneSections}</div>`;
 }
 function finishCardDrag() {
@@ -779,8 +785,8 @@ addEventListener('pointerup',e=>{
       changeNamedDeck(d,deck=>{
         // Stage both operations: a Function validation failure must not leave a zone move behind.
         const staged={...deck,cards:deck.cards.map(e=>({...e,tags:[...e.tags]}))};
-        moveEntry(staged,key,zone);
-        assignEntryFunction(staged,entryKey({card:entry.card,zone}),name);
+        const moved=moveEntry(staged,key,zone);
+        assignEntryFunction(staged,entryKey(moved),name);
         deck.cards=staged.cards;
       });
       toast(`Added ${entry.card.name} to ${name}`);
@@ -852,7 +858,7 @@ function renderCardActions() {
   const action=(value,label,attributes='')=>`<button role="menuitem" data-card-action="${value}" ${attributes}>${label}</button>`;
   const submenu='aria-haspopup="menu" aria-expanded="false" aria-controls="card-submenu"';
   menu.setAttribute('aria-label',`Card actions for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
-  menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>`+action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>',submenu)+action('move-menu','Move to… <span aria-hidden="true">›</span>',submenu)+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card')+'<div id="card-submenu" popover="manual" role="menu"></div>';
+  menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>`+action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>',submenu)+action('move-menu','Move to… <span aria-hidden="true">›</span>',submenu)+action('edit-printing','Change in-deck card details')+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card')+'<div id="card-submenu" popover="manual" role="menu"></div>';
   menu.scrollTop=0;
   menu.showPopover();positionCardActions();
   menu.querySelector(':scope > button:not(:disabled)')?.focus();
@@ -874,11 +880,6 @@ function assignFunctionDialog(d,key) {
   $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${name.trim()}`);}catch(error){$('#function-error').textContent=error.message;}};
   $('#function-form input').focus();
 }
-function copyEntryDialog(d,key) {
-  const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
-  showDialog(`<h2>Add ${esc(entry.card.name)} to another deck</h2><p>Adds copies without changing ${esc(d.name)}. Existing destination entries keep their printing and merge functions.</p><form id="copy-entry-form"><label>Destination deck<select name="deck"><option value="">Choose a deck…</option>${decks.filter(x=>x!==d).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></label><label>Destination zone<select name="zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}">${label}</option>`).join('')}</select></label><label>Copies<input type="number" name="quantity" min="1" max="500" value="1" required></label><p id="copy-entry-error" role="alert"></p><button class="primary">Add copies</button></form>`);
-  $('#copy-entry-form').onsubmit=e=>{e.preventDefault();try{const data=new FormData(e.target),target=decks.find(x=>x.id===data.get('deck'));if(!decks.includes(d)||!target)throw Error('Choose an available destination deck.');changeNamedDeck(target,deck=>copyEntryToDeck(d,key,deck,Number(data.get('quantity')),String(data.get('zone'))));$('#dialog').close();focusCardEntry(d,key);toast('Copies added to '+target.name);}catch(error){$('#copy-entry-error').textContent=error.message;}};
-}
 function removeCopiesDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
   const matches=d.cards.filter(e=>cardKey(e.card)===cardKey(entry.card)),total=matches.reduce((n,e)=>n+e.qty,0);
@@ -887,13 +888,13 @@ function removeCopiesDialog(d,key) {
   $('#remove-copies').onclick=()=>{try{changeNamedDeck(d,deck=>removeCardCopies(deck,key));$('#dialog').close();$('#deck-title')?.focus();toast('All copies removed from '+d.name);}catch(error){$('#remove-copies-error').textContent=error.message;}};
 }
 function confirmCommanderRemoval(d,entry,remove) {
-  if(zoneFor(entry)!=='command'||entry.qty!==1)return false;
+  if(zoneFor(entry)!=='command'||deckCardCopies(d,entry.card,'command')!==1)return false;
   const dialog=$('#commander-removal'),error=$('#commander-removal-error');
   $('#commander-removal-title').textContent=`Remove ${entry.card.name}?`;
   $('#commander-removal-description').textContent=`This removes the last copy of this commander from the Command zone in ${d.name}.`;
   error.hidden=true;error.textContent='';
   $('#confirm-commander-removal').onclick=()=>{
-    if(!decks.includes(d)||!d.cards.includes(entry)||zoneFor(entry)!=='command'||entry.qty!==1){
+    if(!decks.includes(d)||!d.cards.includes(entry)||zoneFor(entry)!=='command'||deckCardCopies(d,entry.card,'command')!==1){
       error.hidden=false;error.textContent='This commander entry changed. Close this dialog and review the deck.';return;
     }
     dialog.close();remove();
@@ -910,15 +911,16 @@ $('#card-actions').addEventListener('click',async e=>{
   closeCardActions();
   try{
     if(action==='details')inspect(entry.card.id,key);
+    if(action==='edit-printing')deckCardDialog(entry.card,{zone:zoneFor(entry),edit:{deck:d,entry,key}});
     if(action==='new-function')assignFunctionDialog(d,key);
     if(action==='assign-function'){
       if(!d.cards.some(e=>e.tags[0]===button.dataset.function))throw Error('This function is no longer in this deck. Reopen the menu.');
       changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${button.dataset.function}`);
     }
-    if(action==='copy-deck')copyEntryDialog(d,key);
+    if(action==='copy-deck')deckCardDialog(entry.card,{source:{deck:d,entry,key}});
     if(action==='remove')removeCopiesDialog(d,key);
     if(action==='copy-name'){await navigator.clipboard.writeText(entry.card.name);toast('Card name copied');}
-    if(action.startsWith('move:')){const zone=action.slice(5),nextKey=entryKey({card:entry.card,zone});changeNamedDeck(d,deck=>moveEntry(deck,key,zone));focusCardEntry(d,nextKey);toast('All entry copies moved to '+ZONES[zone]);}
+    if(action.startsWith('move:')){const zone=action.slice(5),moved=changeNamedDeck(d,deck=>moveEntry(deck,key,zone));focusCardEntry(d,entryKey(moved));toast('All entry copies moved to '+ZONES[zone]);}
   }catch(error){toast(error.message);}
 });
 $('#card-actions').addEventListener('pointerover',e=>{
@@ -1271,6 +1273,7 @@ $('#app').addEventListener('click',async e=>{
     else $('#raw')?.focus();
     return;
   }
+  if(button.dataset.inspectOwned!==undefined){const lot=collection[Number(button.dataset.inspectOwned)];if(lot)inspect(lot.card.id,null,lot.card);return;}
   if(button.dataset.editOwned!==undefined){collectionLotDialog(null,Number(button.dataset.editOwned));return;}
   if(button.dataset.ownedMinus!==undefined||button.dataset.ownedPlus!==undefined){const index=Number(button.dataset.ownedMinus??button.dataset.ownedPlus),lot=collection[index];if(lot)updateOwnedQuantity(index,lot.qty+(button.dataset.ownedPlus!==undefined?1:-1));return;}
   if(button.dataset.removeOwned!==undefined){removeCollectionLot(Number(button.dataset.removeOwned));return;}
@@ -1294,7 +1297,7 @@ $('#app').addEventListener('click',async e=>{
     const d=current(),key=button.dataset.zoneMinus||button.dataset.zonePlus,entry=d?.cards.find(e=>entryKey(e)===key);
     if(!entry)return;
     if(button.dataset.zonePlus){
-      if(entry.qty<500)changeNamedDeck(d,()=>{entry.qty++;});
+      if(deckCardCopies(d,entry.card,zoneFor(entry))<500)changeNamedDeck(d,()=>{entry.qty++;});
     }else{
       const remove=()=>{
         changeNamedDeck(d,()=>{if(--entry.qty===0)d.cards=d.cards.filter(e=>e!==entry);});
@@ -1330,7 +1333,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='add-owned')collectionLotDialog();
   if(action==='import-collection')collectionImport();
   if(action==='clear-collection')clearCollection();
-  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Matching all” narrows your results; “Matching any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Search names and aliases in the bundled Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}. Use Related to browse recorded broader and narrower relationships. When a name has no catalog match, add it as an unlisted function to try it in a Scryfall search.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Inspect a card to choose its deck zone or assign personal role tags. These role tags power deck statistics and are separate from Scryfall’s tags.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander coverage remains partial; review paired commanders and companions manually.</p>`);
+  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Matching all” narrows your results; “Matching any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Search names and aliases in the bundled Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}. Use Related to browse recorded broader and narrower relationships. When a name has no catalog match, add it as an unlisted function to try it in a Scryfall search.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Open card details to view printings and ownership, or choose Add card to deck to set the destination and primary function.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander coverage remains partial; review paired commanders and companions manually.</p>`);
 });
 async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Object.assign(new Error(data.error || 'Request failed.'),{status:r.status,retryAfter:data.retryAfter});return data; }
 // Input blur may happen while the next row is receiving focus. Keep that form in place
@@ -1353,41 +1356,33 @@ async function search(append=false,keepBroadening=false,keepForm=false) {
 }
 function findCard(id) {return results.find(c=>c.id===id)||current()?.cards.find(e=>e.card.id===id)?.card;}
 function addLabel(c) {
-  const d=current();
-  const qty=d?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main')?.qty||0;
+  const d=current(), qty=deckCardCopies(d,c,'main');
   return d?`Add ${c.name} to ${d.name} · Main deck (${qty} currently in Main deck)`:`Add ${c.name} to a chosen deck`;
 }
-function addToDeck(c,d,zone='main') {
-  if(typeof zone!=='string' || !Object.hasOwn(ZONES,zone))throw Error('Choose a valid destination zone.');
-  if(!decks.includes(d))throw new Error('That deck is no longer available. Choose another deck.');
-  const found=d.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)===zone);
-  if(!found && d.cards.length>=1000)throw new Error('Maximum 1000 card entries per deck. No cards were added.');
-  if(found?.qty>=500)throw new Error('Maximum 500 copies per card and zone. No cards were added.');
-  if(found)found.qty++;else d.cards.push({card:c,qty:1,tags:[],zone});
-  d.updated=new Date().toISOString();save();render();
-  toast(storageError?storageError:`${c.name} added to ${d.name} · ${ZONES[zone]}`);
-}
 function addCard(id,zone='main') {
-  const c=findCard(id);if(!c)return;
-  if(!current()){chooseDestination(id);return;}
-  try{addToDeck(c,current(),zone);}catch(error){toast(error.message);}
+  const card=findCard(id);
+  if(card)deckCardDialog(card,{deck:current(),zone});
 }
-function chooseDestination(id,zone='main',preview) {
-  const c=preview || findCard(id);if(!c)return;
-  showDialog(`<h2>Add ${esc(c.name)}</h2><p>Choose the destination for one copy. Your tracked deck will stay selected.</p>${decks.length?`<form id="add-destination-form"><label>Destination deck<select name="deck" id="add-destination"><option value="">Choose a deck…</option>${decks.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label><label>Destination zone<select id="add-zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zone===z?'selected':''}>${label}</option>`).join('')}</select></label><p id="add-destination-error" role="alert"></p><button class="primary" type="submit">Add 1 copy</button></form>`:'<p>Create a deck to keep this card.</p><button class="primary" id="create-destination">Create deck…</button>'}`);
-  if(decks.length)$('#add-destination-form').onsubmit=e=>{
-    e.preventDefault();const d=decks.find(d=>d.id===$('#add-destination').value);
-    if(!d){$('#add-destination-error').textContent='Choose a destination deck first.';return;}
-    try{addToDeck(c,d,$('#add-zone').value||zone);$('#dialog').close();}catch(error){$('#add-destination-error').textContent=error.message;}
-  };
-  else $('#create-destination').onclick=()=>deckForm(undefined,d=>{view='explore';try{addToDeck(c,d,zone);}catch(error){toast(error.message);}});
+function chooseDestination(id,zone='main') {
+  const card=findCard(id);
+  if(card)deckCardDialog(card,{zone});
 }
-function closeDialog(discard=false) {if(discard!==true && detail && !saveDetailRoles())return false;const s=detail;detail=null;$('#dialog').close();if(s && typeof CSS!=='undefined')document.querySelector(s.originKey?'[data-entry="'+CSS.escape(s.originKey)+'"]':'[data-inspect="'+CSS.escape(s.source.id)+'"]')?.focus({preventScroll:true});return true;}
-function showDialog(html) {detail=null;const dialog=$('#dialog');dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;dialog.scrollTop=0;dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=closeDialog;}
-$('#dialog').addEventListener('click',e=>{if(e.target===$('#dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}});
-$('#dialog').addEventListener('cancel',e=>{if(detail){e.preventDefault();closeDialog();}});
-globalThis.addEventListener?.('beforeunload',e=>{if(detail?.invalidRoles){e.preventDefault();e.returnValue='';}});
-$('#dialog').addEventListener('close',()=>{detail=null;});
+function closeDialog() {$('#dialog').close();}
+function showDialog(html) {
+  const dialog=$('#dialog');
+  dialog.onclose=null;
+  dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;
+  dialog.scrollTop=0;
+  dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');
+  if(!dialog.open)dialog.showModal();
+  else dialog.querySelector('.dialog-close').focus();
+  dialog.querySelector('.dialog-close').onclick=closeDialog;
+}
+$('#dialog').addEventListener('click',e=>{
+  if(e.target!==$('#dialog'))return;
+  const r=e.target.getBoundingClientRect();
+  if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();
+});
 function deckForm(deck,after) {
   if(!deck&&decks.length>=200){toast('Maximum 200 decks per workspace.');return;}
   let commander=null;
@@ -1505,123 +1500,170 @@ function settings() {
   $('#settings-backup').onclick=()=>saveWorkspaceCopy();
   $('#settings-restore').onclick=restore;
 }
-function detailEntry(s=detail) { return s?.deck?.cards.find(e=>entryKey(e)===s.key); }
-function detailMessage(message, error=false) {
-  $('#detail-save-status').textContent=message;
-  $('#detail-save-status').className=error?'detail-error':'detail-saved';
-  $('#discard-roles').hidden=!error;
+const printingControls=`<label for="view-printing">Set / printing</label><select id="view-printing"></select>
+  <p id="printing-status" role="status"></p><button type="button" class="secondary" id="load-printings" hidden>Load more printings</button>`;
+
+function mountPrintings(state, onSelect) {
+  const select=$('#view-printing'), status=$('#printing-status'), button=$('#load-printings');
+  const oracleId=state.source.oracle_id;
+  const live=()=>select.isConnected && $('#dialog').open!==false;
+  const loaded=()=>`${state.printings.length} ${state.printings.length===1?'printing':'printings'} loaded${state.more?' · more available':''}.`;
+  function renderOptions() {
+    select.innerHTML=state.printings.map(card=>`<option value="${esc(card.id)}" ${card.id===state.card.id?'selected':''}>${esc(printingLabel(card))}</option>`).join('');
+  }
+  select.onchange=()=>{
+    state.card=state.printings.find(card=>card.id===select.value)||state.card;
+    onSelect();
+  };
+  button.onclick=async()=>{
+    if(!oracleId || button.disabled || (state.page&&!state.more))return;
+    button.disabled=true;status.textContent='Loading printings…';
+    try{
+      const page=state.page+1,data=await api('/api/printings?'+new URLSearchParams({oracle:oracleId,page}));
+      if(!live())return;
+      if(!Array.isArray(data.data)||!data.data.length)throw Error('No printings were returned.');
+      const cards=data.data.map(card=>validatePrinting(state.source,card));
+      state.printings=[...new Map([...cards,...state.printings].map(card=>[card.id,card])).values()];
+      state.page=page;state.more=Boolean(data.has_more);
+      renderOptions();
+      status.textContent=loaded();
+      if(!state.more && document.activeElement===button)select.focus();
+      button.hidden=!state.more;button.textContent='Load more printings';
+    }catch(error){
+      if(live()){status.textContent=error.message;button.hidden=false;button.textContent='Retry loading printings';}
+    }finally{button.disabled=false;}
+  };
+  renderOptions();
+  button.hidden=!state.more;
+  status.textContent=state.page?loaded():oracleId?'':'Other printings are unavailable for this stored card. Find it again in search.';
+  if(!state.page && oracleId)button.onclick();
 }
-function saveDetailRoles() {
-  const s=detail;if(!s?.key)return true;
-  try {
-    if(!decks.includes(s.deck))throw Error('This deck no longer exists. Your function text is kept below.');
-    const entry=detailEntry(s);if(!entry)throw Error('This entry changed or was removed. Your function text is kept below.');
-    const raw=$('#detail-roles').value;
-    // Keep the raw input intact while typing; only the validated primary function is stored.
-    const before=JSON.stringify(entry.tags);
-    const draft={...entry,tags:[...s.roleMemberships]};
-    assignEntryFunction({cards:[draft]},s.key,raw);
-    entry.tags=draft.tags;
-    if(before!==JSON.stringify(entry.tags)) {s.deck.updated=new Date().toISOString();save();render();}
-    s.invalidRoles=false;
-    detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Saved to '+s.deck.name+' · '+ZONES[s.zone],Boolean(storageError));
-    return true;
-  }catch(error){s.invalidRoles=true;detailMessage(error.message,true);return false;}
+
+function printingState(card) {return {source:card,card,printings:[card],page:0,more:false};}
+
+function showCardDetails(state, focus) {
+  showDialog(`<div class="card-detail"><div id="detail-images" class="detail-images"></div>
+    <div class="detail-information"><div id="detail-facts"></div>
+      <section class="printing-browser" aria-label="Card printings"><h3>Sets and printings</h3>${printingControls}<p id="detail-scryfall"></p></section>
+      <section class="detail-deck-context" aria-label="Collection and deck"><h3>Collection</h3><p id="detail-ownership"></p>
+        <button class="secondary" id="detail-add-owned">Add this card to collection</button>
+        <h3>Deck</h3><button class="primary" id="detail-add">Add card to deck</button></section>
+    </div></div>`);
+  function renderCard() {
+    const c=state.card;
+    const images=c.image_uris?[{name:c.name,image:c.image_uris.normal}]:c.card_faces?.map(f=>({name:f.name,image:f.image_uris?.normal}))||[];
+    $('#detail-images').innerHTML=images.some(f=>safeUrl(f.image,true))?images.filter(f=>safeUrl(f.image,true)).map(f=>`<img src="${esc(safeUrl(f.image,true))}" alt="${esc(f.name)}" width="488" height="680">`).join(''):'<p class="hint">Artwork unavailable for this printing.</p>';
+    const date=typeof c.legalityUpdatedAt==='string' && Number.isFinite(Date.parse(c.legalityUpdatedAt))?c.legalityUpdatedAt.slice(0,10):null;
+    $('#detail-facts').innerHTML=`<h2>${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost||c.card_faces?.map(f=>f.mana_cost||'').join(' // '))}</div>
+      <p class="detail-type">${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p>
+      <dl class="card-facts">${c.power!==undefined?`<div><dt>Power / toughness</dt><dd>${esc(c.power)} / ${esc(c.toughness)}</dd></div>`:''}${c.loyalty!==undefined?`<div><dt>Loyalty</dt><dd>${esc(c.loyalty)}</dd></div>`:''}
+      <div><dt>Release</dt><dd>${esc(printingLabel(c,{language:false}))}</dd></div><div><dt>Rarity</dt><dd>${esc(c.rarity||'Unavailable')}</dd></div><div><dt>Artist</dt><dd>${esc(c.artist||c.card_faces?.map(f=>f.artist).filter(Boolean).join(' / ')||'Unavailable')}</dd></div></dl>
+      <section class="detail-legality" aria-label="Stored format legality"><h3>Stored format legality</h3>
+      <div class="legality-badges">${FORMATS.map(f=>{
+        const status=c.legalities?.[f];
+        return `<span class="${status==='legal'?'is-legal':status?'':'is-unknown'}">${f}: ${esc(typeof status==='string'?status.replaceAll('_',' '):'unknown')}</span>`;
+      }).join('')}</div>
+      ${date?`<p class="hint">Last updated <time datetime="${esc(date)}">${esc(date)}</time></p>`:''}</section>`;
+    const link=safeUrl(c.scryfall_uri);
+    $('#detail-scryfall').innerHTML=link?`<a href="${esc(link)}" target="_blank" rel="noreferrer">View this printing on Scryfall</a>`:'';
+    const owned=collection.reduce((qty,lot)=>qty+(lot.card.id===c.id?lot.qty:0),0);
+    $('#detail-ownership').textContent=owned?`${owned} ${owned===1?'copy':'copies'} owned of this printing.`:'No copies owned of this printing.';
+    $('#dialog').setAttribute('aria-label',c.name+' — Card details');
+  }
+  $('#detail-add-owned').onclick=()=>collectionLotDialog(state.card,null,()=>showCardDetails(state,'#detail-add-owned'));
+  $('#detail-add').onclick=()=>deckCardDialog(state.card,{
+    deck:view==='deck'||view==='explore'?current():null,zone:state.zone,printings:state,back:()=>showCardDetails(state,'#detail-add'),
+  });
+  renderCard();
+  mountPrintings(state,renderCard);
+  if(focus)$(focus).focus();
+  $('#dialog').onclose=()=>{
+    if(!$('#dialog').open && state.origin && typeof CSS!=='undefined')document.querySelector(state.origin)?.focus({preventScroll:true});
+  };
 }
-function selectDetailTarget(deckId,zone) {
-  const s=detail;if(!s)return;
-  if(!saveDetailRoles()) {
-    $('#detail-target').value=s.deck?.id || '';$('#detail-zone').value=s.zone;
+
+function inspect(id,key,card) {
+  const row=key?current()?.cards.find(entry=>entryKey(entry)===key):null;
+  const source=card || row?.card || findCard(id);
+  if(!source)return;
+  const origin=typeof CSS==='undefined'||card?null:row?'[data-entry="'+CSS.escape(key)+'"]':'[data-inspect="'+CSS.escape(id)+'"]';
+  showCardDetails({...printingState(source),zone:row?zoneFor(row):'main',origin});
+}
+
+function deckCardDialog(card, {deck,zone='main',source,edit,back,printings}={}) {
+  const state=printings?{...printings}:printingState(card);
+  const selectedDeck=deck;
+  const title=edit?'Change in-deck card details':'Add card to deck';
+  if(!edit && !decks.length){
+    showDialog(`<h2>${title}</h2><p>Create a destination deck for ${esc(card.name)}.</p><div class="settings-actions"><button class="primary" id="create-destination">Create deck…</button>${back?'<button class="secondary" id="deck-card-cancel">Back to card details</button>':''}</div>`);
+    $('#create-destination').onclick=()=>deckForm(undefined,d=>deckCardDialog(card,{deck:d,zone,back,printings:state}));
+    if(back)$('#deck-card-cancel').onclick=back;
     return;
   }
-  const d=decks.find(d=>d.id===deckId);
-  if((deckId&&!d)||!Object.hasOwn(ZONES,zone)){detailMessage('Choose an available deck and zone.',true);return;}
-  s.deck=d;s.zone=zone;
-  const entry=d?.cards.find(e=>cardKey(e.card)===cardKey(s.source)&&zoneFor(e)===zone);
-  s.key=entry?entryKey(entry):null;
-  renderDetailDeck();renderDetailRoles();detailMessage('');
-}
-function renderDetailFacts() {
-  const s=detail,c=s.card;
-  const images=c.image_uris?[{name:c.name,image:c.image_uris.normal}]:c.card_faces?.map(f=>({name:f.name,image:f.image_uris?.normal})) || [];
-  $('#detail-images').innerHTML=images.some(f=>safeUrl(f.image,true))?images.filter(f=>safeUrl(f.image,true)).map(f=>`<img src="${esc(safeUrl(f.image,true))}" alt="${esc(f.name)}" width="488" height="680">`).join(''):'<p class="hint">Artwork unavailable for this printing.</p>';
-  $('#detail-facts').innerHTML=`<h2 id="detail-title">${esc(c.name)}</h2><div class="detail-mana">${mana(c.mana_cost || c.card_faces?.map(f=>f.mana_cost||'').join(' // '))}</div><p class="detail-type">${esc(c.type_line)}</p><p class="oracle-text">${esc(oracle(c))}</p><dl class="card-facts"><div><dt>Mana value</dt><dd>${esc(c.cmc)}</dd></div>${c.power!==undefined?`<div><dt>Power / toughness</dt><dd>${esc(c.power)} / ${esc(c.toughness)}</dd></div>`:''}${c.loyalty!==undefined?`<div><dt>Loyalty</dt><dd>${esc(c.loyalty)}</dd></div>`:''}<div><dt>Release</dt><dd>${esc(printingLabel(c))}</dd></div><div><dt>Rarity</dt><dd>${esc(c.rarity || 'Unavailable')}</dd></div><div><dt>Artist</dt><dd>${esc(c.artist || c.card_faces?.map(f=>f.artist).filter(Boolean).join(' / ') || 'Unavailable')}</dd></div></dl><details class="detail-legality"><summary>Stored format legality</summary><div class="legality-badges">${FORMATS.map(f=>`<span class="${c.legalities?.[f]==='legal'?'is-legal':''}">${f}: ${esc(c.legalities?.[f]?.replaceAll('_',' ')||'unknown')}</span>`).join('')}</div><p class="hint">Stored data can be outdated. Deck Checks shows refresh status and validation limits.</p></details><p><a href="${esc(safeUrl(c.scryfall_uri))}" target="_blank" rel="noreferrer">View this printing on Scryfall</a></p>`;
-}
-function renderDetailDeck() {
-  const s=detail,entry=detailEntry(s),d=s.deck,zone=s.zone;
-  const context=d?d.name+' · '+ZONES[zone]:'a selected deck and zone';
-  $('#detail-deck').innerHTML=`<h3>Collection</h3><button class="secondary" id="detail-add-owned">Add viewed printing to collection</button><p class="hint">Stores this exact set and collector number.</p><h3>Deck</h3><div class="detail-targets"><div><label for="detail-target">Destination deck</label><select id="detail-target"><option value="">Choose a deck…</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck===d?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></div><div><label for="detail-zone">Deck zone</label><select id="detail-zone">${Object.entries(ZONES).map(([z,label])=>`<option value="${z}" ${zone===z?'selected':''}>${label}</option>`).join('')}</select></div></div><div class="detail-quantity" role="group" aria-label="Quantity in ${esc(context)}"><span>Copies</span><button class="secondary" id="detail-remove" aria-label="Remove one ${esc(s.card.name)} from ${esc(context)}" ${!entry?'disabled':''}>${icon('minus',16)}</button><output id="detail-quantity" aria-live="polite" aria-label="Copies in ${esc(context)}">${entry?.qty||0}</output><button class="secondary" id="detail-add" aria-label="Add one ${esc(s.card.name)} to ${esc(context)}" ${!d||entry?.qty>=500?'disabled':''}>${icon('plus',16)}</button></div>${!d?'<p class="hint">Choose a deck before adding copies.</p>':''}${entry?`<p class="hint" id="detail-entry-context">Stored printing: ${esc(printingLabel(entry.card))}</p><button class="secondary" id="apply-printing" ${entry.card.id===s.card.id?'disabled':''}>${entry.card.id===s.card.id?'Printing already selected':'Use viewed printing'}</button><p class="hint">Applies to ${entry.qty} ${entry.qty===1?'copy':'copies'} in ${esc(context)}.</p>`:''}`;
-  $('#detail-add-owned').onclick=()=>collectionLotDialog(s.card);
-  $('#detail-target').addEventListener('change',e=>{selectDetailTarget(e.target.value,s.zone);$('#detail-target').focus();});
-  $('#detail-zone').addEventListener('change',e=>{selectDetailTarget(s.deck?.id||'',e.target.value);$('#detail-zone').focus();});
-  $('#detail-add').onclick=()=>{
-    if(!saveDetailRoles())return;
-    try {
-      if(!d)throw Error('Choose a destination deck first.');
-      addToDeck(s.card,d,zone);s.key=entryKey({card:s.card,zone});
-      renderDetailDeck();renderDetailRoles();
-      detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Added to '+context,Boolean(storageError));
-      $('#detail-add').focus();
-    }catch(error){detailMessage(error.message,true);}
+  const destinations=decks.filter(d=>d!==source?.deck);
+  showDialog(`<h2>${title}</h2><p>${esc(card.name)}${edit?` · ${esc(edit.deck.name)} · ${ZONES[zone]} · ${edit.entry.qty} ${edit.entry.qty===1?'copy':'copies'}`:''}</p>
+    <form id="deck-card-form">
+      ${edit?'':`<label>Destination deck<select id="add-destination" required><option value="">Choose a deck…</option>${destinations.map(d=>`<option value="${esc(d.id)}" ${d===selectedDeck?'selected':''}>${esc(d.name)}</option>`).join('')}</select></label>
+      <label>Destination zone<select id="add-zone">${Object.entries(ZONES).map(([id,label])=>`<option value="${id}" ${id===zone?'selected':''}>${label}</option>`).join('')}</select></label>
+      <p id="add-existing" role="status"></p>`}
+      <div class="deck-card-printings">${printingControls}</div>
+      <div class="deck-card-printings"><label for="deck-card-finish">Finish</label><select id="deck-card-finish" required></select></div>
+      <p id="deck-card-price" role="status"></p>
+      ${edit?'':`<label>Primary function<input id="add-primary" maxlength="80" placeholder="e.g. Removal" value="${esc(source?.entry.tags[0]||'')}"></label>
+      <label>Quantity to add<input id="add-quantity" type="number" min="1" max="500" step="1" value="1" required></label>`}
+      <p id="deck-card-error" role="alert"></p><div class="settings-actions"><button class="primary">${edit?'Save printing and finish':'Add card(s) to deck'}</button>
+      <button class="secondary" type="button" id="deck-card-cancel">${back?'Back to card details':'Cancel'}</button></div>
+    </form>`);
+  const finish=$('#deck-card-finish'), destination=()=>decks.find(d=>d.id===$('#add-destination').value);
+  const showPrice=()=>{
+    const {cents}=deckPrintingPrice(state.card,finish.value);
+    $('#deck-card-price').textContent=cents===null?'Price unavailable for this printing and finish.':usd(cents)+' per copy';
   };
-  $('#detail-remove').onclick=()=>{
-    if(!saveDetailRoles())return;
-    try {
-      if(!decks.includes(d))throw Error('This deck no longer exists.');
-      const currentEntry=detailEntry(s);if(!currentEntry)return;
-      const remove=()=>{
-        if(--currentEntry.qty===0){d.cards=d.cards.filter(e=>e!==currentEntry);s.key=null;}
-        d.updated=new Date().toISOString();save();render();renderDetailDeck();renderDetailRoles();
-        detailMessage(storageError?'Kept for this session. Browser save failed; export a JSON backup.':'Removed one copy from '+context,Boolean(storageError));
-        $(s.key?'#detail-remove':'#detail-add').focus();
-      };
-      if(!confirmCommanderRemoval(d,currentEntry,remove))remove();
-    }catch(error){detailMessage(error.message,true);}
+  const showFinishes=(preferred=finish.value)=>{
+    const options=deckFinishOptions(state.card);
+    finish.innerHTML=options.length?options.map(value=>`<option value="${value}">${{regular:'Nonfoil',foil:'Foil',etched:'Etched'}[value]}</option>`).join(''):'<option value="">No supported finish</option>';
+    finish.value=options.includes(preferred)?preferred:options[0]||'';
+    showPrice();
   };
-  $('#apply-printing')?.addEventListener('click',()=>{
-    if(!saveDetailRoles())return;
-    try{if(!decks.includes(d))throw Error('This deck no longer exists.');setEntryPrinting(d,s.key,s.card);d.updated=new Date().toISOString();save();render();renderDetailDeck();detailMessage(storageError?'Printing kept for this session. Export a JSON backup.':'Printing saved to '+context,Boolean(storageError));$('#detail-target').focus();}catch(error){detailMessage(error.message,true);}
-  });
-}
-function renderDetailRoles() {
-  const entry=detailEntry();
-  detail.roleMemberships=[...(entry?.tags||[])];
-  $('#detail-roles-section').innerHTML=entry?`<label for="detail-roles">Primary function</label><input id="detail-roles" maxlength="80" value="${esc(entry.tags[0]||'')}" placeholder="e.g. Removal" aria-describedby="detail-roles-help detail-save-status"><p class="hint" id="detail-roles-help">Saves as you type. Leave blank for Unassigned.</p>`:'';
-  $('#detail-roles')?.addEventListener('input',()=>saveDetailRoles());
-  $('#detail-roles')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveDetailRoles();}});
-}
-function renderPrintings() {
-  const s=detail;
-  $('#printing-options').innerHTML=s.loaded?`<label for="view-printing">View a set / printing</label><select id="view-printing">${s.printings.map(c=>`<option value="${esc(c.id)}" ${c.id===s.card.id?'selected':''}>${esc(printingLabel(c))}</option>`).join('')}</select>`:'';
-  $('#view-printing')?.addEventListener('change',e=>{s.card=s.printings.find(c=>c.id===e.target.value)||s.card;renderDetailFacts();renderDetailDeck();});
-  $('#printing-status').textContent=s.printingError || (s.loading?'Loading printings…':s.loaded?`${s.printings.length} printings loaded${s.more?'; more available':''}.`:'Browse paper releases for this card.');
-  $('#load-printings').textContent=s.printingError?'Retry loading printings':s.loaded&&s.more?'Load more printings':'Browse printings';
-  $('#load-printings').disabled=s.loading || !s.source.oracle_id;
-  $('#load-printings').hidden=s.loaded&&!s.more&&!s.printingError;
-  if(!s.source.oracle_id)$('#printing-status').textContent='Printing lookup unavailable for this stored card. Find the card again in search.';
-}
-async function loadPrintings() {
-  const s=detail;if(!s || s.loading || !s.source.oracle_id)return;
-  s.loading=true;s.printingError='';renderPrintings();
-  try {
-    const page=s.page+1,data=await api('/api/printings?'+new URLSearchParams({oracle:s.source.oracle_id,page}));
-    if(detail!==s)return;
-    if(!Array.isArray(data.data)||!data.data.length)throw Error('No printings returned. The current preview is unchanged.');
-    const printings=data.data.map(c=>validatePrinting(s.source,c));
-    s.printings=[...new Map([...s.printings,...printings].map(c=>[c.id,c])).values()];s.page=page;s.more=Boolean(data.has_more);s.loaded=true;
-  }catch(error){if(detail===s)s.printingError=error.message;}
-  finally{if(detail===s){s.loading=false;renderPrintings();}}
-}
-function inspect(id,entryId) {
-  const d=current(), row=entryId?d?.cards.find(e=>entryKey(e)===entryId):null;
-  const c=row?.card || findCard(id);if(!c)return;
-  const entry=row || d?.cards.find(e=>cardKey(e.card)===cardKey(c)&&zoneFor(e)==='main');
-  showDialog(`<div class="card-detail"><div id="detail-images" class="detail-images"></div><div class="detail-information"><div id="detail-facts"></div><section class="printing-browser" aria-label="Card printings"><h3>Sets and printings</h3><div id="printing-options"></div><p id="printing-status" role="status"></p><button class="secondary" id="load-printings">Browse printings</button></section><section class="detail-deck-context" aria-label="Deck-specific changes"><div id="detail-deck"></div><div id="detail-roles-section"></div><p id="detail-save-status" role="status"></p><button class="text-button" id="discard-roles" hidden>Discard unsaved function text and close</button></section></div></div>`);
-  detail={deck:d,zone:entry?zoneFor(entry):'main',key:entry?entryKey(entry):null,originKey:entry?entryKey(entry):null,source:c,card:c,printings:[c],page:0,more:false,loaded:false,loading:false,printingError:''};
-  renderDetailFacts();renderDetailDeck();renderDetailRoles();renderPrintings();
-  $('#dialog').setAttribute('aria-label',c.name+' — Card details');
-  $('#load-printings').onclick=loadPrintings;
-  $('#discard-roles').onclick=()=>closeDialog(true);
+  if(!edit){
+    const showCopies=()=>{
+      const d=destination();
+      $('#add-existing').textContent=d?`Copies already in this deck across all zones and printings: ${deckCardCopies(d,card)}.`:'Choose a deck to see its existing copies.';
+    };
+    $('#add-destination').onchange=showCopies;
+    showCopies();
+  }
+  $('#deck-card-cancel').onclick=back || closeDialog;
+  finish.onchange=showPrice;
+  showFinishes(edit?.entry.finish ?? source?.entry.finish);
+  mountPrintings(state,showFinishes);
+  $('#deck-card-form').onsubmit=e=>{
+    e.preventDefault();
+    try{
+      const d=edit?.deck || destination();
+      if(!d)throw Error('Choose an available destination deck.');
+      if(!finish.value)throw Error('Choose an available finish.');
+      if(edit && (!d.cards.includes(edit.entry)||entryKey(edit.entry)!==edit.key))throw Error('This entry changed. Reopen it from the deck.');
+      if(source && (!decks.includes(source.deck)||!source.deck.cards.includes(source.entry)))throw Error('The source entry is no longer available.');
+      const qty=edit?0:Number($('#add-quantity').value);
+      const targetZone=edit?zone:$('#add-zone').value;
+      const primary=edit?'':$('#add-primary').value;
+      const selection={card:state.card,finish:finish.value,primary};
+      const changed=changeNamedDeck(d,target=>{
+        if(edit)return setEntryPrinting(target,edit.key,state.card.id===edit.entry.card.id?edit.entry.card:state.card,finish.value);
+        if(source)return copyEntryToDeck(source.deck,source.key,target,qty,targetZone,selection);
+        return addDeckCopies(target,state.card,qty,targetZone,finish.value,primary);
+      });
+      if(back)back();
+      else {
+        closeDialog();
+        if(edit)focusCardEntry(d,entryKey(changed));
+        if(source)focusCardEntry(source.deck,source.key);
+        if(!edit&&!source&&typeof CSS!=='undefined')document.querySelector('[data-add="'+CSS.escape(card.id)+'"]')?.focus();
+      }
+      toast(storageError || (edit?'Printing and finish saved.':`Added ${qty} ${qty===1?'copy':'copies'} to ${d.name} · ${ZONES[targetZone]}`));
+    }catch(error){$('#deck-card-error').textContent=error.message;}
+  };
 }
 
 async function fetchCollection(values,key='names') {const cards=[],missing=[];for(let i=0;i<values.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[key]:values.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x[key==='ids'?'id':'name']));}return {cards,missing};}
@@ -1704,10 +1746,9 @@ function importDialog(target=current()){
     if(form.isConnected===false||$('#dialog').open===false)return;
     if(target&&!decks.includes(target))throw new Error('The destination deck no longer exists.');
     if(!target&&decks.length>=200)throw new Error('Maximum 200 decks per workspace.');
-    const destination=target||blankDeck(name,format),merged=structuredClone(destination.cards);
-    for(const a of additions){const found=merged.find(x=>entryKey(x)===entryKey(a));if(found){found.qty+=a.qty;if(found.qty>500)throw new Error('Maximum 500 copies per card.');}else merged.push(a);}
-    if(merged.length>1000)throw new Error('Maximum 1000 card entries per deck.');
-    destination.cards=merged;destination.updated=new Date().toISOString();if(!target)decks.push(destination);save();$('#dialog').close();openDeck(destination.id);toast(`${additions.reduce((n,e)=>n+e.qty,0)} cards imported`);
+    const destination=target||blankDeck(name,format),staged={cards:structuredClone(destination.cards)};
+    for(const {card,qty,zone} of additions)addDeckCopies(staged,card,qty,zone);
+    destination.cards=staged.cards;destination.updated=new Date().toISOString();if(!target)decks.push(destination);save();$('#dialog').close();openDeck(destination.id);toast(`${additions.reduce((n,e)=>n+e.qty,0)} cards imported`);
   }catch(error){form.querySelector('#import-error').textContent=error.message;}finally{pending=false;button.disabled=false;button.textContent=review?'Import reviewed cards':'Review import';if(review&&form.isConnected!==false)button.focus();}};
 }
 function restore(){
@@ -1783,9 +1824,10 @@ function refresh(d=current()) {
       }
       if(problems.length)throw Error(problems.slice(0,6).join(' ')+(problems.length>6?' Plus '+(problems.length-6)+' more.':'')+' Stored data kept. Retry legality refresh.');
       if (d.cards.filter(e=>zoneFor(e)!=='maybeboard').some(e=>!entries.some(({entry,card})=>entry===e && card===e.card))) state.signature='';
+      const legalityUpdatedAt=new Date().toISOString();
       for (const {entry,card} of relevant) {
         // Only patch the surviving original card; quantities, roles, zones and printing stay live.
-        if (d.cards.includes(entry) && entry.card===card) entry.card={...card,legalities:byId.get(card.id).legalities};
+        if (d.cards.includes(entry) && entry.card===card) entry.card={...card,legalities:byId.get(card.id).legalities,legalityUpdatedAt};
       }
       state.status='fresh';state.time=Date.now();save();
       setTimeout(()=>{if(current()===d)render();},300_000);

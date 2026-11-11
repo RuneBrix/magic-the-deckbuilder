@@ -9,7 +9,11 @@ test.beforeEach(async({page,browser},testInfo)=>{
   });
 });
 
-const savedCards=page=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].cards);
+// Moving through Maybeboard intentionally refreshes legality; retain all other data in comparisons.
+const savedCards=page=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].cards.map(entry=>{
+  const {legalityUpdatedAt,...card}=entry.card;
+  return {...entry,card};
+}));
 
 async function openDeck(page){
   await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
@@ -81,14 +85,13 @@ test('optional zones transition in every layout and tracker without changing oth
     const heading=tracker.getByRole('heading',{name:new RegExp(`^${zone} ·`)});
     await expect(heading).toHaveCount(0);
     await tracker.getByRole('button',{name:'Smoke Card 2',exact:true}).click();
-    await page.locator('#detail-zone').selectOption(zone==='Sideboard'?'sideboard':'maybeboard');
     await page.locator('#detail-add').click();
+    await page.locator('#add-zone').selectOption(zone==='Sideboard'?'sideboard':'maybeboard');
+    await page.getByRole('button',{name:'Add card(s) to deck',exact:true}).click();
     await page.keyboard.press('Escape');
     await expect(heading).toContainText(`${zone} · 1`);
     const section=heading.locator('..');
-    await section.getByRole('button',{name:'Smoke Card 2',exact:true}).click();
-    await page.locator('#detail-remove').click();
-    await page.keyboard.press('Escape');
+    await section.getByRole('button',{name:`Remove one Smoke Card 2 from ${zone}`,exact:true}).click();
     await expect(heading).toHaveCount(0);
   }
   expect(await savedCards(page)).toEqual(original);

@@ -246,11 +246,12 @@ test('adding with no tracker requires a destination and never changes the select
   assert.match(w.node('#dialog').innerHTML,/Destination deck/);
   assert.match(w.node('#dialog').innerHTML,/Main deck/);
   w.node('#add-destination').value='';
-  w.node('#add-destination-form').onsubmit({preventDefault(){}});
-  assert.match(w.node('#add-destination-error').textContent,/Choose a destination/);
+  w.node('#deck-card-form').onsubmit({preventDefault(){}});
+  assert.match(w.node('#deck-card-error').textContent,/Choose an available destination/);
   assert.equal(w.writes.length,0);
   w.node('#add-destination').value='second';
-  w.node('#add-destination-form').onsubmit({preventDefault(){}});
+  w.node('#add-zone').value='main';w.node('#add-primary').value='';w.node('#add-quantity').value='1';
+  w.node('#deck-card-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[1].cards.at(-1).qty',w.context),1);
   assert.equal(vm.runInContext('decks[1].cards.at(-1).zone',w.context),'main');
   assert.equal(vm.runInContext('decks[0].cards.length',w.context),a.cards.length);
@@ -259,8 +260,8 @@ test('adding with no tracker requires a destination and never changes the select
   vm.runInContext("chooseDestination('new')",w.context);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
   vm.runInContext("decks[1].cards.at(-1).qty=500",w.context);
-  w.node('#add-destination-form').onsubmit({preventDefault(){}});
-  assert.match(w.node('#add-destination-error').textContent,/Maximum 500/);
+  w.node('#deck-card-form').onsubmit({preventDefault(){}});
+  assert.match(w.node('#deck-card-error').textContent,/Maximum 500/);
   assert.equal(vm.runInContext('decks[1].cards.at(-1).qty',w.context),500);
   core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context)));
 });
@@ -292,9 +293,14 @@ test('adding the first card creates an explicit destination without starting tra
   w.node('#create-destination').onclick();
   formValues(w,{name:'First deck',format:'modern'});
   w.node('#deck-form').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext('decks[0].cards.length',w.context),0);
+  assert.match(w.node('#dialog').innerHTML,/value="[^"]+" selected>First deck/);
+  w.node('#add-destination').value=vm.runInContext('decks[0].id',w.context);
+  w.node('#add-zone').value='main';w.node('#add-primary').value='';w.node('#add-quantity').value='1';
+  w.node('#deck-card-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[0].cards[0].card.id',w.context),'new');
   assert.equal(vm.runInContext('decks[0].cards[0].zone',w.context),'main');
-  assert.equal(vm.runInContext('view',w.context),'explore');
+  assert.equal(vm.runInContext('view',w.context),'deck');
   assert.equal(vm.runInContext('tracker.id',w.context),'');
   core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context)));
 });
@@ -379,7 +385,7 @@ test('results, details and help expose ordinary card actions without candidate o
   vm.runInContext("inspect('Found')",w.context);
   assert.doesNotMatch(w.node('#dialog').innerHTML,/candidate|compare/i);
   assert.match(w.node('#detail-facts').innerHTML,/Found/);
-  assert.match(w.node('#detail-deck').innerHTML,/detail-add/);
+  assert.match(w.node('#dialog').innerHTML,/Add card to deck/);
   await w.node('#app').click({target:{closest:()=>({dataset:{action:'help'}})}});
   assert.doesNotMatch(w.node('#dialog').innerHTML,/candidate|compare/i);
   assert.equal(w.writes.length,0);
@@ -388,7 +394,8 @@ test('results, details and help expose ordinary card actions without candidate o
 test('exploration destination chooser adds directly to Maybeboard without changing tracking or playing totals', () => {
   const w=workspace({savedDecks:JSON.stringify([editorDeck()]),savedTracker:JSON.stringify({id:''})});w.context.card=editorCard('Bench idea');
   vm.runInContext("results=[card];chooseDestination(card.id)",w.context);assert.match(w.node('#dialog').innerHTML,/id="add-zone"/);assert.match(w.node('#dialog').innerHTML,/Maybeboard/);
-  w.node('#add-destination').value='editor';w.node('#add-zone').value='maybeboard';w.node('#add-destination-form').onsubmit({preventDefault(){}});
+  w.node('#add-destination').value='editor';w.node('#add-zone').value='maybeboard';w.node('#add-primary').value='';w.node('#add-quantity').value='1';
+  w.node('#deck-card-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[0].cards.at(-1).zone',w.context),'maybeboard');assert.equal(vm.runInContext('tracker.id',w.context),'');assert.equal(vm.runInContext('stats(decks[0]).total',w.context),3);
   assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
 });
