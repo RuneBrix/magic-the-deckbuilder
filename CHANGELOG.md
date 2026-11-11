@@ -1,5 +1,11 @@
 # Changelog
 
+## Zone and navigation acceptance
+
+- Keep newly opened card menus available when a delayed focus/layout scroll leaves their anchor unchanged; moving the anchor still dismisses the menu (#61).
+- Let phone trackers grow with their rows and reserve room below their final quantity controls for the floating tracker shortcut (#61).
+- Verify empty/populated optional-zone transitions in every deck layout and the tracker, with preserved data and destinations (#53).
+
 ## Primary functions and reverse faces
 
 - Edit one primary deck function while retaining all stored memberships; grouping, filtering and statistics use the primary (#100).

@@ -29,6 +29,8 @@ API requests receive deterministic fixture responses, and external requests rece
 ## Coverage and failure evidence
 
 - Deck navigation, scrolling/sticky navigation, Statistics and Ownership & budget rendering, and horizontal overflow.
+- Optional Sideboard/Maybeboard hidden → populated → hidden transitions in all four deck layouts and the tracker; populated zero-filter-match sections, retained destinations and unchanged unrelated entries.
+- Long library/editor/Explore pages, scrollable Settings, wrapped-header measurement, keyboard/touch menus, focused controls above fixed overlays, desktop preview/tracker offsets and final phone tracker-control hit testing. The acceptance tests attach exact browser/version, viewport, origin and appearance.
 - Ownership & budget zone selection with keyboard focus and reload preservation, all-zone rows, and comparisons with missing EUR quotes.
 - Desktop drag destination sizing, gap hit testing, edge scrolling and cancellation. Keyboard and emulated touch card menus retain deletion confirmation.
 - Card-control contrast across all palettes, keyboard and touch flyouts, and commander minus confirmation from the editor, tracker and card details.

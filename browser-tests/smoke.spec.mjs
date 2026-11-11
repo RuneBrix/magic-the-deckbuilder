@@ -407,6 +407,15 @@ test('deck drag destinations stay still across gaps and let the page scroll outs
     const zone = await sideboard.boundingBox();
     expect(newFunction.width).toBeCloseTo(zone.width, 0);
     expect(newFunction.height).toBeCloseTo(zone.height, 0);
+    const nav=await page.locator('.workspace-nav').boundingBox(),strip=await dock.boundingBox();
+    expect(nav.y).toBeCloseTo(0,0);
+    expect(strip.y).toBeGreaterThanOrEqual(nav.y+nav.height);
+    for(const label of ['Move to Sideboard','Move to Maybeboard']){
+      const target=dock.getByText(label,{exact:true});
+      expect(await target.evaluate(el=>{
+        const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));
+      })).toBe(true);
+    }
     await noPageOverflow(page);
   };
 
