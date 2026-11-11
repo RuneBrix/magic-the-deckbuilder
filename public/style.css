@@ -766,7 +766,7 @@ dialog:has(.function-discovery){width:690px}
 #tracker-resize:hover,#tracker-resize:focus-visible{background:var(--soft);outline:2px solid var(--focus);outline-offset:0}
 #add-destination-form{margin-top:20px}
 #add-destination-error{color:var(--danger);margin:12px 0}
-@media(max-width:960px){#tracker-resize{display:none}.explorer{padding-bottom:70px}#deck-tracker{min-height:0;height:auto}#deck-tracker .panel-content{overflow:visible}.mobile-deck-jump{max-width:calc(100vw - 32px);white-space:normal;text-align:left}}
+@media(max-width:960px){#tracker-resize{display:none}.explorer{padding-bottom:70px}#deck-tracker{min-height:0;height:auto}#deck-tracker .panel-content{overflow:visible;max-height:none;padding-bottom:96px}.mobile-deck-jump{max-width:calc(100vw - 32px);white-space:normal;text-align:left}}
 
 @media(max-width:600px){.explorer h1{font-size:30px}.exploration-target{align-items:center;gap:10px}.exploration-target>label{width:100%}.exploration-target>span{min-width:0}.results-heading{gap:12px}.results-controls select{max-width:140px}.results-heading h2{font-size:22px}.card-meta{flex-wrap:wrap}.choose-deck{font-size:11px}}
 

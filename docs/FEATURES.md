@@ -40,7 +40,7 @@ This inventory describes what the app does today. GitHub Issues track future wor
 
 ## Validation baseline
 
-The [Statistics tool board](DECK_WORKSPACE.md#viewing-and-scrolling-follow-ups-53--57--61) has desktop and narrow Chromium coverage in light and dark modes ([#57](https://github.com/RuneBrix/magic-the-deckbuilder/issues/57)). GitHub tracks the remaining browser checks for optional empty zones ([#53](https://github.com/RuneBrix/magic-the-deckbuilder/issues/53)) and sticky navigation ([#61](https://github.com/RuneBrix/magic-the-deckbuilder/issues/61)).
+The [Statistics tool board](DECK_WORKSPACE.md#viewing-and-scrolling-follow-ups-53--57--61) has desktop and narrow Chromium coverage in light and dark modes ([#57](https://github.com/RuneBrix/magic-the-deckbuilder/issues/57)). Optional empty zones ([#53](https://github.com/RuneBrix/magic-the-deckbuilder/issues/53)) and sticky navigation ([#61](https://github.com/RuneBrix/magic-the-deckbuilder/issues/61)) also have Chromium desktop/phone light/dark acceptance at localhost:3000, including all four deck layouts, tracker transitions, overlays and desktop drag destinations. The navigation batch fixes delayed-scroll menu dismissal and covered final phone tracker controls. See the linked workspace contract for dates, viewport sizes and platform limits.
 
 Historical baseline only: the initial MVP passed eight automated checks (`npm test`) and live browser checks for search, card addition, reload persistence, atomic imports, and desktop/mobile layouts. These are the baseline, not a claim of full feature coverage. New fixes need validation appropriate to their behavior.
 

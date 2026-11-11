@@ -862,6 +862,7 @@ function openCardActions(key,trigger) {
   const d=current(),entry=d?.cards.find(e=>entryKey(e)===key);if(!entry)return;
   const menu=$('#card-actions');cardActionTrigger=trigger;menu.dataset.deck=d.id;menu.dataset.entry=key;
   renderCardActions();trigger.setAttribute('aria-expanded','true');
+  const {top,left}=trigger.getBoundingClientRect();menu.dataset.anchor=JSON.stringify([top,left]);
 }
 function focusCardEntry(d,key) {
   if(current()!==d || typeof CSS==='undefined')return;
@@ -940,7 +941,16 @@ $('#card-actions').addEventListener('keydown',e=>{
 });
 addEventListener('resize',()=>{if($('#card-actions').matches(':popover-open'))positionCardActions();});
 $('#card-actions').addEventListener('toggle',e=>{if(e.target===$('#card-actions')&&e.newState==='closed'){closeCardSubmenu();cardActionTrigger?.setAttribute('aria-expanded','false');}});
-addEventListener('scroll',e=>{const menu=$('#card-actions');if(!menu.contains(e.target))closeCardActions(false);else if(e.target===menu)positionCardSubmenu();},true);
+addEventListener('scroll',e=>{
+  const menu=$('#card-actions');
+  if(!menu.matches(':popover-open'))return;
+  if(!menu.contains(e.target)){
+    // A queued focus/layout scroll can arrive after the menu already measured its final anchor.
+    const {top,left}=cardActionTrigger.getBoundingClientRect();
+    if(menu.dataset.anchor===JSON.stringify([top,left]))return;
+    closeCardActions(false);
+  }else if(e.target===menu)positionCardSubmenu();
+},true);
 const formatLabel = format => format.charAt(0).toUpperCase()+format.slice(1);
 function deckMenu(d) {
   return `<details class="deck-menu" name="deck-actions"><summary aria-label="Deck actions for ${esc(d.name)}" title="Deck actions">${icon('more',20)}</summary><div class="deck-menu-actions">${[['rename','Rename / format'],['import','Import cards'],['export','Export deck'],['duplicate','Duplicate'],['delete','Delete deck…']].map(([action,label])=>`<button class="${action==='delete'?'danger':''}" data-manage="${action}" data-target="${esc(d.id)}">${label}</button>`).join('')}</div></details>`;
