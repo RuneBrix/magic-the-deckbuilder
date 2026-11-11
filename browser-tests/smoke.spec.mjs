@@ -14,6 +14,76 @@ async function dialogFits(page) {
 }
 test.beforeEach(async ({ page }) => prepareApp(page));
 
+test('primary function editing and temporary reverse faces preserve stored card data', async ({page,isMobile},testInfo)=>{
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2', data=JSON.parse(localStorage.getItem(key));
+    const entry=data.decks[0].cards[1];
+    entry.tags=['Draw','Legacy secondary'];
+    delete entry.card.image_uris;
+    entry.card.card_faces=[
+      {name:'Smoke front',image_uris:{normal:'https://cards.scryfall.io/front.jpg'}},
+      {name:'Smoke reverse',image_uris:{normal:'https://cards.scryfall.io/back.jpg'}},
+    ];
+    data.decks[0].cards=data.decks[0].cards.slice(0,3);
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.route('https://cards.scryfall.io/{front,back}.jpg',route=>route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="488" height="680"><rect width="488" height="680" fill="${route.request().url().includes('back')?'#263c61':'#326747'}"/><text x="30" y="340" fill="white" font-size="48">${route.request().url().includes('back')?'Reverse face':'Front face'}</text></svg>`}));
+  await page.reload();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  await page.getByRole('tab',{name:'Checks',exact:true}).click();
+  await expect(page.locator('.freshness')).toContainText('Legality refreshed this session');
+  await page.getByRole('tab',{name:'Cards',exact:true}).click();
+  const row=page.locator('.visual-card').filter({has:page.getByRole('button',{name:'Inspect Smoke Card 2 in Main deck',exact:true})});
+  const flip=row.getByRole('button',{name:'Flip Smoke Card 2',exact:true});
+  const before=await row.getAttribute('data-preview-entry');
+  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].cards);
+  const original=await stored();
+  await flip.focus();await flip.press('Enter');
+  await expect(row.locator('.card-art img')).toHaveAttribute('src',/back.jpg$/);
+  await expect(flip).toHaveAttribute('aria-pressed','true');
+  await expect(flip).toBeFocused();
+  if(isMobile){
+    const box=await flip.boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(44);expect(box.height).toBeGreaterThanOrEqual(44);
+    await flip.tap();await expect(row.locator('.card-art img')).toHaveAttribute('src',/front.jpg$/);
+    await flip.tap();await expect(row.locator('.card-art img')).toHaveAttribute('src',/back.jpg$/);
+  }
+  if(!isMobile){
+    const preview=page.locator('#deck-card-preview');
+    await preview.getByRole('button',{name:'Flip Smoke Card 2',exact:true}).click();
+    await expect(preview.locator('img')).toHaveAttribute('alt','Smoke reverse');
+    await page.getByRole('heading',{name:'Smoke Garden'}).hover();
+    await expect(preview.locator('img')).toHaveAttribute('src',/front.jpg$/);
+  }
+  await page.locator('#editor-layout').focus();
+  await expect(row.locator('.card-art img')).toHaveAttribute('src',/front.jpg$/);
+  expect(await row.getAttribute('data-preview-entry')).toBe(before);
+  expect(await stored()).toEqual(original);
+  await page.screenshot({path:testInfo.outputPath('card-faces.png'),fullPage:true});
+  await page.locator('#editor-layout').selectOption('visual-vertical');
+  await flip.focus();await flip.press('Space');
+  await expect(row.locator('.card-art img')).toHaveAttribute('src',/back.jpg$/);
+  await page.locator('#editor-layout').selectOption('text-horizontal');
+  await expect(page.locator('[data-flip-card]')).toHaveCount(0);
+  const entry=page.locator('.text-card').filter({has:page.getByRole('button',{name:'Smoke Card 2',exact:true})});
+  await entry.getByRole('button',{name:'Card actions for Smoke Card 2 in Main deck',exact:true}).press('Enter');
+  await page.getByRole('menuitem',{name:/Assign card to function/}).press('Enter');
+  await page.getByRole('menuitem',{name:'Add new function…',exact:true}).press('Enter');
+  await page.getByRole('textbox',{name:'Function name',exact:true}).fill('Removal');
+  await page.getByRole('button',{name:'Create and assign',exact:true}).click();
+  expect((await stored())[1].tags).toEqual(['Removal','Draw','Legacy secondary']);
+  await page.getByRole('button',{name:'Smoke Card 2',exact:true}).click();
+  await expect(page.getByRole('textbox',{name:'Primary function',exact:true})).toHaveCount(0);
+  await dialogFits(page);
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab',{name:'Statistics',exact:true}).click();
+  await expect(page.locator('#app')).not.toContainText('Legacy secondary');
+  await page.reload();
+  expect((await stored())[1].tags).toEqual(['Removal','Draw','Legacy secondary']);
+  expect((await stored())[1].card.card_faces).toEqual(original[1].card.card_faces);
+  await noPageOverflow(page);
+});
+
 test('deck library uses available width and commander suggestions are optional until creation', async ({ page, isMobile }) => {
   if (!isMobile) await page.setViewportSize({ width: 1920, height: 900 });
   const columns = await page.locator('.deck-library').evaluate(grid => getComputedStyle(grid).gridTemplateColumns.split(' ').length);
@@ -262,6 +332,61 @@ test('budget zones keep every card visible and compare known costs across scope 
   await expect(comparison).toContainText('over budget from known costs alone');
 });
 
+test('budget compares selected and cheapest printings without changing deck cards', async ({ page }, testInfo) => {
+  await page.evaluate(() => {
+    const key = 'arcana.workspace.v2';
+    const data = JSON.parse(localStorage.getItem(key));
+    const [commander, main, maybe] = data.decks[0].cards;
+    commander.card.finishes = ['foil'];
+    commander.card.cardmarket_id = 41;
+    main.card.prices.eur = '2.25';
+    maybe.zone = 'maybeboard';
+    data.decks[0].cards = [commander, main, maybe];
+    localStorage.setItem(key, JSON.stringify(data));
+  });
+  await page.reload();
+  let attempts = 0;
+  let release;
+  const waitForCancel = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/search?**', async route => {
+    if (++attempts === 1) await waitForCancel;
+    const query = new URL(route.request().url()).searchParams.get('q');
+    expect(query).toContain('game:paper lang:en is:nonfoil unique:prints');
+    for (const card of cards.slice(0,3)) expect(query).toContain(`oracleid:${card.oracle_id}`);
+    const data = ['0.50','0.33','0.25'].map((eur,i)=>({...cards[i],games:['paper'],set_name:'Cheaper set',prices:{eur}}));
+    await route.fulfill({ json: { data, has_more: false } });
+  });
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.getByRole('tab', { name: 'Checks', exact: true }).click();
+  await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
+  await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
+  const before = await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
+  const check = page.getByRole('button', { name: 'Check cheapest printings', exact: true });
+  const cancel = page.getByRole('button', { name: 'Cancel price check', exact: true });
+  const request = page.waitForRequest('**/api/search?**');
+  await check.press('Enter');
+  await request;
+  await expect(cancel).toBeFocused();
+  await cancel.press('Enter');
+  release();
+  await expect(page.getByText('Cheapest-printing check cancelled.')).toBeVisible();
+  await check.press('Enter');
+  await expect(page.getByText(/Cheapest printings checked/)).toBeVisible();
+  await expect(check).toBeFocused();
+  const row = page.getByRole('row').filter({ hasText: 'Smoke Card 2' });
+  await expect(row.getByRole('cell').nth(4)).toContainText(/2[.,]25/);
+  await expect(row.getByRole('cell').nth(5)).toContainText(/4[.,]50/);
+  await expect(row.getByRole('cell').nth(6)).toContainText(/0[.,]33.*Cheaper set/);
+  await expect(page.getByRole('link', { name: 'Cardmarket' })).toHaveAttribute('href', /idProduct=41&isFoil=Y$/);
+  const cheapestTotal = page.locator('.planning-totals > div').filter({ hasText: 'Cheapest printings estimate' });
+  await expect(cheapestTotal).toContainText(/1[.,]16/);
+  expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(before);
+  await page.getByRole('checkbox', { name: 'Maybeboard' }).check();
+  await expect(cheapestTotal).toContainText(/1[.,]41/);
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('budget-comparison.png') });
+});
+
 test('deck drag destinations stay still across gaps and let the page scroll outside', async ({ page, isMobile }, testInfo) => {
   test.skip(isMobile, 'Direct dragging uses a desktop pointer');
   if (testInfo.project.name === 'desktop-dark') await page.setViewportSize({ width: 760, height: 720 });
@@ -286,6 +411,15 @@ test('deck drag destinations stay still across gaps and let the page scroll outs
     const zone = await sideboard.boundingBox();
     expect(newFunction.width).toBeCloseTo(zone.width, 0);
     expect(newFunction.height).toBeCloseTo(zone.height, 0);
+    const nav=await page.locator('.workspace-nav').boundingBox(),strip=await dock.boundingBox();
+    expect(nav.y).toBeCloseTo(0,0);
+    expect(strip.y).toBeGreaterThanOrEqual(nav.y+nav.height);
+    for(const label of ['Move to Sideboard','Move to Maybeboard']){
+      const target=dock.getByText(label,{exact:true});
+      expect(await target.evaluate(el=>{
+        const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));
+      })).toBe(true);
+    }
     await noPageOverflow(page);
   };
 
@@ -616,6 +750,97 @@ test('Explore fills available width and keeps selected functions inside their di
   }
   await page.getByRole('button', { name: 'Clear search and filters', exact: true }).click();
   await expect(page.locator('#search-output')).toBeEmpty();
+});
+
+test('function pages and related browsing preserve the search until a filter is applied', async ({ page }, testInfo) => {
+  const queries = [];
+  const exampleQuery = slug => `game:paper otag:${slug}`;
+  let removalAttempts = 0;
+  let releaseSweeper;
+  const waitForNavigation = new Promise(resolve => { releaseSweeper = resolve; });
+  await page.route('**/api/search?**', async route => {
+    const query = new URL(route.request().url()).searchParams.get('q');
+    queries.push(query);
+    if (query === exampleQuery('sweeper')) {
+      await waitForNavigation;
+      return route.fulfill({ json: { data: [cards[20]], total_cards: 1, has_more: false } });
+    }
+    if (query === exampleQuery('removal') && ++removalAttempts === 1) {
+      return route.fulfill({ status: 502, json: { error: 'Fixture unavailable' } });
+    }
+    return route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } });
+  });
+  await page.getByRole('button', { name: 'Explore cards' }).click();
+  const raw = page.locator('#raw');
+  await raw.fill('t:creature (otag:ramp OR otag:draw)');
+  await page.locator('#function-tags > summary').press('Enter');
+  const lookup = page.getByRole('searchbox', { name: 'Find a function' });
+  const grid = page.locator('.tag-options');
+  const tiles = grid.locator('li');
+  const pager = page.locator('#tag-page');
+  await lookup.fill('a');
+  await expect(tiles).toHaveCount(40);
+  await expect(tiles.first()).toContainText(/\d+ cards?/);
+  const phone = page.viewportSize().width < 600;
+  const geometry = await tiles.evaluateAll(nodes => nodes.map(node => {
+    const { x, y, width, height } = node.getBoundingClientRect();
+    return { x, y, width, height };
+  }));
+  expect(new Set(geometry.map(rect => rect.x)).size).toBe(phone ? 2 : 5);
+  expect(new Set(geometry.map(rect => rect.y)).size).toBe(phone ? 20 : 8);
+  expect(Math.max(...geometry.map(rect => rect.width)) - Math.min(...geometry.map(rect => rect.width))).toBeLessThan(1);
+  expect(Math.max(...geometry.map(rect => rect.height)) - Math.min(...geometry.map(rect => rect.height))).toBeLessThan(1);
+  const firstTag = await tiles.first().getByRole('button', { name: /relationships/ }).getAttribute('data-browse-tag');
+  await pager.focus();
+  await pager.press('ArrowDown');
+  await pager.press('Enter');
+  await expect(pager).toBeFocused();
+  await expect(pager).toHaveValue('2');
+  await expect(tiles.first().getByRole('button', { name: /relationships/ })).not.toHaveAttribute('data-browse-tag', firstTag);
+  await lookup.fill('a ');
+  await expect(pager).toHaveValue('1');
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('function-grid.png') });
+  expect(queries).toEqual([]);
+
+  await lookup.fill('sweeper');
+  const trigger = page.getByRole('button', { name: 'Browse sweeper relationships', exact: true });
+  await trigger.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Related functions' });
+  const heading = dialog.locator('#browsed-function');
+  await expect(heading).toBeFocused();
+  await expect(dialog.getByText('Loading example cards…')).toBeVisible();
+  await expect.poll(() => queries.includes(exampleQuery('sweeper'))).toBe(true);
+  await dialog.getByRole('button', { name: 'Removal', exact: true }).click();
+  await expect(dialog.getByText('Example cards are unavailable.')).toBeVisible();
+  releaseSweeper();
+  await dialog.getByRole('button', { name: 'Try again' }).click();
+  const examples = dialog.locator('.tag-example-grid li');
+  await expect(examples).toHaveCount(8);
+  await expect(examples.first()).toHaveText('Smoke Card 1');
+  await expect.poll(() => examples.locator('img').evaluateAll(images => images.filter(img => img.naturalWidth > 0).length)).toBe(8);
+  const rowPositions = await examples.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
+  expect(new Set(rowPositions).size).toBe(2);
+  await expect(dialog.getByText(/Direct taggings in the/)).toBeVisible();
+  await dialogFits(page);
+  await dialog.screenshot({ path: testInfo.outputPath('function-overlay.png') });
+  await dialog.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(heading).toHaveText(/board wipes|sweeper/i);
+  await dialog.getByRole('button', { name: 'Forward', exact: true }).click();
+  await expect(heading).toHaveText('Removal');
+  await dialog.getByLabel('Narrower functions').selectOption('sweeper');
+  await expect(heading).toBeFocused();
+  await expect(heading).toHaveText(/board wipes|sweeper/i);
+  await expect(raw).toHaveValue('t:creature (otag:ramp OR otag:draw)');
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await dialog.getByRole('button', { name: 'Add filter', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(raw).toHaveValue('t:creature (otag:ramp OR otag:draw OR otag:sweeper)');
+  await expect(trigger).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Remove sweeper filter', exact: true })).toHaveCount(2);
 });
 
 test('Explore panels submit independently and add unlisted functions inline', async ({ page }, testInfo) => {

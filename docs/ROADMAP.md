@@ -14,6 +14,6 @@
 
 D01 uses a dated [tag snapshot](TAG_TAXONOMY.md); live sync is absent. D02 retains [broadening](EFFECT_COMPARISON.md), with candidates/comparison removed by #47; scoring is undecided. D04 uses [portable files](PORTABLE_STORAGE.md), deferring cloud sync/accounts. D06 supports the selected [Archidekt text contract](DECKLIST_INTEROP.md), not every format. D08 uses [source launchers](STARTUP.md), deferring native packaging. D09 established the [retained visual system](../DESIGN.md).
 
-Browser verification for implemented empty-zone, statistics and persistent-navigation refinements (#53/#57/#61) remains required; [FEATURES.md](FEATURES.md#validation-baseline) records that limitation. Consult GitHub for live review state.
+Chromium acceptance evidence for empty-zone, statistics and persistent-navigation refinements (#53/#57/#61) is recorded in [FEATURES.md](FEATURES.md#validation-baseline), with remaining platform limits. Consult GitHub for live review state.
 
 New feedback becomes issues when requested. Select implementation scope from those issues, keep revisions in the same PR and merge after developer inspection and approval.

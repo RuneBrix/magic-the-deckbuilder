@@ -6,6 +6,8 @@ Inspect from a deck, Explore cards or Collection to open the same read-only card
 
 The first page of paper printings loads on open. **Load more printings** fetches one page at a time. The current printing stays available during loading and after a failed lookup. Retry uses the same page. Cards without a stored Oracle identity retain their original printing and explain the lookup limit. Responses for closed or replaced dialogs are ignored. **Add this card to collection** opens the collection editor. **Back to card details** restores the viewed printing and returns focus to the collection action.
 
+Functions remain private ordered `tags`: the first controls grouping, filtering and statistics. Secondary memberships remain stored and round-trip in JSON. Use the card menu to change the primary function.
+
 ## Adding copies
 
 **Add card to deck** from details, an Explore result, or the deck card menu uses the same confirmation form. The open or tracked deck is preselected for ordinary Add. Without a deck in context, choose a destination. **Add to…** and **Add to another deck…** start with an explicit destination choice. Choose the zone, printing, finish, optional primary function and quantity. The existing copy count covers the chosen deck across all zones, printings and finishes. Destination changes leave the tracked deck and viewed card in place.
@@ -16,7 +18,7 @@ Confirmation adds the entered quantity. Matching printing and finish copies in t
 
 Choose **Change in-deck card details** in an entry’s options menu. The form identifies the deck, zone, card and quantity. **Save printing and finish** applies to those copies and preserves quantity, zone, personal functions and the latest stored legality. If the same printing and finish already has a separate entry in that zone, choose a different version or use the deck’s quantity controls to combine copies deliberately.
 
-Both forms show the stored per-copy USD quote for the selected printing and finish. Nonfoil, foil and etched use their corresponding Scryfall fields. Missing quotes remain unavailable. The separate [Ownership & budget estimate](COLLECTION_BUDGETS.md) continues to use regular EUR quotes.
+Both forms show the stored per-copy USD quote for the selected printing and finish. Nonfoil, foil and etched use their corresponding Scryfall fields. Missing quotes remain unavailable. The separate [Ownership & budget estimate](COLLECTION_BUDGETS.md) uses regular or foil EUR quotes for each stored entry.
 
 ## Preservation and lookup
 

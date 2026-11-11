@@ -4,6 +4,21 @@ import vm from 'node:vm';
 import * as core from '../public/core.js';
 import { workspace, editorCard, editorDeck, formValues, chooseWorkspaceFile, startCardDrag, dropCard } from '../test-support/workspace.mjs';
 
+test('queued scrolls keep a newly positioned card menu open; moving its anchor dismisses it',()=>{
+  const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
+  vm.runInContext("openDeck('editor')",w.context);
+  let top=500;
+  w.context.trigger={setAttribute(){},getBoundingClientRect:()=>({top,left:200,right:250,bottom:top+36})};
+  vm.runInContext('openCardActions(entryKey(decks[0].cards[1]),trigger)',w.context);
+  const menu=w.node('#card-actions');
+  assert.equal(menu.popoverOpen,true);
+  w.events.scroll({target:{}});
+  assert.equal(menu.popoverOpen,true);
+  top-=50;
+  w.events.scroll({target:{}});
+  assert.equal(menu.popoverOpen,false);
+});
+
 test('deck action menus support arrow navigation, Escape return and outside dismissal', () => {
   const w=workspace();let focused=-1;
   const buttons=[0,1,2,3,4].map(i=>({focus(){focused=i;w.document.activeElement=this;}}));
@@ -58,7 +73,7 @@ test('function submenu lists only the named deck labels, assigns a primary witho
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   await click({cardAction:'function-menu'});
   const html=w.node('#card-submenu').innerHTML;
-  assert.match(html,/data-function="Draw"/);assert.match(html,/data-function="Ramp"/);
+  assert.match(html,/data-function="Draw"/);assert.doesNotMatch(html,/data-function="Ramp"/);
   assert.match(html,/data-function="Removal"[^>]*aria-checked="true"/);
   assert.match(html,/role="menuitemradio"/);
   assert.doesNotMatch(html,/Other deck only|<p\b/);

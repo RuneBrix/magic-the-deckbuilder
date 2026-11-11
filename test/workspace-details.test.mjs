@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { addDeckCopies, deckCardCopies, deckPrintingPrice, entryKey, exportDeckText, moveEntry, readWorkspaceFile, setEntryPrinting, workspaceFile } from '../public/core.js';
+import { addDeckCopies, copyEntryToDeck, deckCardCopies, deckPrintingPrice, entryKey, exportDeckText, moveEntry, readWorkspaceFile, setEntryPrinting, workspaceFile } from '../public/core.js';
 import { editorDeck, workspace } from '../test-support/workspace.mjs';
 
 const tick = () => new Promise(resolve=>setImmediate(resolve));
@@ -116,4 +116,18 @@ test('variant quantities, copies, finishes and function data round-trip while li
   assert.equal(deckPrintingPrice(updated.card,updated.finish).cents,50);
   assert.deepEqual(readWorkspaceFile(JSON.parse(JSON.stringify(workspaceFile([deck],[])))).decks,[deck]);
   assert.match(exportDeckText(deck),/Main deck\n6 Ramp spell/);
+});
+
+
+test('adding and copying variants retain an Unassigned primary and hidden memberships',()=>{
+  const source=editorDeck(),entry=source.cards[1];
+  entry.card=finishCard(entry.card);
+  entry.tags=['','Legacy secondary'];
+  addDeckCopies(source,entry.card,1,'main','regular');
+  assert.deepEqual(entry.tags,['','Legacy secondary']);
+  const target={...editorDeck(),id:'target',cards:[]};
+  copyEntryToDeck(source,entryKey(entry),target,1,'main',{finish:'foil',primary:''});
+  assert.deepEqual(target.cards[0].tags,['','Legacy secondary']);
+  addDeckCopies(target,entry.card,1,'main','foil','Draw');
+  assert.deepEqual(target.cards[0].tags,['Draw','Legacy secondary']);
 });

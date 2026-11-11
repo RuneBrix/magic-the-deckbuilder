@@ -4,11 +4,11 @@ import { queryFor, stats, drawProbability, legality, parseImport, exportDeckText
 const card=(name,type,cmc,identity=[],extra={})=>({id:name,oracle_id:name,name,type_line:type,cmc,color_identity:identity,colors:identity,oracle_text:'',legalities:{commander:'legal',modern:'legal',vintage:'legal'},...extra});
 const entry=(c,qty=1,extra={})=>({card:c,qty,tags:[],...extra});
 
-test('deck views filter every role and type, sort without mutation, and use command identity for Commander',()=>{
+test('deck views filter primary functions and type, sort without mutation, and use command identity for Commander',()=>{
   const d={format:'commander',cards:[entry(card('Leader','Legendary Creature',4,['G']),1,{zone:'command'}),entry(card('B','Artifact Creature',2,['U']),3,{zone:'main',tags:['Draw','Ramp']}),entry(card('A','Sorcery',1,['R']),2,{zone:'main',tags:['Ramp']})]};
   const before=JSON.stringify(d);
   assert.equal(primaryRole(d.cards[1]),'Draw');
-  assert.deepEqual(deckEntries(d,{role:'Ramp'}).map(e=>e.card.name),['A','B']);
+  assert.deepEqual(deckEntries(d,{role:'Ramp'}).map(e=>e.card.name),['A']);
   assert.deepEqual(deckEntries(d,{type:'Artifact'}).map(e=>e.card.name),['B']);
   assert.deepEqual(deckEntries(d,{order:'quantity'}).map(e=>e.qty),[3,2,1]);
   assert.deepEqual(deckEntries(d,{order:'mana'}).map(e=>e.card.cmc),[1,2,4]);
@@ -123,13 +123,14 @@ test('backup links only allow Scryfall HTTPS destinations',()=>{
 });
 
 
-test('deck text matching requires every case-insensitive term across names, types, categories and all personal functions', () => {
+test('deck text matching requires every case-insensitive term across names, types, categories and the primary function', () => {
   const d={cards:[entry(card('Elvish Mystic','Creature — Elf Druid',1),1,{tags:['Mana','Ramp']}),entry(card('Beast Within','Instant',3),2,{tags:['Removal']}),entry(card('Unknown','Artifact',2))]};
   const before=JSON.stringify(d);
-  assert.deepEqual(deckEntries(d,{search:'  ELF  ramp '}).map(e=>e.card.name),['Elvish Mystic']);
+  assert.deepEqual(deckEntries(d,{search:'  ELF  mana '}).map(e=>e.card.name),['Elvish Mystic']);
   assert.deepEqual(deckEntries(d,{search:'beast removal'}).map(e=>e.card.name),['Beast Within']);
   assert.deepEqual(deckEntries(d,{search:'unassigned'}).map(e=>e.card.name),['Unknown']);
   assert.deepEqual(deckEntries(d,{search:'elf removal'}),[]);
+  assert.deepEqual(deckEntries(d,{search:'ramp'}),[]);
   assert.equal(JSON.stringify(d),before);
 });
 

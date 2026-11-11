@@ -74,11 +74,13 @@ export function editEntry(deck, key, roles, zone) {
   return moved;
 }
 export function assignEntryFunction(deck, key, name) {
-  if(typeof name!=='string' || !name.trim() || name.trim().length>80 || name.includes(','))throw Error('Use one function name of 1–80 characters, without commas.');
+  if(typeof name!=='string' || name.trim().length>80 || name.includes(','))throw Error('Use one function name of at most 80 characters, without commas.');
   const entry=deck.cards.find(e=>entryKey(e)===key);
   if(!entry)throw Error('This card entry no longer exists.');
   name=name.trim();
-  return editEntry(deck,key,[name,...entry.tags.filter(t=>t!==name)].join(', '),zoneFor(entry));
+  if(name===entry.tags[0] || (!name&&!entry.tags.length))return entry;
+  entry.tags=[name,...entry.tags.filter(t=>t && t!==name)];
+  return entry;
 }
 export function copyEntryToDeck(source, key, target, qty, zone, selection) {
   if(source===target || source.id===target.id)throw Error('Choose another deck.');
@@ -96,7 +98,8 @@ export function addDeckCopies(deck, card, qty, zone, finish, primary='', inherit
   const candidate={card,qty,tags:[],zone,...(finish===undefined?{}:{finish})};
   const found=matchingEntry(deck,candidate);
   if(!found && deck.cards.length>=1000)throw Error('Maximum 1000 card entries per deck. Nothing added.');
-  const tags=[...new Set([primary.trim(),...(found?.tags ?? []),...inheritedTags].filter(Boolean))];
+  const memberships=[...new Set([...(found?.tags ?? []),...inheritedTags])];
+  const tags=primary.trim()?[primary.trim(),...memberships.filter(tag=>tag && tag!==primary.trim())]:memberships;
   if(found){
     found.qty+=qty;found.tags=tags;
     if(finish!==undefined)found.finish=finish;
@@ -196,8 +199,8 @@ export function deckEntries(deck, { type = '', role = '', search = '', order = '
     return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
   };
   return deck.cards.filter(e=>{
-    const text=[e.card.name,deckTypeLine(e.card),category(e.card),primaryRole(e),...e.tags].join(' ').toLocaleLowerCase('en');
-    return (!type || (TYPE_PRIORITY.includes(type)?cardTypes(e.card).includes(type):deckTypeLine(e.card).includes(type))) && (!role || e.tags.includes(role)) && terms.every(term=>text.includes(term));
+    const text=[e.card.name,deckTypeLine(e.card),category(e.card),primaryRole(e)].join(' ').toLocaleLowerCase('en');
+    return (!type || (TYPE_PRIORITY.includes(type)?cardTypes(e.card).includes(type):deckTypeLine(e.card).includes(type))) && (!role || primaryRole(e)===role) && terms.every(term=>text.includes(term));
   }).sort((a,b)=>{
     const av=value(a),bv=value(b);
     // Missing values always sort last, including in descending order.
@@ -271,7 +274,7 @@ export function stats(deck, { detailed = false } = {}) {
     const knownColors = Array.isArray(storedColors) ? storedColors.filter(color => typeof color === 'string' && /^[WUBRG]$/.test(color)) : [];
     const colors = knownColors.length ? knownColors : ['C'];
     result.types[type] = (result.types[type] || 0) + qty;
-    for (const tag of tags) result.tags[tag] = (result.tags[tag] || 0) + qty;
+    if(tags[0]) result.tags[tags[0]] = (result.tags[tags[0]] || 0) + qty;
     for (const c of colors) result.colors[c] += qty;
     const primary = detailed ? primaryRole({ tags }) : null;
     if (detailed) {
@@ -524,6 +527,17 @@ function parseCurrencyCents(value) {
   return Number.isSafeInteger(result) ? result : null;
 }
 export const parseEuroCents = parseCurrencyCents;
+export function parseEuroQuote(value) {
+  const cents = parseEuroCents(value);
+  // Keep totals exact even for a backup with 1,000 entries of 500 copies.
+  return cents !== null && cents <= 1_000_000_000 ? cents : null;
+}
+
+export function storedEuroPrice(entry) {
+  const finish = entry.finish ?? deckPrintingPrice(entry.card).finish;
+  const field = finish === 'regular' ? 'eur' : finish === 'foil' ? 'eur_foil' : null;
+  return { finish, field, cents: field ? parseEuroQuote(entry.card.prices?.[field]) : null };
+}
 
 export function collectionReport(deck, collection) {
   validateBackup([deck]);validateCollection(collection);
@@ -534,8 +548,9 @@ export function collectionReport(deck, collection) {
   for(const lot of collection){const key=matchKey(lot.card);if(key)available.set(key,(available.get(key)||0)+lot.qty);}
   let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0;
   const rows=entries.map(entry=>{
-    const key=matchKey(entry.card),zone=zoneFor(entry),included=zones.includes(zone),unitCents=parseEuroCents(entry.card.prices?.eur);
-    const row={entry,zone,included,demand:entry.qty,unitCents,identityResolved:Boolean(key)};
+    const key=matchKey(entry.card),zone=zoneFor(entry),included=zones.includes(zone);
+    const { cents: unitCents, finish } = storedEuroPrice(entry);
+    const row={entry,zone,included,demand:entry.qty,unitCents,finish,identityResolved:Boolean(key)};
     if(!included)return {...row,owned:null,missing:null};
     const have=available.get(key)||0,used=Math.min(entry.qty,have),needed=entry.qty-used;
     if(key)available.set(key,have-used);

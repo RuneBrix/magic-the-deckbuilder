@@ -6,6 +6,27 @@
 - Add a chosen quantity, printing, finish and primary function to an explicit deck and zone (#101).
 - Change a deck entry’s printing and finish with a separate confirmation and finish-specific USD quote (#102).
 
+## Zone and navigation acceptance
+
+- Keep newly opened card menus available when a delayed focus/layout scroll leaves their anchor unchanged; moving the anchor still dismisses the menu (#61).
+- Let phone trackers grow with their rows and reserve room below their final quantity controls for the floating tracker shortcut (#61).
+- Verify empty/populated optional-zone transitions in every deck layout and the tracker, with preserved data and destinations (#53).
+
+## Primary functions and reverse faces
+
+- Edit one primary deck function while retaining all stored memberships; grouping, filtering and statistics use the primary (#100).
+- Flip a double-faced card in visual stacks or the large preview, with temporary face state that resets on pointer/focus exit (#97).
+
+## EUR deck pricing
+
+- Compare stored unit and line costs with the cheapest quoted regular English paper printings in Ownership & budget (#111).
+- Use available foil EUR quotes for foil entries, keep saved quotes when refresh finds no replacement and link missing quotes to exact Cardmarket products when mapped (#109).
+
+## Browse by function
+
+- Page through 40 function matches at a time in a responsive grid with direct Scryfall tagging counts (#128).
+- Open Related to browse broader and narrower functions and preview up to eight paper-card matches before applying a filter (#130).
+
 ## Deck review
 
 - Compare colored mana costs and production in Statistics and show primary assignments under Card functions (#105).

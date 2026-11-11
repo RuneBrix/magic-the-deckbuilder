@@ -13,6 +13,10 @@ Deck grouping, typed filters, free-text type/subtype matching, primary type stat
 
 Invasion of Alara is Battle rather than its reverse-face Sorcery. Backup Plan is explicitly Conspiracy. Bonecrusher Giant remains Creature rather than Stomp's Instant type. Fire // Ice remains Instant. Type/subtype text search uses the selected type line; this does not change the unified Scryfall search language in Explore. Details still display the complete stored facts for both faces.
 
+## Temporary face viewing (#97)
+
+Visual deck stacks and the large desktop preview show an opposing-curved-arrow Flip button when the stored printing has safe front and second-face image URLs. Enter, Space or touch toggles the image and accessible pressed state. Leaving that card/preview with the pointer or keyboard focus restores the original face. Re-rendering also starts on the front. Text layouts omit the control, including in their preview. Single-image split/adventure records have no reverse-image control. Viewing never changes printing, quantity, grouping, stored face records or browser storage.
+
 ## Sources and fixtures
 
 Checked 1 November 2026 against Wizards' [current rules index](https://magic.wizards.com/en/rules) and its [Comprehensive Rules effective 25 September 2026](https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt), particularly 205.2a–b and 300.1–2 for the card-type list and multitype objects. The choice of one primary deck group is an application convention, not a requirement stated by those rules.

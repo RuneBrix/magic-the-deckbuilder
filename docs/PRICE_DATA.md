@@ -1,5 +1,23 @@
 # Price-data evidence for D07
 
+## Current EUR price coverage and comparison
+
+On 2026-11-10 three first pages of English paper Scryfall printing searches returned 175 printings each. This was an alphabetical sample, so the counts describe those pages only.
+
+| Printing sample | Regular EUR quotes | Foil EUR quotes | Cardmarket IDs |
+| --- | ---: | ---: | ---: |
+| Regular finish available | 174 | 117 | 175 |
+| Foil only | 0 | 157 | 158 |
+| Etched only | 0 | 0 | 175 |
+
+For example, Abrade `trc` #449 returned HTTP 200 with both EUR fields null and Cardmarket ID 919573. Foil-only Aang, Air Nomad `tle` #210 returned €0.87 in `eur_foil`. Etched-only Abaddon the Despoiler `40k` #319 had an exact Cardmarket ID and neither EUR quote field. A failed refresh is different from a successful response with a missing quote. In either case the app keeps any last usable quote for the same printing and finish. A failed exact-ID batch leaves the saved estimates intact. [Scryfall price fields](https://github.com/scryfall/api-types/blob/main/src/objects/Card/values/Prices.ts) · [Scryfall search API](https://scryfall.com/docs/api/cards/search)
+
+Cardmarket currently accepts no new API access applications. Its public daily price guide and product catalogue can be incorporated into apps without API credentials or extra permission. The Scryfall partnership already provides Cardmarket EUR data and exact product IDs where mapped. A separate guide import would require choosing a comparable price metric and verifying finish coverage, particularly for etched cards. Arcana uses `eur` and `eur_foil` from Scryfall and offers the documented exact-product URL for missing quotes. It does not use a regular quote to fill a foil or etched gap. The product redirect returned HTTP 403 in the research environment. [Cardmarket API access](https://help.cardmarket.com/en/cardmarket-api) · [Price guide announcement](https://news.cardmarket.com/en/Magic/were-making-the-price-guide-and-product-catalogue-available-for-download) · [Scryfall partnership and product links](https://insight.cardmarket.com/en/Articles/scryfall-x-cardmarket)
+
+The comparison uses Scryfall-searchable English paper printings with a regular finish and a valid regular EUR quote. It matches Oracle IDs, so names or collector numbers alone cannot select a comparable printing. A live two-ID query for Sol Ring and Arcane Signet returned 185 eligible-by-language/game/finish printings across pages. Arcana checks at most 200 distinct Oracle IDs in sorted batches of eight, with up to four pages per batch. An unfinished batch stays unpriced, even if it contains a candidate quote. The shared proxy serializes and caches identical requests for five minutes. Known costs use integer cents and deck quantities. Unknown copies are counted separately. The comparison covers quoted card prices, excluding shipping, taxes and availability. [Scryfall API access policy](https://scryfall.com/docs/faqs/i-m-having-trouble-accessing-the-scryfall-api-or-i-m-blocked-17) · [Cardmarket shipping](https://help.cardmarket.com/en/ShippingCosts)
+
+## Original D07 research
+
 Access date: 2026-11-01. Research for [collection ownership and deck budget planning (#7)](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7); this note records evidence and proposed boundaries, not shipped behavior.
 
 ## Verified first-party facts
