@@ -2,7 +2,7 @@
 
 ## Evidence from 13 November 2026
 
-This implementation batch runs in Windows 11 Home (10.0.26300), x64, Node v24.14.1. The native suite passed 217 tests with no failures; one opt-in live CSV lookup test was skipped. Server/launcher checks use disposable loopback ports. No personal browser storage or developer server was replaced.
+This implementation batch runs in Windows 11 Home (10.0.26300), x64, Node v24.14.1. The native suite passed 218 tests with no failures; one opt-in live CSV lookup test was skipped. Server/launcher checks use disposable loopback ports. No personal browser storage or developer server was replaced.
 
 Isolated Playwright Chromium 156.0.8078.4 checks cover desktop 1280×900 and emulated phone 390×844, light/dark. The new upload/companion flows passed in all four configurations: additive totals, replacement confirmation/cancellation, inventory/deck preservation, keyboard confirmation, companion selection/focus/clear and same-context reload. Detailed screenshots were inspected for desktop/phone light/dark. Existing browser smoke results and the exact assessed commit/hosted run are recorded in the implementing PR, so CI evidence stays tied to its actual revision.
 

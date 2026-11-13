@@ -114,6 +114,13 @@ test('separate successful uploads intentionally add again but a completed operat
   vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),8);
 });
 
+test('uploads never overwrite an unreadable saved workspace before explicit recovery',async()=>{
+  const w=workspace({savedWorkspace:'unreadable saved data'});formValues(w,{list:'2 New'});let lookups=0;
+  w.context.fetch=async()=>{lookups++;throw Error('Unexpected lookup');};
+  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(lookups,0);assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/storage warning/);
+});
+
 test('replacement needs confirmation, merges duplicate rows and persists before replacing inventory',async()=>{
   const d=editorDeck(),lot={card:{...editorCard('Forest'),finishes:['nonfoil']},qty:20,finish:'regular'},w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[lot]))});
   formValues(w,{list:'Quantity,Name,Finish,Condition\n1,Forest,Normal,NM\n2,Forest,Normal,NM'});
