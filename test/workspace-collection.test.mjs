@@ -92,7 +92,7 @@ test('CSV ignored columns require confirmation and syntax validation itself send
   const w=workspace();formValues(w,{list:'Quantity,Name,Purchase Price,Tags\n1,Forest,5,personal'});let calls=0;
   w.context.fetch=async()=>{calls++;return {ok:true,json:async()=>({data:[editorCard('Forest')]})};};
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');form.oninput();
-  assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Not counted: Purchase Price, Tags/);assert.equal(form.querySelector('button').disabled,true);
+  assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Not counted: Purchase Price, Tags/);assert.equal(w.node('#collection-upload-submit').disabled,true);
   await form.onsubmit({preventDefault(){}});assert.equal(calls,0);
   w.node('#collection-accept-ignored').checked=true;await form.onsubmit({preventDefault(){}});assert.equal(calls,1);assert.equal(vm.runInContext('collection.length',w.context),1);
 });
@@ -102,6 +102,69 @@ test('compatible stored collection printings eliminate upload network lookups',a
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([],[lot]))});formValues(w,{list:'3 Forest'});
   w.context.fetch=async()=>{throw Error('Network should not be needed');};vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('collection[0].qty',w.context),5);assert.equal(w.node('#collection-import-error').textContent||'','');
+});
+
+test('separate successful uploads intentionally add again but a completed operation cannot apply twice',async()=>{
+  const lot={card:{...editorCard('Forest'),finishes:['nonfoil']},qty:2,finish:'regular'};
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([editorDeck()],[lot]))});formValues(w,{list:'3 Forest'});
+  vm.runInContext('collectionImport()',w.context);const first=w.node('#collection-import').onsubmit;
+  w.node('#collection-import').oninput();assert.match(w.node('#collection-impact').textContent,/2 → 5/);assert.match(w.node('#collection-impact').textContent,/Re-uploading/);
+  await first({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),5);
+  await first({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),5);
+  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),8);
+});
+
+test('uploads never overwrite an unreadable saved workspace before explicit recovery',async()=>{
+  const w=workspace({savedWorkspace:'unreadable saved data'});formValues(w,{list:'2 New'});let lookups=0;
+  w.context.fetch=async()=>{lookups++;throw Error('Unexpected lookup');};
+  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(lookups,0);assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/storage warning/);
+});
+
+test('replacement needs confirmation, merges duplicate rows and persists before replacing inventory',async()=>{
+  const d=editorDeck(),lot={card:{...editorCard('Forest'),finishes:['nonfoil']},qty:20,finish:'regular'},w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[lot]))});
+  formValues(w,{list:'Quantity,Name,Finish,Condition\n1,Forest,Normal,NM\n2,Forest,Normal,NM'});
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');w.node('#collection-import-mode').value='replace';form.oninput({target:{id:'collection-import-mode'}});
+  assert.match(w.node('#collection-impact').textContent,/Replace 20 current copies in 1 lots with 3/);
+  assert.match(w.node('#dialog').innerHTML,/Save current workspace copy/);
+  await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
+  w.node('#collection-confirm-replace').checked=true;
+  const persist=w.context.localStorage.setItem;w.context.localStorage.setItem=()=>{assert.equal(vm.runInContext('collection[0].qty',w.context),20);throw Error('Quota');};
+  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),20);assert.match(w.node('#collection-import-error').textContent,/Quota/);
+  w.context.localStorage.setItem=persist;await form.onsubmit({preventDefault(){}});
+  const saved=JSON.parse(w.writes.at(-1)[1]);assert.deepEqual(saved.decks,[d]);assert.equal(saved.collection.length,1);assert.equal(saved.collection[0].qty,3);assert.equal(saved.collection[0].condition,'near_mint');assert.equal(saved.collection[0].finish,'regular');
+});
+
+test('cancelled and changed replacement lookups retain prior decks and inventory',async()=>{
+  for(const change of ['close','list','mode','inventory']){
+    const lot={card:editorCard('Owned'),qty:7,finish:'regular'},w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([editorDeck()],[lot]))});formValues(w,{list:'2 New'});
+    let release;w.context.fetch=async()=>{await new Promise(resolve=>release=resolve);return {ok:true,json:async()=>({data:[editorCard('New')]})};};
+    vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');w.node('#collection-import-mode').value='replace';w.node('#collection-confirm-replace').checked=true;
+    const pending=form.onsubmit({preventDefault(){}});await Promise.resolve();
+    if(change==='close')w.node('#dialog').open=false;
+    if(change==='list'){formValues(w,{list:'4 New'});form.oninput();}
+    if(change==='mode'){w.node('#collection-import-mode').value='add';form.oninput({target:{id:'collection-import-mode'}});}
+    if(change==='inventory')vm.runInContext('collection[0].qty=9',w.context);
+    release();await pending;
+    assert.equal(w.writes.length,0,change);assert.equal(vm.runInContext('collection[0].qty',w.context),change==='inventory'?9:7,change);assert.equal(vm.runInContext('decks.length',w.context),1);
+  }
+});
+
+test('unresolved/malformed replacement and failed additive writes retain the original inventory',async()=>{
+  for(const mode of ['replace','add']){
+    const lot={card:editorCard('Owned'),qty:7,finish:'regular'},w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([],[lot]))});formValues(w,{list:'0 Bad'});
+    vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');w.node('#collection-import-mode').value=mode;w.node('#collection-confirm-replace').checked=true;
+    await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
+    if(mode==='replace'){
+      formValues(w,{list:'0 Bad\n2 New'});form.oninput();w.node('#collection-accept-ignored').checked=true;
+      await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);assert.match(w.node('#collection-syntax').textContent,/every row/);
+    }
+    formValues(w,{list:'2 New'});form.oninput();w.context.fetch=async()=>({ok:true,json:async()=>({data:[],has_more:false})});
+    await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
+    w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('New')]})});vm.runInContext('collectionImport()',w.context);w.node('#collection-import-mode').value=mode;w.node('#collection-confirm-replace').checked=true;
+    w.context.localStorage.setItem=()=>{throw Error('Quota');};await w.node('#collection-import').onsubmit({preventDefault(){}});
+    assert.equal(vm.runInContext('collection[0].qty',w.context),7);assert.equal(vm.runInContext('collection.length',w.context),1);
+  }
 });
 
 test('collection Text is a sortable table with dates, price and contained actions',async()=>{
@@ -146,7 +209,7 @@ test('large collection review resumes after cooldown without repeating completed
   w.context.Date=class extends Date{static now(){return time;}};
   w.context.fetch=async(_url,options)=>{calls++;if(calls===2)return {ok:false,status:429,json:async()=>({error:'Paused',retryAfter:60})};return {ok:true,json:async()=>({data:JSON.parse(options.body).names.map(n=>editorCard(n)),not_found:[]})};};
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await form.onsubmit({preventDefault(){}});
-  assert.equal(calls,2);assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(form.querySelector('button').disabled,true);
+  assert.equal(calls,2);assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.node('#collection-upload-submit').disabled,true);
   await form.onsubmit({preventDefault(){}});assert.equal(calls,2);
   time+=61_000;await form.onsubmit({preventDefault(){}});assert.equal(calls,3);assert.equal(vm.runInContext('collection.length',w.context),80);
 });

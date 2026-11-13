@@ -4,6 +4,8 @@ import { COMMANDER_BRACKETS } from './commander-brackets.js';
 export { COMMANDER_BRACKETS };
 import { TAG_CATALOG } from './tag-catalog.js';
 import { replaceCondition, searchOptions } from './search.js';
+import { commanderRules, companionRules, companionCapable } from './construction-rules.js';
+export { companionCapable };
 export { parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES, COST_SYMBOLS, MAX_COST_AMOUNT } from './search.js';
 export { TAG_CATALOG };
 export const FORMATS = ['commander', 'standard', 'modern', 'pioneer', 'pauper', 'legacy', 'vintage'];
@@ -65,12 +67,19 @@ function matchingEntry(deck, candidate, except) {
     || (candidate.finish===undefined && deck.cards.find(entry=>entry!==except && entryKey(entry)===entryKey(candidate)));
 }
 export const zoneCount = (deck, zone) => count({ cards: deck.cards.filter(e => zoneFor(e) === zone) });
+export function setCompanion(deck, key) {
+  const entry = key === null ? null : deck.cards.find(entry => entryKey(entry) === key);
+  if (key !== null && (!entry || zoneFor(entry) !== 'sideboard' || !companionCapable(entry.card))) throw Error('Choose a companion-capable card from the Sideboard / outside-game area.');
+  for (const card of deck.cards) delete card.companion;
+  if (entry) entry.companion = true;
+}
 export function moveEntry(deck, key, zone) {
   if (typeof zone !== 'string' || !Object.hasOwn(ZONES, zone)) throw Error('Unknown deck zone.');
   const entry = deck.cards.find(e => entryKey(e) === key);
   if (!entry || zoneFor(entry) === zone) return entry;
   const target = matchingEntry(deck, {...entry,zone}, entry);
   if (deckCardCopies(deck, entry.card, zone) + entry.qty > 500) throw Error('Maximum 500 copies per card in a zone. Nothing moved.');
+  if (zone !== 'sideboard') delete entry.companion;
   if (target) { target.qty += entry.qty; target.tags = [...new Set([...target.tags, ...entry.tags])]; deck.cards = deck.cards.filter(e => e !== entry); }
   else { entry.zone = zone; entry.commander = zone === 'command'; }
   return target || entry;
@@ -419,15 +428,11 @@ export function legalityReport(deck) {
   const failed = [], unavailable = [], manual = [];
   const main = zoneCount(deck, 'main'), side = zoneCount(deck, 'sideboard'), command = zoneCount(deck, 'command');
   const commanders = deck.cards.filter(e => zoneFor(e) === 'command');
-  const commander = commanders[0];
   if (deck.format === 'commander') {
     if (main + command !== 100) failed.push(`Commander needs exactly 100 cards including the command zone (${main + command}/100).`);
     if (!command) failed.push('Choose a commander from your deck and move it to the command zone.');
     if (commanders.some(e => e.qty !== 1)) failed.push('Each commander must have exactly one copy in the command zone.');
-    if (commanders.length > 1) manual.push('Multiple commanders: pairing compatibility and combined identity require manual review.');
-    if (commander && !(/Legendary.*Creature/.test(commander.card.type_line) || /can be your commander/i.test(oracle(commander.card)))) manual.push(`${commander.card.name}: commander eligibility requires manual review.`);
-    if (side) manual.push('Commander sideboard/outside-game cards are not validated; they do not count toward the 100-card deck.');
-    manual.push('Commander coverage is partial: verify commander eligibility and pairings, basic-land types allowed by commander color identity, and special construction rules. The app does not fully check these rules.');
+    if (deck.cards.some(entry => zoneFor(entry)==='sideboard' && !entry.companion)) manual.push('Commander has no sideboard. Undesignated outside-game cards are stored for reference and are excluded from construction checks.');
   } else {
     if (main < 60) failed.push(`Main deck needs at least 60 cards (${main}/60); sideboard and command-zone cards do not count.`);
     if (side > 15) failed.push(`Sideboard has ${side} cards; maximum 15.`);
@@ -435,7 +440,15 @@ export function legalityReport(deck) {
     if (deck.format !== 'modern') manual.push('Only Modern has a supported construction rule set. This format uses shared size and copy checks; verify its format-specific construction rules yourself.');
   }
   const groups = new Map();
-  const checked = deck.cards.filter(e => zoneFor(e) !== 'maybeboard' && zoneFor(e) !== (deck.format === 'commander' ? 'sideboard' : 'command'));
+  const companion = deck.cards.find(entry => entry.companion === true);
+  const starting = deck.cards.filter(entry => zoneFor(entry)==='main' || deck.format==='commander' && zoneFor(entry)==='command');
+  const checked = deck.cards.filter(e => zoneFor(e) !== 'maybeboard' && zoneFor(e) !== (deck.format === 'commander' ? 'sideboard' : 'command') || e===companion);
+  if (deck.format==='commander') {
+    commanderRules(commanders, checked, {failed, unavailable, manual});
+    if (companion && starting.some(entry => entry.card.name===companion.card.name)) failed.push(`${companion.card.name}: a Commander companion cannot share a name with a card in the starting deck.`);
+    if (companion && companion.qty!==1) failed.push('Store exactly one copy of the designated Commander companion outside the deck.');
+  }
+  companionRules(companion, starting, deck.format, {failed, unavailable, manual});
   for (const entry of checked) {
     const { card } = entry, name = card.name.toLowerCase();
     if (!groups.has(name)) groups.set(name, []);
@@ -444,8 +457,6 @@ export function legalityReport(deck) {
     if (!status || !['legal','restricted','banned','not_legal'].includes(status) || (status === 'restricted' && deck.format !== 'vintage')) unavailable.push(`${card.name} (${ZONES[zoneFor(entry)]}): legality data unavailable. Refresh card data.`);
     else if (status !== 'legal' && status !== 'restricted') failed.push(`${card.name} (${ZONES[zoneFor(entry)]}): ${status.replaceAll('_',' ')} in ${deck.format} according to stored card legality.`);
     if (!hasOracle(card)) unavailable.push(`${card.name}: Oracle text unavailable; copy exceptions and special restrictions cannot be fully checked.`);
-    if (/\bCompanion\b/.test(oracle(card)) || card.keywords?.includes('Companion')) manual.push(`${card.name}: companion designation and starting-deck restrictions are not checked.`);
-    if (deck.format === 'commander' && commanders.length === 1 && commander && card.color_identity.some(c => !commander.card.color_identity.includes(c))) failed.push(`${card.name} (${ZONES[zoneFor(entry)]}) is outside your commander's color identity (${commander.card.name}).`);
   }
   for (const entries of groups.values()) {
     const qty = count({cards:entries}), card = (entries.find(e=>hasOracle(e.card)) || entries[0]).card, text = oracle(card);
@@ -493,9 +504,11 @@ export function validateBackup(data) {
     if (d.priceUpdatedAt !== undefined && (typeof d.priceUpdatedAt !== 'string' || !Number.isFinite(Date.parse(d.priceUpdatedAt)))) throw Error('Invalid price refresh date.');
     ids.add(d.id);
     const cards = new Set(), variants = new Set(), copies = new Map();
+    if (d.cards.filter(entry => entry?.companion === true).length > 1) throw Error('Designate at most one companion.');
     for (const e of d.cards) {
       if (!e || (e.zone !== undefined && (typeof e.zone !== 'string' || !Object.hasOwn(ZONES, e.zone))) || (e.commander !== undefined && typeof e.commander !== 'boolean') || (e.commander === true && e.zone !== undefined && e.zone !== 'command')) throw new Error('Invalid deck zone.');
       const c = e.card;
+      if (e.companion !== undefined && (typeof e.companion !== 'boolean' || e.companion && zoneFor(e)!=='sideboard')) throw Error('Invalid companion designation.');
       if (!c || typeof c.id !== 'string' || cards.has(entryKey(e)) || typeof c.name !== 'string' || typeof c.type_line !== 'string' || !Number.isFinite(c.cmc) || !Number.isInteger(e.qty) || e.qty < 1 || e.qty > 500 || !Array.isArray(c.color_identity) || !Array.isArray(e.tags) || e.tags.some(t => typeof t !== 'string' || t.length > 80)) throw new Error('Invalid card in deck backup.');
       if (c.colors !== undefined && (!Array.isArray(c.colors) || c.colors.some(x => !'WUBRG'.includes(x)))) throw new Error('Invalid card colors.');
       if (c.color_identity.some(x => typeof x !== 'string' || !/^[WUBRG]$/.test(x))) throw new Error('Invalid card identity.');

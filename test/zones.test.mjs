@@ -44,7 +44,7 @@ test('unknown data and companion rules are not mislabeled as confirmed violation
   const d=modern();d.cards.push(entry('Missing',1,'sideboard',{card:card('Missing',{legalities:{},oracle_text:undefined,card_faces:[]})}));
   let report=legalityReport(d);assert.ok(report.unavailable.length);assert.doesNotMatch(report.failed.join(' '),/Missing/);
   d.cards=d.cards.filter(e=>e.card.name!=='Missing');d.cards[1].card.oracle_text='Companion — Your starting deck contains only cards with even mana values.';
-  report=legalityReport(d);assert.deepEqual(report.failed,[]);assert.match(report.manual.join(' '),/companion designation/);
+  report=legalityReport(d);assert.deepEqual(report.failed,[]);assert.doesNotMatch(report.manual.join(' '),/companion designation/);
 });
 
 test('legacy commander mapping, main + command size and identity remain explicit and partial',()=>{

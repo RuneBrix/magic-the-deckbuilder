@@ -85,12 +85,12 @@ test('legality results distinguish stored violations, missing data and unsupport
   assert.match(html,/Deck legality issues found/);
   assert.match(html,/Failed checks · [1-9]/);
   assert.match(html,/Banned spell \(Main deck\): banned in commander according to stored card legality/);
-  assert.match(html,/&lt;Unknown&gt; \(Main deck\) is outside your commander&#39;s color identity \(Leader\)/);
+  assert.match(html,/&lt;Unknown&gt; is outside your commander&#39;s color identity \(Leader\)/);
   assert.match(html,/Data unavailable · 1/);
   assert.match(html,/does not mean the affected cards are banned/);
   assert.match(html,/Manual review · 1/);
-  assert.match(html,/basic-land types allowed by commander color identity/);
-  assert.match(html,/issues\/13/);
+  assert.match(html,/combined color identity and basic-land types/);
+  assert.match(html,/Designated companion/);
   assert.match(html,/Sideboard and Maybeboard are excluded/);
   assert.ok(html.indexOf('Failed checks')<html.indexOf('Commander bracket discussion'));
   assert.doesNotMatch(html,/check-summary check-success|None found|<Unknown>/);

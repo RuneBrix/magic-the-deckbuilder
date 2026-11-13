@@ -28,6 +28,8 @@ API requests receive deterministic fixture responses, and external requests rece
 
 ## Coverage and failure evidence
 
+- Collection upload Add/Replace quantities, repeat warnings, explicit replacement confirmation/cancellation, keyboard application and preserved decks; companion selection, focus, reload and clearing in Checks. Native tests separately exercise failed writes, stale operations and rule predicates.
+
 - Quick add three-character gating, bounded suggestions, keyboard/touch selection, stale-response rejection, Escape dismissal, shared confirmation, offline function assignment and reload preservation.
 - Deck navigation, scrolling/sticky navigation, Statistics and Ownership & budget rendering, and horizontal overflow.
 - Optional Sideboard/Maybeboard hidden → populated → hidden transitions in all four deck layouts and the tracker; populated zero-filter-match sections, retained destinations and unchanged unrelated entries.
