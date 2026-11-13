@@ -18,11 +18,11 @@ The implemented constructed checks require at least 60 main-deck cards, no more 
 
 ## Check categories and coverage
 
-**Failed checks** report confirmed violations of supported rules. **Data unavailable** reports missing or unrecognized stored legality/Oracle data; it does not label a card banned. **Manual review** reports unsupported rules, including companion cards, unknown copy-limit text and Commander cases. Passing supported checks is not tournament certification.
+**Failed checks** report confirmed violations of supported rules. **Data unavailable** reports missing or unrecognized stored legality/Oracle data; it does not label a card banned. **Manual review** reports unsupported rules, including unsupported companion predicates, unknown copy-limit text and special Commander cases. Passing supported checks is not tournament certification.
 
-Commander retains partial checks: 100 cards in main plus command zone, singleton/copy exceptions, one copy per commander and single-command identity. Sideboard/outside-game entries are excluded from the 100 and explicitly require review. Pair compatibility, multiple-command identity, current special commander eligibility and basic-land type restrictions remain in [follow-up #13](https://github.com/RuneBrix/magic-the-deckbuilder/issues/13). Nonstandard commander eligibility is reported as manual rather than conclusively rejected. No card is moved merely by changing formats.
+Commander and companion checks are implemented in bounded scope. Supported eligibility includes legendary creatures, legendary Vehicles, legendary Spacecraft with power/toughness, and explicit Oracle exceptions. Compatible partner variants combine color identities; basic-land types are checked even for empty stored identity. Commander still requires exactly 100 playing cards and one copy per commander. Special construction exceptions and pregame choices remain manual. See [supported cases, sources and limits](CONSTRUCTION_RULES.md).
 
-Companion designation and starting-deck predicates remain in [follow-up #14](https://github.com/RuneBrix/magic-the-deckbuilder/issues/14). Companion cards can be stored, but do not receive a false automatic approval. Other format presets use shared constructed checks with a visible format-specific manual-review notice; Modern is the rule family verified by this issue.
+Designate one existing Sideboard / outside-game card using the Checks selector. The companion uses a constructed sideboard slot but stays outside Commander's 100. Its stored legality/Commander identity and supported predicate are checked; the predicate includes commanders and excludes sideboard/Maybeboard. None clears the designation. Complete JSON preserves it; text does not. Zirda, unknown companions and special layouts remain manual; missing facts remain unavailable. Other format presets use shared constructed checks with a visible format-specific manual-review notice; Modern is the rule family verified by this issue.
 
 Tests include complete 60+15 constructed and 99+1 legacy Commander examples, across-zone name/copy and restriction cases, missing data, companions, old/new JSON backup behavior, atomic moves and text zone round trips. UI checks and platform limits are recorded in the implementation PR.
 
@@ -35,14 +35,15 @@ Printing ids are deduplicated and sorted, split into batches of at most 75, and 
 
 Maybeboard is outside the playing deck by the user’s explicit decision (#44): it contributes no statistics, construction failures/data warnings or Game Changer evidence. It is excluded from legality lookup and from in-flight response validation/patching if an entry moves there. Only `legalities` and their successful refresh timestamp are patched into surviving relevant entries. Stored printing/artwork, Oracle facts, quantities, roles, zones and deck timestamps are preserved. Missing or mismatched cards fail the refresh atomically. Deleted decks and removed/replaced entries cannot be revived; new or changed printings/formats are picked up by a subsequent refresh. Editing remains available while requests run. Session status is not exported as durable proof of current legality, and no backup schema changes.
 
-Checks remain in the dedicated workspace. Red failure sections, amber data/freshness notices, neutral informational/manual sections and green supported-pass states include authored SVG symbols and explicit labels. Existing messages retain card/zone names; unsupported rules remain manual and missing/stale data cannot produce a green overall pass. Commander/companion automation remains #13/#14.
+Checks remain in the dedicated workspace. Red failure sections, amber data/freshness notices, neutral informational/manual sections and green supported-pass states include authored SVG symbols and explicit labels. Existing messages retain card/zone names; unsupported rules remain manual and missing/stale data cannot produce a green overall pass. Bounded Commander/companion automation follows [the construction contract](CONSTRUCTION_RULES.md).
 
 
 ## Legality result presentation (#58)
 
 The Checks tab labels deck legality explicitly and explains the checked rules and zones. Failed checks use stored deck/card data, with card, zone and format context where available; freshness remains separate from a legality result. Empty failure, unavailable-data and manual-review categories are hidden. Missing data never means a card is banned, and stale/failed refreshes cannot produce a supported-pass summary. A fresh supported pass with unsupported rules remains a neutral manual-review state.
 
-Commander coverage names the implemented size, copy, commander-quantity and single-commander color-identity checks. Manual review identifies eligibility, pairing, basic-land type and special-rule limits and links [#13](https://github.com/RuneBrix/magic-the-deckbuilder/issues/13); companion support remains [#14](https://github.com/RuneBrix/magic-the-deckbuilder/issues/14). No new rules are automated here. Bracket discussion follows the legality results.
+Commander coverage names the implemented size, copy, commander-quantity, eligibility/pairing, combined-identity and basic-land-type checks. Companion selection and supported starting-deck restrictions are separate from command-zone designation. Results retain explicit manual/unavailable limits; see [construction coverage](CONSTRUCTION_RULES.md). Bracket discussion follows the legality results.
+
 
 ## Exact-printing legality refresh (#59)
 

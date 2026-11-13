@@ -1,5 +1,11 @@
 # Changelog
 
+## Collection safety and construction checks
+
+- Explain additive upload totals and intentional repeats; offer confirmed inventory replacement with a backup opportunity, and save staged uploads before applying (#72).
+- Check supported Commander eligibility, partner variants, combined identity and basic-land types, with explicit limits for special rules (#13).
+- Designate companions in Checks and preserve the choice in complete JSON; validate supported starting-deck predicates and keep unsupported cases explicit (#14).
+
 ## Quick add and automatic primary functions
 
 - Search card names directly in the open deck after three characters, with keyboard suggestions and the shared Add card confirmation (#114).
