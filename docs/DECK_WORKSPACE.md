@@ -1,5 +1,11 @@
 # Deck library and workspace
 
+## Quick add (#114)
+
+The editor's Cards tab has a labeled **Quick add card** name search and names the open deck as its destination. It shows no suggestions below three trimmed characters, waits 250 ms after typing, requests one name-sorted paper-card search page and displays at most eight choices. The query treats typed punctuation literally. New input aborts pending requests; superseded or detached responses cannot replace suggestions or open a dialog. Loading, no-match and lookup-failure messages stay beside the field.
+
+Up/Down chooses a suggestion; Enter opens the shared Add card to deck confirmation. Clicking/tapping a suggestion does the same. Escape dismisses suggestions, and blur hides them. The confirmation preselects this deck and Main deck, with printing, finish, quantity and optional primary override available. Searching/selecting alone never adds copies. Cancel, Escape and confirmation return focus to Quick add. The library does not guess a destination. Frontend changes require refreshing the existing localhost:3000 page; no server restart is needed.
+
 ## Viewing and scrolling follow-ups (#53 / #57 / #61)
 
 Sideboard and Maybeboard viewing sections appear only when the stored zone has entries, across all four editor layouts and the tracker. Filtering a populated zone to zero results retains its heading, underlying count and no-match explanation. Zone totals and add/move destinations remain available, including empty zones; the fixed drag destination strip also retains every zone (#55).
