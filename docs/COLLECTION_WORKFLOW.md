@@ -28,7 +28,7 @@ View has only Visual cards and Text. Text is a single table with compact rows, c
 
 Group by offers none/type/color/set. Filter matches required terms in name/type/set. View, grouping, sorting and filter persist locally; initial settings use visual cards, no grouping and newest-added first. Old horizontal/vertical text settings migrate to Text. Legacy missing dates display a dash and use stored-order fallback. New lots record dates; edits preserve added dates.
 
-Add owned card searches after one literal prefix character in an anchored dropdown. Arrow keys and Enter select results. Its staged editor shows artwork, paginated printing choices, finish, condition and absolute quantity. Plus/minus/direct entry change drafts. Update collection applies them; Cancel/Escape/X discard them. Zero removes the selected lot.
+Add owned card searches after one literal prefix character. Suggestions occupy a bounded list inside the dialog; Up/Down wrap and keep the active choice visible while focus stays in the combobox. Tab skips individual choices and continues to Cancel. Enter or pointer/touch selects a card. Escape dismisses suggestions, then closes the dialog. Its staged editor shows artwork, paginated printing choices, finish, condition and absolute quantity. Searching and selecting alone do not change holdings. Plus/minus/direct entry change drafts. Update collection applies them; Cancel/Escape/X discard them. Zero removes the selected lot.
 
 Visual cards use a distinct title and compact labeled fields for every Text-table value. Quantity is edited inline with minus, number entry and plus; valid changes autosave, while zero requests removal confirmation. The wide collection editor automatically fetches printing pages into one Version dropdown and stops at the API's final page. No manual Load more action is needed; failures preserve loaded versions and expose a retry.
 
@@ -43,6 +43,8 @@ Select any combination of Main deck, Command zone, Sideboard and Maybeboard for 
 Each deck independently allocates owned copies across selected zones in Main deck, Command zone, Sideboard, Maybeboard order, then by printing ID. The Deck estimate includes every copy in the selected zones. Cost to buy includes only copies the collection does not cover. Both use regular EUR quotes for the stored printing and exclude finish or condition adjustments, shipping and tax.
 
 An optional EUR budget compares against either stored-printing estimate. Estimates show the priced subtotal and the number of unpriced copies. Known costs above budget establish an overage. Otherwise an incomplete estimate shows the allowance left after known costs. The table shows the stored per-copy quote and quantity-weighted line cost. Quotes use the selected finish, or the default inferred for older entries. The exact Cardmarket product link is available for an unpriced entry with a mapped product ID.
+
+Budget edits keep normal Tab/Shift+Tab progression. Invalid amounts retain their draft with an adjacent explanation and leave the last valid saved budget unchanged. Drafts survive other planning updates during the session; reload restores the saved amount. Correcting the draft saves the new amount on change; deliberately clearing it removes the budget.
 
 **Refresh EUR prices** checks exact stored printing IDs in selected zones. Valid Scryfall regular and foil EUR quotes replace their corresponding fields. A missing or malformed quote keeps the last usable value and a failed lookup keeps saved quotes. The timestamp describes when the app checked prices.
 

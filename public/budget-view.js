@@ -4,18 +4,19 @@ import { esc, euro, printingLabel } from './view-utils.js';
 
 const estimateLabels = { missing: 'Cost to buy', full: 'Deck estimate' };
 
-function budgetComparison(budget, estimate, unpriced, zones) {
-  if (!zones.length) return 'Select zones to estimate their cost.';
+export function budgetComparison(d, collection, report = collectionReport(d, collection)) {
+  const budget = d.budgetCents, full = d.budgetBasis === 'full';
+  const estimate = full ? report.fullCents : report.missingCents;
+  const unpriced = full ? report.fullUnpriced : report.missingUnpriced;
+  if (!report.zones.length) return 'Select zones to estimate their cost.';
   if (budget === undefined) return 'Enter a budget to compare it with the selected estimate.';
   if (estimate > budget) return `${euro(estimate - budget)} over budget${unpriced ? ' from known costs alone' : ''}.`;
   if (unpriced) return `${euro(budget - estimate)} left after known costs. Unpriced copies may change the result.`;
   return `${euro(budget - estimate)} left in the budget.`;
 }
 
-export function budgetPanel(d, collection, state, comparison) {
+export function budgetPanel(d, collection, state, comparison, draft) {
   const report = collectionReport(d, collection), basis = d.budgetBasis ?? 'missing';
-  const estimate = basis === 'full' ? report.fullCents : report.missingCents;
-  const unpriced = basis === 'full' ? report.fullUnpriced : report.missingUnpriced;
   const budget = d.budgetCents, refreshing = state?.status === 'refreshing';
   const estimateValue = (cents, unknown) => `${euro(cents)}${unknown ? `<small>+ ${unknown} unpriced ${unknown === 1 ? 'copy' : 'copies'}</small>` : ''}`;
   const quoteFor = row => comparison?.quotes?.get(priceIdentity(row.entry.card));
@@ -52,11 +53,11 @@ export function budgetPanel(d, collection, state, comparison) {
       <div><dt>${estimateLabels.missing}</dt><dd>${estimateValue(report.missingCents, report.missingUnpriced)}</dd></div>
     </dl>
     <div class="planning-controls">
-      <label>Budget in EUR<input id="deck-budget" inputmode="decimal" value="${budget === undefined ? '' : (budget / 100).toFixed(2)}" placeholder="Optional"></label>
+      <div><label>Budget in EUR<input id="deck-budget" inputmode="decimal" value="${esc(draft?.value ?? (budget === undefined ? '' : (budget / 100).toFixed(2)))}" placeholder="Optional" aria-invalid="${Boolean(draft?.error)}" aria-describedby="deck-budget-error"></label><p id="deck-budget-error" class="query-error" role="status">${esc(draft?.error || '')}</p></div>
       <label>Compare budget against<select id="budget-basis">${Object.entries(estimateLabels).map(([value, label]) => `<option value="${value}" ${basis === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
       <label>Ownership matching<select id="ownership-match"><option value="rules" ${report.mode === 'rules' ? 'selected' : ''}>Any printing of the same card</option><option value="printing" ${report.mode === 'printing' ? 'selected' : ''}>Exact stored printing only</option></select></label>
     </div>
-    <p class="budget-comparison">${esc(budgetComparison(budget, estimate, unpriced, report.zones))}</p>
+    <p class="budget-comparison">${esc(budgetComparison(d, collection, report))}</p>
     ${state?.status === 'failed' ? `<p class="query-error" role="alert">Price refresh failed. Last usable prices were retained. ${esc(state.error)}</p>` : ''}
     ${state?.kept ? `<p class="hint" role="status">Kept the saved quote for ${state.kept} ${state.kept === 1 ? 'entry without a new quote' : 'entries without new quotes'}.</p>` : ''}
     ${checking ? '<p class="hint" role="status">Checking cheapest printings on Scryfall…</p>' : ''}

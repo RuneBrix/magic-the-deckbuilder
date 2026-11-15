@@ -2,7 +2,7 @@ import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG
 import { esc, mana, printingLabel } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
-import { budgetPanel } from './budget-view.js';
+import { budgetPanel, budgetComparison } from './budget-view.js';
 import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions } from './core.js';
 import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
@@ -65,6 +65,7 @@ let previewKey = '', previewDeck = '', cardActionTrigger = null;
 let cardDrag = null, cardDragPress = null, suppressCardClick = false;
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
+const budgetDrafts = new WeakMap();
 const priceStates = new WeakMap();
 const cheapestPriceStates = new WeakMap();
 const current = () => decks.find(d => d.id === (view === 'explore' ? tracker.id : active));
@@ -231,7 +232,7 @@ function searchPanels() {
 }
 function explorer() {
   const d=current();
-  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Default destination: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div>${searchPanels()}<div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
+  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Default destination: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button id="search-submit" class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div>${searchPanels()}<div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
 }
 function searchResults(){
   if(!searched&&!loading&&!error)return '';
@@ -418,16 +419,31 @@ function saveCollectionOptions(){try{localStorage.setItem('arcana.collection-vie
 function collectionLotDialog(card=null,index=null,back=null){
   if(index!==null)card=collection[index]?.card;
   if(!card){
-    showDialog('<h2>Add owned card</h2><div class="owned-search-wrap"><label>Search card names<input id="owned-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="owned-matches" aria-expanded="false" autocomplete="off" placeholder="Type a card name"></label><div id="owned-matches" class="owned-suggestions" role="listbox" hidden></div></div><p id="owned-search-status" role="status">Type a letter to search card names.</p><button class="secondary" id="owned-cancel">Cancel</button>');
+    showDialog('<h2>Add owned card</h2><div class="owned-search-wrap"><label>Search card names<input id="owned-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="owned-matches" aria-describedby="owned-search-status" aria-expanded="false" autocomplete="off" placeholder="Type a card name"></label><div id="owned-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" tabindex="-1" hidden></div></div><p id="owned-search-status" role="status">Type a letter to search card names.</p><button class="secondary" id="owned-cancel">Cancel</button>');
     const input=$('#owned-search'),matches=$('#owned-matches'),status=$('#owned-search-status');let revision=0,timer,choices=[],activeOption=-1;
     const choose=id=>{const selected=choices.find(c=>c.id===id);if(selected){revision++;collectionLotDialog(selected);}};
-    input.oninput=()=>{const version=++revision,value=input.value.trim();clearTimeout(timer);matches.innerHTML='';matches.hidden=true;input.setAttribute('aria-expanded','false');choices=[];activeOption=-1;if(!value){status.textContent='Type a letter to search card names.';return;}status.textContent='Searching…';timer=setTimeout(async()=>{try{
+    input.oninput=()=>{const version=++revision,value=input.value.trim();clearTimeout(timer);dismiss();matches.innerHTML='';choices=[];if(!value){status.textContent='Type a letter to search card names.';return;}status.textContent='Searching…';timer=setTimeout(async()=>{try{
       const literal=value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\//g,'\\/');
       const data=await api('/api/search?'+new URLSearchParams({q:'game:paper name:/^'+literal+'/',order:'name'}));
-      if(version!==revision||!input.isConnected)return;choices=data.data;matches.innerHTML=choices.map((c,i)=>`<button type="button" role="option" id="owned-option-${i}" data-owned-choice="${esc(c.id)}" aria-selected="false">${esc(c.name)}</button>`).join('');matches.hidden=!choices.length;input.setAttribute('aria-expanded',String(Boolean(choices.length)));status.textContent=choices.length+' matching card names.';
+      if(version!==revision||!input.isConnected)return;choices=data.data;matches.innerHTML=choices.map((c,i)=>`<button type="button" role="option" tabindex="-1" id="owned-option-${i}" data-owned-choice="${esc(c.id)}" aria-selected="false">${esc(c.name)}</button>`).join('');matches.hidden=!choices.length||document.activeElement!==input;input.setAttribute('aria-expanded',String(!matches.hidden));status.textContent=choices.length+' matching card names.';
     }catch(error){if(version===revision&&input.isConnected)status.textContent=error.message;}},250);};
     matches.onclick=e=>{const button=e.target.closest('[data-owned-choice]');if(button)choose(button.dataset.ownedChoice);};
-    input.onkeydown=e=>{if(e.key==='Escape'&&!matches.hidden){e.preventDefault();e.stopPropagation();matches.hidden=true;input.setAttribute('aria-expanded','false');return;}if(['ArrowDown','ArrowUp'].includes(e.key)&&choices.length){e.preventDefault();matches.hidden=false;activeOption=(activeOption+(e.key==='ArrowDown'?1:choices.length-1)+choices.length)%choices.length;input.setAttribute('aria-activedescendant','owned-option-'+activeOption);input.setAttribute('aria-expanded','true');for(const [i,node] of [...matches.querySelectorAll('[role="option"]')].entries())node.setAttribute('aria-selected',String(i===activeOption));}if(e.key==='Enter'&&activeOption>=0&&!matches.hidden){e.preventDefault();choose(choices[activeOption].id);}};
+    const dismiss=()=>{matches.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');matches.querySelector('[aria-selected="true"]')?.setAttribute('aria-selected','false');activeOption=-1;};
+    input.onfocus=()=>{if(choices.length){matches.hidden=false;input.setAttribute('aria-expanded','true');}};
+    input.onblur=e=>{if(!matches.contains(e.relatedTarget))dismiss();};
+    input.onkeydown=e=>{
+      if(e.isComposing)return;
+      if(e.key==='Escape'){e.preventDefault();e.stopPropagation();revision++;clearTimeout(timer);if(!matches.hidden)dismiss();else closeDialog();return;}
+      if(['ArrowDown','ArrowUp'].includes(e.key)&&choices.length){
+        e.preventDefault();matches.hidden=false;
+        const step=e.key==='ArrowDown'?1:-1;
+        activeOption=activeOption<0?(step===1?0:choices.length-1):(activeOption+step+choices.length)%choices.length;
+        input.setAttribute('aria-activedescendant','owned-option-'+activeOption);input.setAttribute('aria-expanded','true');
+        for(const [i,node] of [...matches.querySelectorAll('[role="option"]')].entries())node.setAttribute('aria-selected',String(i===activeOption));
+        matches.querySelector('#owned-option-'+activeOption)?.scrollIntoView({block:'nearest'});
+      }
+      if(e.key==='Enter'&&activeOption>=0&&!matches.hidden){e.preventDefault();choose(choices[activeOption].id);}
+    };
     $('#owned-cancel').onclick=()=>closeDialog();input.focus();return;
   }
   const original=collection[index],draft=new Map();let selected=card,printings=[card],page=0;
@@ -570,7 +586,7 @@ function deckWorkspace(d, statistics, previousStatistics) {
   if(!d)return `<div class="library"><h1>No deck selected</h1><button class="secondary" data-view="decks">Back to My decks</button></div>`;
   const s=statistics ?? stats(d), report=legalityReport(d);
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['planning','Ownership & budget'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span>${s.total} in playing deck · ${zoneCount(d,'sideboard')} sideboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${[['cards','Cards'],['stats','Statistics'],['planning','Ownership & budget'],['checks','Checks']].map(([key,label])=>`<button role="tab" aria-selected="${deckTab===key}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),budgetDrafts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div></div>`;
 }
 function quickAddMarkup(d) {
   return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p class="hint">Destination: ${esc(d.name)} · Main deck by default.</p><p id="quick-add-status" class="hint" role="status">Type at least three characters.</p></section>`;
@@ -1267,7 +1283,23 @@ function bind() {
   $('#assigned-bracket')?.addEventListener('change',e=>{const d=current();if(!d || d.format!=='commander')return;const value=Number(e.target.value);if(e.target.value && !Object.hasOwn(BRACKETS,value))return;if(e.target.value)d.bracket=value;else delete d.bracket;d.updated=new Date().toISOString();save();render();$('#assigned-bracket')?.focus();});
   for(const key of ['layout','group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
   $('#editor-search')?.addEventListener('input',e=>{editorOptions.search=e.target.value;const d=current();if(view==='deck' && d)$('#editor-card-area').outerHTML=deckCards(d);});
-  $('#deck-budget')?.addEventListener('change',e=>{const d=current();if(!d)return;const value=e.target.value.trim();if(!value)delete d.budgetCents;else{const cents=parseEuroCents(value);if(cents===null){toast('Enter a EUR amount with at most two decimals.');render();return;}d.budgetCents=cents;}d.updated=new Date().toISOString();save();render();});
+  const updateBudgetDraft=input=>{
+    const value=input.value,trimmed=value.trim(),cents=trimmed?parseEuroCents(trimmed):undefined;
+    const draft={value,cents,error:cents===null?'Enter a nonnegative EUR amount with at most two decimals.':''};
+    budgetDrafts.set(current(),draft);
+    input.setAttribute('aria-invalid',String(Boolean(draft.error)));
+    $('#deck-budget-error').textContent=draft.error;
+    return draft;
+  };
+  $('#deck-budget')?.addEventListener('input',e=>updateBudgetDraft(e.target));
+  $('#deck-budget')?.addEventListener('change',e=>{
+    const d=current();if(!d)return;
+    const draft=updateBudgetDraft(e.target);if(draft.error)return;
+    if(draft.cents===undefined)delete d.budgetCents;else d.budgetCents=draft.cents;
+    d.updated=new Date().toISOString();save();
+    if(storageError){$('#deck-budget-error').textContent=storageError;$('.local-status').textContent='Unsaved changes';}
+    $('.budget-comparison').textContent=budgetComparison(d,collection);
+  });
   $('#budget-basis')?.addEventListener('change',e=>{const d=current();if(!d)return;d.budgetBasis=e.target.value;d.updated=new Date().toISOString();save();render();});
   for(const zone of Object.keys(ZONES))$('#budget-zone-'+zone)?.addEventListener('change',e=>{
     const d=current();if(!d)return;
@@ -1394,7 +1426,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='rename') deckForm(current());
   if(action==='settings')settings();
   if(action==='reset'){clearSearch();render();$('#raw')?.focus();}
-  if(action==='retry')search(false,true);
+  if(action==='retry'){$('#search-submit')?.focus();search(false,true);}
   if(action==='restore-search')await restoreSearch();
   if(action==='more')search(true);
   if(action==='sample')sample();

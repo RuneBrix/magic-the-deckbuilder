@@ -1,5 +1,11 @@
 # Changelog
 
+## Input focus and draft preservation
+
+- Keep Collection card-name suggestions within the dialog, scroll keyboard selection into view and skip individual options in the Tab path (#155).
+- Preserve Search button focus during loading, results and failures; return retry focus to Search (#156).
+- Retain invalid EUR budget drafts with adjacent validation, preserve the last valid saved amount and keep Tab/Shift+Tab progression stable (#157).
+
 ## Collection safety and construction checks
 
 - Explain additive upload totals and intentional repeats; offer confirmed inventory replacement with a backup opportunity, and save staged uploads before applying (#72).
