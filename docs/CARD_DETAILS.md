@@ -2,7 +2,7 @@
 
 ## Card details
 
-Inspect from a deck, Explore cards or Collection to open the same read-only card details. Deck rows and collection entries open their stored printing. The dialog shows full artwork, Oracle text, release facts and stored format legality. A date appears only when Arcana has a recorded successful legality refresh for the displayed data. Choose a printing to update the preview, the Scryfall link and the exact-printing ownership total across finishes and conditions.
+Inspect from a deck or Explore cards to open the same read-only card details. Deck rows open their stored printing. Collection artwork, captions and text rows instead open the exact owned lot's staged editor directly (#184). The read-only dialog shows full artwork, Oracle text, release facts and stored format legality. A date appears only when Arcana has a recorded successful legality refresh for the displayed data. Choose a printing to update the preview, the Scryfall link and the exact-printing ownership total across finishes and conditions.
 
 The first page of paper printings loads on open. **Load more printings** fetches one page at a time. The current printing stays available during loading and after a failed lookup. Retry uses the same page. Cards without a stored Oracle identity retain their original printing and explain the lookup limit. Responses for closed or replaced dialogs are ignored. **Add this card to collection** opens the collection editor. **Back to card details** restores the viewed printing and returns focus to the collection action.
 

@@ -1277,7 +1277,7 @@ function bindTrackerResize() {
 function bind() {
   if(view==='deck' && deckTab==='cards' && current())bindQuickAdd(current());
   for(const key of ['view','group','sort'])$('#collection-'+key)?.addEventListener('change',e=>{collectionOptions[key]=e.target.value;saveCollectionOptions();render();});
-  $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage();$('#collection-results').innerHTML=container.querySelector('#collection-results').innerHTML;});
+  $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage(collection,collectionOptions);$('#collection-results').innerHTML=container.querySelector('#collection-results').innerHTML;});
   $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
   bindTrackerResize();
   $('#deck-companion')?.addEventListener('change',e=>{try{changeDeck(deck=>setCompanion(deck,e.target.value||null));$('#deck-companion')?.focus();}catch(error){toast(error.message);}});
@@ -1358,6 +1358,8 @@ $('#app').addEventListener('change',e=>{
 });
 $('#app').addEventListener('click',async e=>{
   if(e.detail>0 && suppressCardClick){suppressCardClick=false;e.preventDefault();return;}
+  const ownedRow=e.target.closest('[data-owned-row]');
+  if(ownedRow && !e.target.closest('button,a,input,select,textarea,label')){collectionLotDialog(null,Number(ownedRow.dataset.ownedRow));return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
@@ -1389,7 +1391,6 @@ $('#app').addEventListener('click',async e=>{
     else $('#raw')?.focus();
     return;
   }
-  if(button.dataset.inspectOwned!==undefined){const lot=collection[Number(button.dataset.inspectOwned)];if(lot)inspect(lot.card.id,null,lot.card);return;}
   if(button.dataset.editOwned!==undefined){collectionLotDialog(null,Number(button.dataset.editOwned));return;}
   if(button.dataset.ownedMinus!==undefined||button.dataset.ownedPlus!==undefined){const index=Number(button.dataset.ownedMinus??button.dataset.ownedPlus),lot=collection[index];if(lot)updateOwnedQuantity(index,lot.qty+(button.dataset.ownedPlus!==undefined?1:-1));return;}
   if(button.dataset.removeOwned!==undefined){removeCollectionLot(Number(button.dataset.removeOwned));return;}

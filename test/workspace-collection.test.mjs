@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import * as core from '../public/core.js';
+import { collectionPage } from '../public/collection-view.js';
 import { workspace, editorCard, editorDeck, formValues, chooseWorkspaceFile, startCardDrag, dropCard } from '../test-support/workspace.mjs';
 
 test('version 2 browser storage renders collection and independent deck ownership planning',()=>{
@@ -196,6 +197,30 @@ test('collection Text is a sortable table with dates, price and contained action
   assert.match(html,/<table class="collection-table"/);assert.match(html,/data-collection-sort="price"/);assert.match(html,/data-collection-sort="updated"/);assert.match(html,/class="collection-actions"/);assert.doesNotMatch(html,/Horizontal text|Vertical text/);
   await w.node('#app').click({target:{closest:()=>({dataset:{collectionSort:'price'}})}});assert.equal(vm.runInContext('collectionOptions.sort',w.context),'price');
   await w.node('#app').click({target:{closest:()=>({dataset:{collectionSort:'price'}})}});assert.equal(vm.runInContext('collectionOptions.sort',w.context),'price-desc');
+});
+
+test('collection captions keep only concise condition, finish and language without changing stored lots',()=>{
+  const lots=['near_mint','lightly_played','moderately_played','heavily_played','damaged',undefined].map((condition,index)=>({card:{...editorCard('Owned '+index),set_name:'A very long set name',lang:'ja'},qty:2,finish:index%2?'foil':'regular',...(condition?{condition}:{})}));
+  const before=structuredClone(lots),html=collectionPage(lots,{view:'visual',group:'none',sort:'name',filter:''});
+  const facts=[...html.matchAll(/<dl class="collection-facts">(.*?)<\/dl>/g)].map(match=>match[1]);
+  assert.equal(facts.length,6);
+  for(const fact of facts){assert.equal((fact.match(/<dt>/g)||[]).length,3);assert.match(fact,/<dt>Language<\/dt><dd>JA/);assert.doesNotMatch(fact,/<dt>(Set|Color|EUR each|Added|Updated)<\/dt>/);}
+  for(const label of ['NM','LP','MP','HP','DMG','—'])assert.ok(facts.some(fact=>fact.includes('>'+label+'</abbr>')));
+  assert.match(html,/title="Heavily played"/);assert.match(html,/title="Not recorded"/);
+  assert.doesNotMatch(html,/data-inspect-owned/);assert.deepEqual(lots,before);
+});
+
+test('collection card and non-control row activation open the exact lot as a staged edit',async()=>{
+  const card=editorCard('Owned'),lots=[{card,qty:2,finish:'regular'},{card,qty:5,finish:'foil',condition:'lightly_played'}];
+  for(const source of ['card','row']){
+    const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([],lots))});
+    w.node('#owned-finish').value='foil';w.node('#owned-condition').value='lightly_played';
+    const target={closest:selector=>source==='row'?(selector==='[data-owned-row]'?{dataset:{ownedRow:'1'}}:null):{dataset:{editOwned:'1'}}};
+    await w.node('#app').click({target});
+    assert.match(w.node('#dialog').innerHTML,/<h2>Update collection/);assert.match(w.node('#dialog').innerHTML,/value="foil" selected/);
+    assert.equal(w.node('#owned-qty').value,5);w.node('#owned-plus').onclick();assert.equal(w.node('#owned-qty').value,6);
+    assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(collection)',w.context)),lots);assert.equal(w.writes.length,0);
+  }
 });
 
 test('Archidekt Normal rows accept Scryfall nonfoil finish for the reported three-card CSV',async()=>{

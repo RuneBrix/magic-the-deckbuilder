@@ -1,5 +1,11 @@
 # Changelog
 
+## Collection captions and editing
+
+- Reduce visual-card captions to Language, Finish and abbreviated Condition, with aligned title and quantity areas (#183).
+- Open the exact owned lot's staged editor from card artwork, captions and text-row backgrounds; retain separate quantity and removal controls (#184).
+- Keep Collection text columns and row heights stable through long metadata, grouping, sorting and filtering, with full-value access and sticky actions (#185).
+
 ## Deck keyboard navigation and touch controls
 
 - Complete deck section tabs with automatic Left/Right/Home/End navigation, one sequential tab stop and labeled panels (#158).
