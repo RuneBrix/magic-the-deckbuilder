@@ -1,5 +1,5 @@
 import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
-import { esc, mana, printingLabel } from './view-utils.js';
+import { esc, mana, printingLabel, icon } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel, budgetComparison } from './budget-view.js';
@@ -8,7 +8,6 @@ import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
 const $ = s => document.querySelector(s);
-const icon = (name, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${({ search: '<path d="m10 2 8 8-8 8-8-8zM10 6v8M6 10h8m2 6 6 6"/>', cards: '<path d="M8 3h12v16H8zM4 7v14h12M11 8l3-2 3 2-3 4z"/>' , settings: '<path d="M4 7h16M4 17h16M8 4v6M16 14v6"/>' , filters: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', flip: '<path d="M20 7a8 8 0 0 0-14-2L3 8m0-5v5h5M4 17a8 8 0 0 0 14 2l3-3m0 5v-5h-5"/>', plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>', close: '<path d="m6 6 12 12M6 18 18 6"/>', leaf: '<path d="M20 4C8 2 2 10 7 16s14-1 13-12ZM5 21 16 10"/>', check: '<path d="m5 12 4 4L19 6"/>', down: '<path d="m6 9 6 6 6-6"/>', upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>', download: '<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>', chart: '<path d="M4 20V4m0 16h17M9 16v-5m5 5V7m5 9v-8"/>', more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>', book: '<path d="M12 5C8 2 4 3 2 4v15c4-2 7-1 10 1 3-2 6-3 10-1V4c-4-2-7-1-10 1Zm0 0v15"/>' })[name] || ''}</svg>`;
 const blankDeck = (name = 'Untitled deck', format = 'commander') => ({ id: crypto.randomUUID(), name, format, cards: [], updated: new Date().toISOString() });
 const DARK_PALETTES = [['green','Dark green'],['blue','Dark blue'],['white','Black / white'],['orange','Black / orange']];
 let palette = 'green';
@@ -417,7 +416,7 @@ const collectionOptions={view:'visual',group:'none',sort:'added',filter:''};
 try{const saved=JSON.parse(localStorage.getItem('arcana.collection-view.v1'));for(const key of ['view','group','sort'])if(collectionChoices[key].some(([value])=>value===saved?.[key]))collectionOptions[key]=saved[key];if(['list','visual-vertical'].includes(saved?.view))collectionOptions.view=saved.view==='list'?'text':'visual';if(typeof saved?.filter==='string')collectionOptions.filter=saved.filter.slice(0,300);}catch{}
 function saveCollectionOptions(){try{localStorage.setItem('arcana.collection-view.v1',JSON.stringify(collectionOptions));}catch{toast('Collection view kept for this session.');}}
 function collectionLotDialog(card=null,index=null,back=null){
-  if(index!==null)card=collection[index]?.card;
+  if(index!==null){card=collection[index]?.card;if(!card){toast('This owned card is no longer available.');return;}}
   if(!card){
     showDialog('<h2>Add owned card</h2><div class="owned-search-wrap"><label>Search card names<input id="owned-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="owned-matches" aria-describedby="owned-search-status" aria-expanded="false" autocomplete="off" placeholder="Type a card name"></label><div id="owned-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" tabindex="-1" hidden></div></div><p id="owned-search-status" role="status">Type a letter to search card names.</p><button class="secondary" id="owned-cancel">Cancel</button>');
     const input=$('#owned-search'),matches=$('#owned-matches'),status=$('#owned-search-status');let revision=0,timer,choices=[],activeOption=-1;
@@ -446,15 +445,15 @@ function collectionLotDialog(card=null,index=null,back=null){
     };
     $('#owned-cancel').onclick=()=>closeDialog();input.focus();return;
   }
-  const original=collection[index],draft=new Map();let selected=card,printings=[card],page=0;
+  const original=collection[index],originalSnapshot=JSON.stringify(original),draft=new Map();let selected=card,printings=[card],page=0;
   const key=()=>[selected.id,$('#owned-finish').value,$('#owned-condition').value].join('|');
-  showDialog(`<h2>Update collection</h2><div class="owned-editor"><div id="owned-art"></div><form id="owned-form"><h3>${esc(card.name)}</h3><label>Version<select id="owned-version"></select></label><button type="button" class="text-button" id="owned-load" hidden>Retry loading versions</button><p id="owned-status" role="status"></p><label>Finish<select id="owned-finish">${['regular','foil','etched'].map(f=>`<option value="${f}" ${original?.finish===f?'selected':''}>${f}</option>`).join('')}</select></label><label>Condition<select id="owned-condition"><option value="">Not recorded</option>${Object.entries(CONDITION_LABELS).map(([v,l])=>`<option value="${v}" ${original?.condition===v?'selected':''}>${l}</option>`).join('')}</select></label><p id="owned-existing"></p><label>Quantity of this version</label><div class="owned-quantity"><button type="button" class="secondary" id="owned-minus" aria-label="Subtract one owned copy">−</button><input id="owned-qty" aria-label="Owned quantity" type="number" min="0" max="9999" step="1"><button type="button" class="secondary" id="owned-plus" aria-label="Add one owned copy">+</button></div><p id="owned-error" role="alert"></p><div class="settings-actions"><button class="primary">Update collection</button><button type="button" class="secondary" id="owned-cancel">Cancel</button></div></form></div>`);
+  showDialog(`<h2>${original?'Update card in collection':'Update collection'}</h2><div class="owned-editor"><div id="owned-art"></div><form id="owned-form"><h3>${esc(card.name)}</h3><label>Version<select id="owned-version"></select></label><button type="button" class="text-button" id="owned-load" hidden>Retry loading versions</button><p id="owned-status" role="status"></p><label>Finish<select id="owned-finish">${['regular','foil','etched'].map(f=>`<option value="${f}" ${original?.finish===f?'selected':''}>${f}</option>`).join('')}</select></label><label>Condition<select id="owned-condition"><option value="">Not recorded</option>${Object.entries(CONDITION_LABELS).map(([v,l])=>`<option value="${v}" ${original?.condition===v?'selected':''}>${l}</option>`).join('')}</select></label><p id="owned-existing"></p><label>${original?'Quantity':'Quantity of this version'}</label><div class="owned-quantity"><button type="button" class="secondary" id="owned-minus" aria-label="Subtract one owned copy">−</button><input id="owned-qty" aria-label="Owned quantity" type="number" min="0" max="9999" step="1"><button type="button" class="secondary" id="owned-plus" aria-label="Add one owned copy">+</button></div><p id="owned-error" role="alert"></p><div class="settings-actions"><button class="primary">${original?'Update card':'Update collection'}</button><button type="button" class="secondary" id="owned-cancel">Cancel</button></div></form></div>`);
   const form=$('#owned-form'),qty=$('#owned-qty');let currentKey='';
   const remember=()=>{if(currentKey)draft.set(currentKey,{card:selected,finish:$('#owned-finish').value,condition:$('#owned-condition').value,qty:Number(qty.value)});};
-  const display=()=>{currentKey=key();const lot=collection.find(l=>[l.card.id,l.finish,l.condition||''].join('|')===currentKey);qty.value=draft.get(currentKey)?.qty??lot?.qty??0;$('#owned-existing').textContent='Current quantity for this version, finish and condition: '+(lot?.qty||0);const image=safeUrl(imageFor(selected),true);$('#owned-art').innerHTML=image?`<img src="${esc(image)}" alt="${esc(selected.name)}">`:'<p>Artwork unavailable.</p>';};
+  const display=()=>{const first=!currentKey;currentKey=key();const lot=collection.find(l=>[l.card.id,l.finish,l.condition||''].join('|')===currentKey);if(original){if(first)qty.value=original.qty;$('#owned-existing').textContent=lot&&lot!==original?`These copies will combine with ${lot.qty} copies already recorded with this version, finish and condition.`:'Changes apply to the owned card you opened.';}else{qty.value=draft.get(currentKey)?.qty??lot?.qty??0;$('#owned-existing').textContent='Current quantity for this version, finish and condition: '+(lot?.qty||0);}const image=safeUrl(imageFor(selected),true);$('#owned-art').innerHTML=image?`<img src="${esc(image)}" alt="${esc(selected.name)}">`:'<p>Artwork unavailable.</p>';};
   const options=()=>{$('#owned-version').innerHTML=printings.map(c=>`<option value="${esc(c.id)}" ${c.id===selected.id?'selected':''}>${esc(printingLabel(c))}</option>`).join('');};
-  for(const id of ['owned-finish','owned-condition'])$('#'+id).onchange=()=>{if(currentKey)draft.set(currentKey,{card:selected,finish:currentKey.split('|')[1],condition:currentKey.split('|')[2],qty:Number(qty.value)});display();};
-  $('#owned-version').onchange=()=>{remember();selected=printings.find(c=>c.id===$('#owned-version').value)||selected;display();};
+  for(const id of ['owned-finish','owned-condition'])$('#'+id).onchange=()=>{if(!original&&currentKey)draft.set(currentKey,{card:selected,finish:currentKey.split('|')[1],condition:currentKey.split('|')[2],qty:Number(qty.value)});display();};
+  $('#owned-version').onchange=()=>{if(!original)remember();selected=printings.find(c=>c.id===$('#owned-version').value)||selected;display();};
   $('#owned-minus').onclick=()=>qty.value=Math.max(0,Number(qty.value)-1);$('#owned-plus').onclick=()=>qty.value=Math.min(9999,Number(qty.value)+1);
   $('#owned-cancel').onclick=back || closeDialog;
   if(back){
@@ -464,7 +463,41 @@ function collectionLotDialog(card=null,index=null,back=null){
   }
   let versionsLoading=false,versionsComplete=false;
   $('#owned-load').onclick=async()=>{if(versionsLoading||versionsComplete)return;versionsLoading=true;const button=$('#owned-load');button.hidden=true;try{if(!card.oracle_id)throw Error('Versions unavailable for this stored card.');while(!versionsComplete&&form.isConnected&&$('#dialog').open!==false){$('#owned-status').textContent='Loading versions… '+printings.length+' available so far.';const data=await api('/api/printings?'+new URLSearchParams({oracle:card.oracle_id,page:page+1}));if(!form.isConnected||$('#dialog').open===false)return;page++;printings=[...new Map([...printings,...data.data].map(c=>[c.id,c])).values()];options();versionsComplete=!data.has_more;if(page>=1000&&!versionsComplete)throw Error('Version limit reached. Loaded versions remain available.');}if(form.isConnected)$('#owned-status').textContent=printings.length+' versions available in the dropdown.';}catch(error){if(form.isConnected){$('#owned-status').textContent=error.message;button.hidden=false;}}finally{versionsLoading=false;}};
-  form.onsubmit=e=>{e.preventDefault();try{remember();let next=structuredClone(collection);for(const [lotKey,lot] of draft){if(!Number.isInteger(lot.qty)||lot.qty<0||lot.qty>9999)throw Error('Enter a whole number from 0 to 9999.');const position=next.findIndex(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);if(lot.qty){const previous=collection.find(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);lot.addedAt=previous?previous.addedAt:new Date().toISOString();lot.updatedAt=new Date().toISOString();if(!lot.condition)delete lot.condition;if(position>=0)next[position]=lot;else next.push(lot);}else if(position>=0)next.splice(position,1);}validateCollection(next);collection=next;save();if(!back)closeDialog();render();if(back)back();toast(storageError?'Collection kept for this session; save a workspace copy.':'Collection updated.');}catch(error){$('#owned-error').textContent=error.message;}};
+  form.onsubmit=e=>{
+    e.preventDefault();
+    try{
+      const next=structuredClone(collection);
+      if(original){
+        if(collection[index]!==original||JSON.stringify(original)!==originalSnapshot)throw Error('This owned card changed while editing. Close this window and reopen the card.');
+        const amount=Number(qty.value);
+        if(!String(qty.value).trim()||!Number.isInteger(amount)||amount<0||amount>9999)throw Error('Enter a whole number from 0 to 9999.');
+        const edited={...next.splice(index,1)[0],card:selected,finish:$('#owned-finish').value,condition:$('#owned-condition').value,qty:amount,updatedAt:new Date().toISOString()};
+        if(!edited.condition)delete edited.condition;
+        if(amount){
+          const target=next.find(lot=>lot.card.id===edited.card.id&&lot.finish===edited.finish&&(lot.condition||'')===(edited.condition||''));
+          if(target){target.qty+=amount;target.updatedAt=edited.updatedAt;}
+          else next.splice(index,0,edited);
+        }
+      }else{
+        remember();
+        for(const [lotKey,lot] of draft){
+          if(!Number.isInteger(lot.qty)||lot.qty<0||lot.qty>9999)throw Error('Enter a whole number from 0 to 9999.');
+          const position=next.findIndex(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);
+          if(lot.qty){const previous=collection.find(l=>[l.card.id,l.finish,l.condition||''].join('|')===lotKey);lot.addedAt=previous?previous.addedAt:new Date().toISOString();lot.updatedAt=new Date().toISOString();if(!lot.condition)delete lot.condition;if(position>=0)next[position]=lot;else next.push(lot);}
+          else if(position>=0)next.splice(position,1);
+        }
+      }
+      validateCollection(next);
+      if(original){
+        if(storageError)throw Error('Resolve the workspace storage warning before updating this card. Save a workspace copy to protect your collection.');
+        try{localStorage.setItem('arcana.workspace.v2',JSON.stringify(workspaceFile(decks,next)));}
+        catch(error){throw Error('Could not save this card. The original collection is unchanged. Save a workspace copy or free browser storage, then retry. '+error.message);}
+        collection=next;updateBackupStatus();
+      }else{collection=next;save();}
+      if(!back)closeDialog();render();if(back)back();
+      toast(storageError?'Collection kept for this session; save a workspace copy.':original?'Owned card updated.':'Collection updated.');
+    }catch(error){$('#owned-error').textContent=error.message;}
+  };
   options();display();$('#owned-load').onclick();
 }
 const importCardPool=new Map();
@@ -902,6 +935,7 @@ function closeCardActions(restore=true) {
   if(menu.matches?.(':popover-open'))menu.hidePopover();
   cardActionTrigger?.setAttribute('aria-expanded','false');
   if(restore && cardActionTrigger?.isConnected)cardActionTrigger.focus();
+  delete menu.dataset.ownedIndex;
 }
 function positionCardSubmenu() {
   const menu=$('#card-actions');if(!menu.dataset.submenu)return;
@@ -961,6 +995,16 @@ function openCardActions(key,trigger) {
   renderCardActions();trigger.setAttribute('aria-expanded','true');
   const {top,left}=trigger.getBoundingClientRect();menu.dataset.anchor=JSON.stringify([top,left]);
 }
+function openOwnedActions(index,trigger) {
+  closeCardActions(false);
+  const lot=collection[index];if(!lot||view!=='collection')return;
+  const menu=$('#card-actions');cardActionTrigger=trigger;menu.dataset.ownedIndex=String(index);
+  menu.setAttribute('aria-label',`Card actions for owned ${lot.card.name}`);
+  menu.innerHTML=`<h3>${esc(lot.card.name)}</h3><button role="menuitem" data-card-action="edit-owned">Edit</button><button role="menuitem" data-card-action="remove">Remove</button><div id="card-submenu" popover="manual" role="menu"></div>`;
+  menu.scrollTop=0;menu.showPopover();positionCardActions();trigger.setAttribute('aria-expanded','true');
+  const {top,left}=trigger.getBoundingClientRect();menu.dataset.anchor=JSON.stringify([top,left]);
+  menu.querySelector('button')?.focus();
+}
 function focusCardEntry(d,key) {
   if(current()!==d || typeof CSS==='undefined')return;
   document.querySelector('[data-card-menu="'+CSS.escape(key)+'"]')?.focus();
@@ -995,6 +1039,13 @@ function confirmCommanderRemoval(d,entry,remove) {
 }
 $('#card-actions').addEventListener('click',async e=>{
   const button=e.target.closest('[data-card-action]');if(!button){if(!$('#card-submenu').contains(e.target))closeCardSubmenu();return;}if(button.disabled)return;
+  if($('#card-actions').dataset.ownedIndex!==undefined){
+    const index=Number($('#card-actions').dataset.ownedIndex);closeCardActions();
+    if(view!=='collection'||!collection[index]){toast('This owned card is no longer available.');return;}
+    if(button.dataset.cardAction==='edit-owned')collectionLotDialog(null,index);
+    if(button.dataset.cardAction==='remove')removeCollectionLot(index);
+    return;
+  }
   const menu=$('#card-actions'),d=decks.find(x=>x.id===menu.dataset.deck),key=menu.dataset.entry,entry=d?.cards.find(e=>entryKey(e)===key);
   if(!d||!entry||current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
   const action=button.dataset.cardAction;
@@ -1277,7 +1328,7 @@ function bindTrackerResize() {
 function bind() {
   if(view==='deck' && deckTab==='cards' && current())bindQuickAdd(current());
   for(const key of ['view','group','sort'])$('#collection-'+key)?.addEventListener('change',e=>{collectionOptions[key]=e.target.value;saveCollectionOptions();render();});
-  $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage();$('#collection-results').innerHTML=container.querySelector('#collection-results').innerHTML;});
+  $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage(collection,collectionOptions);$('#collection-results').innerHTML=container.querySelector('#collection-results').innerHTML;});
   $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
   bindTrackerResize();
   $('#deck-companion')?.addEventListener('change',e=>{try{changeDeck(deck=>setCompanion(deck,e.target.value||null));$('#deck-companion')?.focus();}catch(error){toast(error.message);}});
@@ -1352,12 +1403,13 @@ $('#app').addEventListener('change',e=>{
     applySelectedFunctions({...filters,match:e.target.value}, '#tag-match');
     return;
   }
-  if(e.target.dataset?.ownedQuantity!==undefined){updateOwnedQuantity(Number(e.target.dataset.ownedQuantity),e.target.value);return;}
   const key=e.target.dataset?.moveEntry;if(!key)return;
   try{changeDeck(d=>moveEntry(d,key,e.target.value));toast('All copies moved; roles preserved');}catch(error){toast(error.message);render();}
 });
 $('#app').addEventListener('click',async e=>{
   if(e.detail>0 && suppressCardClick){suppressCardClick=false;e.preventDefault();return;}
+  const ownedRow=e.target.closest('[data-owned-row]');
+  if(ownedRow && !e.target.closest('button,a,input,select,textarea,label')){collectionLotDialog(null,Number(ownedRow.dataset.ownedRow));return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
@@ -1389,7 +1441,7 @@ $('#app').addEventListener('click',async e=>{
     else $('#raw')?.focus();
     return;
   }
-  if(button.dataset.inspectOwned!==undefined){const lot=collection[Number(button.dataset.inspectOwned)];if(lot)inspect(lot.card.id,null,lot.card);return;}
+  if(button.dataset.ownedMenu!==undefined){openOwnedActions(Number(button.dataset.ownedMenu),button);return;}
   if(button.dataset.editOwned!==undefined){collectionLotDialog(null,Number(button.dataset.editOwned));return;}
   if(button.dataset.ownedMinus!==undefined||button.dataset.ownedPlus!==undefined){const index=Number(button.dataset.ownedMinus??button.dataset.ownedPlus),lot=collection[index];if(lot)updateOwnedQuantity(index,lot.qty+(button.dataset.ownedPlus!==undefined?1:-1));return;}
   if(button.dataset.removeOwned!==undefined){removeCollectionLot(Number(button.dataset.removeOwned));return;}
