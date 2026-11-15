@@ -1,5 +1,11 @@
 # Deck library and workspace
 
+## Section navigation and touch controls (#158 / #159)
+
+Cards, Statistics, Ownership & budget and Checks form one keyboard tab stop. Left/Right wrap between sections with automatic activation; Home/End select the first/last section. Each tab controls a stable, labeled panel. Tab enters the active panel, then its controls; Shift+Tab returns through the panel to the selected tab. Pointer/touch selection retains the same four sections and their content.
+
+Text-deck copy buttons and menus have at least 44×44px hit areas at narrow widths and on non-hover/coarse-pointer devices. The quantity column reserves room for both copy controls and their gap. Collection quantity and Edit/Remove controls use the same minimum touch size, while desktop hover layouts retain their compact controls. Browser geometry, accessibility-tree and emulated-touch checks do not establish physical-phone accuracy or real NVDA/browser acceptance.
+
 ## Quick add (#114)
 
 The editor's Cards tab has a labeled **Quick add card** name search and names the open deck as its destination. It shows no suggestions below three trimmed characters, waits 250 ms after typing, requests one name-sorted paper-card search page and displays at most eight choices. The query treats typed punctuation literally. New input aborts pending requests; superseded or detached responses cannot replace suggestions or open a dialog. Loading, no-match and lookup-failure messages stay beside the field.
@@ -40,7 +46,7 @@ Pointer-based dragging with capture is an optional desktop shortcut. The drag st
 
 The header offers My decks, Explore cards and Settings at every viewport, with local-save status and Help. Startup/reload and the logo open My decks; in-session navigation preserves search (#37). Deck switching and creation belong in My decks rather than a duplicate navigation list.
 
-Clicking library artwork or a title, and successful deck creation/import, enter the dedicated editor. It contains Cards, Statistics and Checks, plus import/export and management actions. Find cards to add explicitly tracks the editor's deck and opens discovery without clearing its search. The compact tracker names that deck and Main deck destination, with Open full deck to return. Exploration can instead track another deck or none; hiding the tracker retains the named quick-add destination. Add to… selects a different destination without changing tracking. See [Exploration](EXPLORATION.md) for #19/#20 behavior, persistence and resize controls.
+Clicking library artwork or a title, and successful deck creation/import, enter the dedicated editor. It contains Cards, Statistics, Ownership & budget and Checks, plus import/export and management actions. Find cards to add explicitly tracks the editor's deck and opens discovery without clearing its search. The compact tracker names that deck and Main deck destination, with Open full deck to return. Exploration can instead track another deck or none; hiding the tracker retains the named quick-add destination. Add to… selects a different destination without changing tracking. See [Exploration](EXPLORATION.md) for #19/#20 behavior, persistence and resize controls.
 
 The editor shows main/sideboard/command/Maybeboard counts, copy controls, zone moves and mana costs. Maybeboard is outside the playing deck; statistics, construction checks and brackets exclude it. Zone moves transfer every copy and merge roles without deleting data on overflow. Commander identity is the union of designated command-zone card identities, not proof of eligibility; other formats show the main-deck identity, excluding sideboard cards.
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck keyboard navigation and touch controls
+
+- Complete deck section tabs with automatic Left/Right/Home/End navigation, one sequential tab stop and labeled panels (#158).
+- Enlarge text-deck copy controls and Collection quantity/Edit/Remove hit areas for narrow and touch layouts while retaining compact desktop sizing (#159).
+
 ## Input focus and draft preservation
 
 - Keep Collection card-name suggestions within the dialog, scroll keyboard selection into view and skip individual options in the Tab path (#155).

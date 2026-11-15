@@ -24,7 +24,7 @@ test('deck action menus support arrow navigation, Escape return and outside dism
   const buttons=[0,1,2,3,4].map(i=>({focus(){focused=i;w.document.activeElement=this;}}));
   const summary={focus(){focused=-1;w.document.activeElement=this;}};
   const menu={open:false,querySelectorAll:()=>buttons,querySelector:()=>summary,contains:()=>false};
-  const target={closest:()=>menu};
+  const target={closest:selector=>selector==='.deck-menu'?menu:null};
   const press=key=>w.node('#app').keydown({key,target,preventDefault(){}});
   press('ArrowDown');assert.equal(menu.open,true);assert.equal(focused,0);
   press('ArrowUp');assert.equal(focused,4);
