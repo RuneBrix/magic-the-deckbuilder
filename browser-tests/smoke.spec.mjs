@@ -630,7 +630,7 @@ test('collection captions, row editing and table geometry stay consistent with l
     data.collection=[
       {card:{...card,name:'A very long card name that must remain available in the owned card editor',set_name:'An exceptionally long edition name with many words to test stable table columns',lang:'ja'},qty:7,finish:'foil',condition:'heavily_played'},
       {card:{...card,id:card.id+'-other',name:'Short',set_name:'Other set'},qty:2,finish:'regular'},
-      {card:{...card,id:card.id+'-third',name:'Middle',set_name:'Other set'},qty:3,finish:'etched',condition:'moderately_played',addedAt:'2026-10-01T12:00:00Z',updatedAt:'2026-11-01T12:00:00Z'},
+      {card:{...card,id:card.id+'-third',name:'Middle',set_name:'Other set'},qty:9999,finish:'etched',condition:'moderately_played',addedAt:'2026-10-01T12:00:00Z',updatedAt:'2026-11-01T12:00:00Z'},
     ];
     localStorage.setItem(key,JSON.stringify(data));
   });
@@ -638,15 +638,18 @@ test('collection captions, row editing and table geometry stay consistent with l
   await page.getByRole('button',{name:'Collection',exact:true}).click();
   const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).collection);
   const original=await stored(),row=page.locator('.collection-row[data-owned-row="0"]');
-  await expect(row.locator('.collection-facts dt')).toHaveText(['Language','Finish','Condition']);
+  await expect(row.locator('h3')).toHaveCount(0);await expect(row.locator('.collection-visual-info')).toHaveText('JA · foil · HP');
   await expect(row.locator('abbr')).toHaveText('HP');await expect(row.locator('abbr')).toHaveAttribute('title','Heavily played');
-  const captions=await page.locator('.collection-visual-info').evaluateAll(nodes=>nodes.map(node=>({height:node.getBoundingClientRect().height,quantity:node.querySelector('.collection-quantity').getBoundingClientRect().top-node.getBoundingClientRect().top})));
-  expect(new Set(captions.map(value=>value.height)).size).toBe(1);expect(new Set(captions.map(value=>value.quantity)).size).toBe(1);
+  const captions=await page.locator('.collection-row').evaluateAll(nodes=>nodes.map(node=>({height:node.getBoundingClientRect().height,art:node.querySelector('.collection-art').getBoundingClientRect().height,caption:node.querySelector('.collection-visual-info').getBoundingClientRect().height})));
+  expect(new Set(captions.map(value=>value.height)).size).toBe(1);
+  for(const caption of captions){expect(caption.caption).toBe(20);expect(caption.height-caption.art).toBeLessThanOrEqual(24);}
   await page.screenshot({path:testInfo.outputPath('collection-captions.png'),fullPage:true});
   await row.locator('.collection-art').click();
   await expect(page.locator('#owned-finish')).toHaveValue('foil');await expect(page.locator('#owned-condition')).toHaveValue('heavily_played');await expect(page.locator('#owned-qty')).toHaveValue('7');
   await page.locator('#owned-plus').click();await page.getByRole('button',{name:'Cancel',exact:true}).click();expect(await stored()).toEqual(original);
-  await row.locator('.collection-facts dd').first().click();await expect(page.locator('#owned-qty')).toHaveValue('7');await page.keyboard.press('Escape');
+  await row.locator('.collection-visual-info').click();await expect(page.locator('#owned-qty')).toHaveValue('7');await page.keyboard.press('Escape');
+  const options=row.locator('[data-owned-menu]');await options.focus();await options.press('Enter');
+  await expect(page.getByRole('menuitem',{name:'Edit',exact:true})).toBeFocused();await page.keyboard.press('ArrowDown');await expect(page.getByRole('menuitem',{name:'Remove',exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(options).toBeFocused();
   await row.locator('[data-owned-plus]').click();expect((await stored())[0].qty).toBe(8);await expect(page.getByRole('dialog')).toBeHidden();
   await page.locator('#collection-view').selectOption('text');
   const table=page.locator('.collection-table'),first=table.locator('tbody tr[data-owned-row="0"]');
@@ -670,6 +673,30 @@ test('collection captions, row editing and table geometry stay consistent with l
   if(isMobile){const box=await actions.getByRole('button',{name:'Edit',exact:true}).boundingBox();expect(box.width).toBeGreaterThanOrEqual(44);expect(box.height).toBeGreaterThanOrEqual(44);}
   await noPageOverflow(page);await page.screenshot({path:testInfo.outputPath('collection-table.png'),fullPage:true});
   const saved=await stored();await page.reload();expect(await stored()).toEqual(saved);
+});
+
+test('collection edits replace the clicked card and combine a matching condition without leaving the old lot',async({page})=>{
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key)),card=data.collection[0].card;
+    data.collection=[{card,qty:1,finish:'regular',condition:'near_mint'},{card,qty:2,finish:'regular',condition:'lightly_played'},{card:{...card,id:card.id+'-other',name:'Unrelated'},qty:4,finish:'regular'}];
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.reload();await page.getByRole('button',{name:'Collection',exact:true}).click();
+  const holdings=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).collection),original=await holdings();
+  const open=()=>page.locator('[data-owned-row="0"] .collection-art').click();
+  await open();await expect(page.getByRole('heading',{name:'Update card in collection',exact:true})).toBeVisible();
+  await page.locator('#owned-condition').selectOption('damaged');await expect(page.locator('#owned-qty')).toHaveValue('1');
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();expect(await holdings()).toEqual(original);
+  await open();await page.locator('#owned-condition').selectOption('damaged');await page.locator('#owned-finish').selectOption('foil');await expect(page.locator('#owned-qty')).toHaveValue('1');
+  await page.getByRole('button',{name:'Update card',exact:true}).click();
+  let saved=await holdings();expect(saved).toHaveLength(3);expect(saved[0]).toMatchObject({qty:1,finish:'foil',condition:'damaged'});expect(saved.slice(1)).toEqual(original.slice(1));
+  await page.reload();await page.getByRole('button',{name:'Collection',exact:true}).click();await open();
+  await expect(page.locator('#owned-condition')).toHaveValue('damaged');await expect(page.locator('#owned-finish')).toHaveValue('foil');
+  await page.locator('#owned-finish').selectOption('regular');await page.locator('#owned-condition').selectOption('lightly_played');await expect(page.locator('#owned-qty')).toHaveValue('1');
+  await expect(page.locator('#owned-existing')).toContainText('combine with 2 copies');
+  await page.getByRole('button',{name:'Update card',exact:true}).click();saved=await holdings();
+  expect(saved).toHaveLength(2);expect(saved[0]).toMatchObject({qty:3,finish:'regular',condition:'lightly_played'});expect(saved[1]).toEqual(original[2]);
+  await page.reload();expect(await holdings()).toEqual(saved);
 });
 
 test('Explore navigation starts fresh and tracker guidance follows the selector', async ({ page }, testInfo) => {

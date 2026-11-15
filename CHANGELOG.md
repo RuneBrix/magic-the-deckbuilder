@@ -2,8 +2,8 @@
 
 ## Collection captions and editing
 
-- Reduce visual-card captions to Language, Finish and abbreviated Condition, with aligned title and quantity areas (#183).
-- Open the exact owned lot's staged editor from card artwork, captions and text-row backgrounds; retain separate quantity and removal controls (#184).
+- Put Collection quantity/options controls on the artwork, move Edit/Remove into the options menu and remove repeated visible card names. Keep Language, Finish and abbreviated Condition in a single compact caption line (#183).
+- Open Update card in collection from artwork, captions and text-row backgrounds. Printing/finish/condition edits retain the chosen lot's quantity and replace the original on save, combining matching lots; cancellation, stale drafts and failed saves preserve holdings (#184).
 - Keep Collection text columns and row heights stable through long metadata, grouping, sorting and filtering, with full-value access and sticky actions (#185).
 
 ## Deck keyboard navigation and touch controls

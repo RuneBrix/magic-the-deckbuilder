@@ -41,7 +41,7 @@ API requests receive deterministic fixture responses, and external requests rece
 - Explore width at 1920px with/without tracking, two phone card columns, empty initial output, function-chip query synchronization and keyboard disclosure collapse.
 - Explore filter header submission without toggling, independent filter-family disclosures, live function match counts, and inline unlisted function entry.
 - Fresh top-navigation Explore entry, deck-editor entry with tracking, keyboard tracker toggle and guidance position.
-- Collection captions limited to language/finish/condition, aligned long titles and quantity controls, direct exact-lot editing from artwork/captions/text rows, fixed table geometry through sorting/filtering/grouping, sticky actions and reload preservation. Automatically loaded printing choices, dialog fit and cancelling a staged quantity edit without changing saved holdings.
+- Collection artwork quantity/options controls, one-line language/finish/condition captions without repeated names, keyboard/touch Edit/Remove menus, direct exact-lot editing from artwork/captions/text rows, and condition/finish replacement plus matching-lot combination without leaving the original behind. Fixed table geometry through sorting/filtering/grouping, sticky actions and reload preservation. Automatically loaded printing choices, dialog fit and cancelling a staged edit without changing saved holdings.
 
 Failures retain screenshots and Playwright traces under ignored `test-results/browser/`; use `npx playwright show-trace <trace.zip>` for a specific trace. The CI browser job installs Chromium on Ubuntu and uploads failure artifacts for seven days. Native Node CI remains independent of browser/development dependency installation.
 

@@ -131,33 +131,34 @@ test('Collection touch targets preserve compact desktop controls and staged edit
   for (const viewport of isMobile ? [initialViewport, { width: 820, height: 900 }] : [initialViewport, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     const touch = await page.evaluate(() => matchMedia('(max-width:600px),(hover:none),(pointer:coarse)').matches);
-    const row = page.locator('.collection-row').filter({ has: page.getByRole('heading', { name: 'Smoke Card 2', exact: true }) });
+    const row = page.locator('.collection-row[data-owned-row="0"]');
     const plus = row.getByRole('button', { name: 'Increase quantity of Smoke Card 2', exact: true });
     const minus = row.getByRole('button', { name: 'Decrease quantity of Smoke Card 2', exact: true });
-    const edit = row.getByRole('button', { name: 'Edit', exact: true });
-    const remove = row.getByRole('button', { name: 'Remove', exact: true });
-    const size = touch ? 44 : 32;
+    const options = row.getByRole('button', { name: 'Card actions for owned Smoke Card 2', exact: true });
+    const edit = page.getByRole('menuitem', { name: 'Edit', exact: true });
+    const remove = page.getByRole('menuitem', { name: 'Remove', exact: true });
+    const size = touch ? 44 : 36;
     const minusBox = await hitTarget(minus, size, size), plusBox = await hitTarget(plus, size, size);
-    expect(plusBox.x).toBeGreaterThanOrEqual(minusBox.x + minusBox.width + 4);
-    const editBox = await hitTarget(edit, size, size), removeBox = await hitTarget(remove, size, size);
-    expect(removeBox.x).toBeGreaterThanOrEqual(editBox.x + editBox.width + 8);
-    if (!touch) { expect(plusBox.width).toBe(32);expect(plusBox.height).toBe(32);expect(editBox.height).toBe(32); }
+    expect(minusBox.y).toBeGreaterThanOrEqual(plusBox.y + plusBox.height + 4);
+    const optionsBox=await hitTarget(options,size,size);expect(optionsBox.y).toBeGreaterThanOrEqual(minusBox.y+minusBox.height+4);
+    if (!touch) { expect(plusBox.width).toBe(36);expect(plusBox.height).toBe(36); }
     await activate(plus);expect((await holdings())[0].qty).toBe(4);
     await activate(minus);expect((await holdings())[0].qty).toBe(3);
-    await activate(edit);await expect(page.getByRole('heading', { name: 'Update collection', exact: true })).toBeVisible();
+    await activate(options);await hitTarget(edit,size,size);await hitTarget(remove,size,size);
+    await activate(edit);await expect(page.getByRole('heading', { name: 'Update card in collection', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await activate(remove);await expect(page.getByRole('heading', { name: 'Remove owned lot?', exact: true })).toBeVisible();
+    await activate(options);await activate(remove);await expect(page.getByRole('heading', { name: 'Remove owned lot?', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     // Quantity edits may update timestamps; holdings and printings stay the same.
     const withoutDates = lots => lots.map(({ addedAt, updatedAt, ...lot }) => lot);
     expect(withoutDates(await holdings())).toEqual(withoutDates(before));
     const last = page.locator('.collection-row').last();
-    await hitTarget(last.getByRole('button', { name: 'Remove', exact: true }), size, size);
+    await hitTarget(last.locator('[data-owned-menu]'), size, size);
     await hitTarget(last.locator('[data-owned-plus]'), size, size);
     if (viewport.width === initialViewport.width) await page.screenshot({ path: testInfo.outputPath('collection-targets.png') });
     await noOverflow(page);
     await page.getByRole('combobox', { name: 'View', exact: true }).selectOption('text');
-    await hitTarget(page.locator('.collection-actions').last().getByRole('button', { name: 'Edit', exact: true }), size, size);
+    await hitTarget(page.locator('.collection-actions').last().getByRole('button', { name: 'Edit', exact: true }), touch?44:32, touch?44:32);
     await noOverflow(page);
     await page.getByRole('combobox', { name: 'View', exact: true }).selectOption('visual');
   }
