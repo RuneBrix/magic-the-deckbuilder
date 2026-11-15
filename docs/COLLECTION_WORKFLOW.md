@@ -32,6 +32,8 @@ Add owned card searches after one literal prefix character. Suggestions occupy a
 
 Visual cards use a distinct title and compact labeled fields for every Text-table value. Quantity is edited inline with minus, number entry and plus; valid changes autosave, while zero requests removal confirmation. The wide collection editor automatically fetches printing pages into one Version dropdown and stops at the API's final page. No manual Load more action is needed; failures preserve loaded versions and expose a retry.
 
+At narrow widths and on non-hover/coarse-pointer devices, quantity buttons and Edit/Remove actions have at least 44×44px hit areas with separate adjacent targets. Desktop hover layouts retain compact controls. These measured targets and emulated-touch checks do not establish physical-phone accuracy.
+
 Delete entire collection is available in the Collection header. It offers a workspace backup and requires typing DELETE. It saves the empty inventory before changing the live view; a failed save retains the collection. Decks and deck budgets are preserved. There is no in-app undo; previously downloaded workspace copies remain available for restoration.
 
 Collection data lives in browser localStorage for the exact app origin (normally http://localhost:3000), in the `collection` property of the `arcana.workspace.v2` JSON value. This same value contains decks, so do not remove the whole key to reset inventory. It belongs to the current browser profile, not a file in the repository; exported workspace JSON files are separate snapshots. localhost and 127.0.0.1 use separate browser storage.
