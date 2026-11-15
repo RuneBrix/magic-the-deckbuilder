@@ -14,12 +14,13 @@ test('version 2 browser storage renders collection and independent deck ownershi
   vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
   const html=w.node('#app').innerHTML;
   assert.match(html,/Ownership & budget/);assert.match(html,/Covered by collection<\/dt>\s*<dd>1/);assert.match(html,/Copies to buy<\/dt>\s*<dd>2/);assert.match(html,/Unknown/);
-  w.node('#deck-budget').change({target:{value:'12.34'}});
+  const budget=w.node('#deck-budget');
+  budget.value='12.34';budget.change({target:budget});
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.version,2);assert.equal(saved.decks[0].budgetCents,1234);assert.deepEqual(saved.collection,[owned]);
-  assert.match(w.node('#app').innerHTML,/left after known costs/);
+  assert.match(w.node('.budget-comparison').textContent,/left after known costs/);
   assert.match(w.node('#app').innerHTML,/1 unpriced copy/);
-  w.node('#deck-budget').change({target:{value:'1.00'}});
-  assert.match(w.node('#app').innerHTML,/over budget from known costs alone/);
+  budget.value='1.00';budget.change({target:budget});
+  assert.match(w.node('.budget-comparison').textContent,/over budget from known costs alone/);
 });
 
 test('collection defaults and saved controls preserve stable added dates and sorting',()=>{
@@ -28,6 +29,28 @@ test('collection defaults and saved controls preserve stable added dates and sor
   w.node('#collection-group').change({target:{value:'color'}});w.node('#collection-sort').change({target:{value:'updated'}});
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.group,'color');assert.equal(saved.sort,'updated');
   assert.equal(w.writes.at(-1)[0],'arcana.collection-view.v1');
+});
+
+test('budget draft validation preserves saved cents and reports failed writes without replacing controls',()=>{
+  const d=editorDeck();d.budgetCents=10000;
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[]))});
+  vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
+  const input=w.node('#deck-budget'),before=w.node('#app').innerHTML;
+  for(const value of ['12.345','-1','invalid']){
+    input.value=value;input.input({target:input});input.change({target:input});
+    assert.equal(vm.runInContext('current().budgetCents',w.context),10000);
+    assert.equal(w.writes.length,0);
+    assert.match(w.node('#deck-budget-error').textContent,/nonnegative EUR amount/);
+    assert.equal(w.node('#app').innerHTML,before);
+  }
+  vm.runInContext('render()',w.context);
+  assert.match(w.node('#app').innerHTML,/id="deck-budget"[^>]*value="invalid"/);
+  w.context.localStorage.setItem=()=>{throw Error('Quota exceeded');};
+  input.value='25.00';input.change({target:input});
+  assert.equal(vm.runInContext('current().budgetCents',w.context),2500);
+  assert.equal(w.writes.length,0);
+  assert.match(w.node('#deck-budget-error').textContent,/Export a JSON backup/);
+  assert.equal(w.node('.local-status').textContent,'Unsaved changes');
 });
 
 test('owned search opens an anchored combobox after one literal character with no placeholder result',async()=>{
