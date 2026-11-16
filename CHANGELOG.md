@@ -1,5 +1,11 @@
 # Changelog
 
+## Ownership and costs
+
+- Separate copy quantities from monetary estimates, use the available page width and move calculation policy into secondary help (#170).
+- Remove budget targets and comparisons; keep ownership/cost estimates and preserve valid legacy budget fields in complete JSON (#172).
+- Sort the concise cost table by card, zone, price, copies or cheapest quote; keep unknown prices last and retain the overall missing-copy cost (#173).
+
 ## Card addition defaults
 
 - Default ordinary single-faced lands to Land alongside existing tag-derived functions. Offer an explicit suggested function for existing entries and an Unassigned choice without rewriting saved manual functions (#163).

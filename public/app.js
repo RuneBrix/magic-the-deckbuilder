@@ -1,8 +1,8 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, parseEuroCents, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 import { esc, mana, printingLabel, icon } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
-import { budgetPanel, budgetComparison } from './budget-view.js';
+import { budgetPanel } from './budget-view.js';
 import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions } from './core.js';
 import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
@@ -64,7 +64,7 @@ let previewKey = '', previewDeck = '', cardActionTrigger = null;
 let cardDrag = null, cardDragPress = null, suppressCardClick = false;
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
-const budgetDrafts = new WeakMap();
+const costSorts = new WeakMap();
 const priceStates = new WeakMap();
 const cheapestPriceStates = new WeakMap();
 const current = () => decks.find(d => d.id === (view === 'explore' ? tracker.id : active));
@@ -624,7 +624,7 @@ function updateOwnedQuantity(index,value){
   if(qty===lot.qty)return;lot.qty=qty;lot.updatedAt=new Date().toISOString();save();render();
 }
 function clearCollection(){
-  showDialog('<h2>Delete entire collection?</h2><p>This removes all owned-card quantities from this browser. Your decks and their budget settings stay intact. This cannot be undone here; save a workspace copy first if you want to restore it later.</p><button class="secondary" id="clear-collection-backup">Save workspace copy</button><label>Type DELETE to confirm<input id="clear-collection-confirm" autocomplete="off"></label><p id="clear-collection-error" role="alert"></p><div class="settings-actions"><button class="danger" id="clear-collection-apply" disabled>Delete entire collection</button><button class="secondary" id="clear-collection-cancel">Keep collection</button></div>');
+  showDialog('<h2>Delete entire collection?</h2><p>This removes all owned-card quantities from this browser. Your decks stay intact. This cannot be undone here; save a workspace copy first if you want to restore it later.</p><button class="secondary" id="clear-collection-backup">Save workspace copy</button><label>Type DELETE to confirm<input id="clear-collection-confirm" autocomplete="off"></label><p id="clear-collection-error" role="alert"></p><div class="settings-actions"><button class="danger" id="clear-collection-apply" disabled>Delete entire collection</button><button class="secondary" id="clear-collection-cancel">Keep collection</button></div>');
   $('#clear-collection-backup').onclick=()=>saveWorkspaceCopy();$('#clear-collection-cancel').onclick=()=>closeDialog();
   $('#clear-collection-confirm').oninput=e=>$('#clear-collection-apply').disabled=e.target.value!=='DELETE';
   $('#clear-collection-apply').onclick=()=>{if($('#clear-collection-confirm').value!=='DELETE')return;try{localStorage.setItem('arcana.workspace.v2',JSON.stringify(workspaceFile(decks,[])));collection=[];storageError='';updateBackupStatus();closeDialog();render();toast('Collection deleted. Decks retained.');}catch(error){$('#clear-collection-error').textContent='Collection was not deleted. '+error.message;}};
@@ -633,9 +633,9 @@ function clearCollection(){
 function deckWorkspace(d, statistics, previousStatistics) {
   if(!d)return `<div class="library"><h1>No deck selected</h1><button class="secondary" data-view="decks">Back to My decks</button></div>`;
   const s=statistics ?? stats(d), report=legalityReport(d);
-  const tabs=[['cards','Cards'],['stats','Statistics'],['planning','Ownership & budget'],['checks','Checks']];
+  const tabs=[['cards','Cards'],['stats','Statistics'],['planning','Ownership & costs'],['checks','Checks']];
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),budgetDrafts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
 }
 function quickAddMarkup(d) {
   return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p id="quick-add-status" class="hint" role="status"></p></section>`;
@@ -1391,24 +1391,12 @@ function bind() {
   $('#assigned-bracket')?.addEventListener('change',e=>{const d=current();if(!d || d.format!=='commander')return;const value=Number(e.target.value);if(e.target.value && !Object.hasOwn(BRACKETS,value))return;if(e.target.value)d.bracket=value;else delete d.bracket;d.updated=new Date().toISOString();save();render();$('#assigned-bracket')?.focus();});
   for(const key of ['layout','group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
   $('#editor-search')?.addEventListener('input',e=>{editorOptions.search=e.target.value;const d=current();if(view==='deck' && d)$('#editor-card-area').outerHTML=deckCards(d);});
-  const updateBudgetDraft=input=>{
-    const value=input.value,trimmed=value.trim(),cents=trimmed?parseEuroCents(trimmed):undefined;
-    const draft={value,cents,error:cents===null?'Enter a nonnegative EUR amount with at most two decimals.':''};
-    budgetDrafts.set(current(),draft);
-    input.setAttribute('aria-invalid',String(Boolean(draft.error)));
-    $('#deck-budget-error').textContent=draft.error;
-    return draft;
-  };
-  $('#deck-budget')?.addEventListener('input',e=>updateBudgetDraft(e.target));
-  $('#deck-budget')?.addEventListener('change',e=>{
+  for(const button of document.querySelectorAll('[data-cost-sort]'))button.addEventListener('click',()=>{
     const d=current();if(!d)return;
-    const draft=updateBudgetDraft(e.target);if(draft.error)return;
-    if(draft.cents===undefined)delete d.budgetCents;else d.budgetCents=draft.cents;
-    d.updated=new Date().toISOString();save();
-    if(storageError){$('#deck-budget-error').textContent=storageError;$('.local-status').textContent='Unsaved changes';}
-    $('.budget-comparison').textContent=budgetComparison(d,collection);
+    const key=button.dataset.costSort,previous=costSorts.get(d)??{key:'card',direction:'asc'};
+    costSorts.set(d,{key,direction:previous.key===key&&previous.direction==='asc'?'desc':'asc'});
+    render();$('[data-cost-sort="'+key+'"]')?.focus();
   });
-  $('#budget-basis')?.addEventListener('change',e=>{const d=current();if(!d)return;d.budgetBasis=e.target.value;d.updated=new Date().toISOString();save();render();});
   for(const zone of Object.keys(ZONES))$('#budget-zone-'+zone)?.addEventListener('change',e=>{
     const d=current();if(!d)return;
     const zones=new Set(d.budgetZones??DEFAULT_BUDGET_ZONES);

@@ -32,11 +32,11 @@ API requests receive deterministic fixture responses, and external requests rece
 
 - Quick add three-character gating, bounded suggestions, immediate keyboard/touch nonfoil addition, stale-response rejection, Escape dismissal, atomic save-failure/retry and explicit foil-only fallback to the detailed form. Offline function assignment, deliberate suggestions/Unassigned for older entries, import/Explore default consistency, printing captions and reload preservation.
 - Ten reported Karona-card identities through fresh text import, function grouping/statistics and reload. Existing-deck missing-function review covers keyboard scrolling, zero/one/many suggestions, cancellation, quota failure/retry, unchanged manual/explicit Unassigned choices and retained inventory.
-- Deck navigation, scrolling/sticky navigation, Statistics and Ownership & budget rendering, and horizontal overflow.
+- Deck navigation, scrolling/sticky navigation, Statistics and Ownership & costs rendering, and horizontal overflow.
 - Compact editor zone counts through quantity edits, moves and reload, including Commander/constructed totals and empty decks. Aligned vertical group headers and inline horizontal costs across long functions, large totals, partial prices and enlarged text.
 - Optional Sideboard/Maybeboard hidden → populated → hidden transitions in all four deck layouts and the tracker; populated zero-filter-match sections, retained destinations and unchanged unrelated entries.
 - Long library/editor/Explore pages, scrollable Settings, wrapped-header measurement, keyboard/touch menus, focused controls above fixed overlays, desktop preview/tracker offsets and final phone tracker-control hit testing. The acceptance tests attach exact browser/version, viewport, origin and appearance.
-- Ownership & budget zone selection with keyboard focus and reload preservation, all-zone rows, and comparisons with missing EUR quotes.
+- Ownership & costs zone selection with keyboard focus and reload preservation, all-zone rows, and estimates with missing EUR quotes; sortable cost columns, legacy budget preservation and separate quantity/cost summaries.
 - Desktop drag destination sizing, gap hit testing, edge scrolling and cancellation. Keyboard and emulated touch card menus retain deletion confirmation.
 - Card-control contrast across all palettes, keyboard and touch flyouts, and commander minus confirmation from the editor, tracker and card details.
 - Search results, card-printing dialog fit, keyboard Escape dismissal and same-context reload preservation.
