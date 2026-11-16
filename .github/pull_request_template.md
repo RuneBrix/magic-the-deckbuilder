@@ -10,6 +10,8 @@ Closes #... or Refs #... (replace with actual issue numbers).
 
 List tests/manual checks performed, results and any untested platforms.
 
+For UI changes, summarize affected-state results and link evidence from [UI acceptance](../docs/DEVELOPMENT.md#ui-acceptance), including specific checks not performed.
+
 ## Tracking
 
 - [ ] Feature inventory updated if capabilities or limitations changed.

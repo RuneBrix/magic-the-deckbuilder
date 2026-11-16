@@ -5,6 +5,21 @@ Visual cards have palette-colored triangular quantities inside rounded top-left 
 
 The workspace serves card discovery and deck editing. Issue [#9](https://github.com/RuneBrix/magic-the-deckbuilder/issues/9) established a collector’s index: warm paper, forest-green ink, crisp rules and restrained square controls. The shared header, dedicated deck editor and library in issues [#16](https://github.com/RuneBrix/magic-the-deckbuilder/issues/16), [#17](https://github.com/RuneBrix/magic-the-deckbuilder/issues/17) and [#18](https://github.com/RuneBrix/magic-the-deckbuilder/issues/18) extend this visual world. Card imagery remains complete and uncropped in discovery, details and deck-row previews. Library covers use art-focused landscape crops (#38).
 
+## Interface principles
+
+Arcana prioritizes card browsing and editing with predictable actions, scannable information and concise task language. Apply these principles to new features and changes within the selected scope.
+
+- **Stable interaction:** hover and focus update a reserved preview area or non-displacing layer. Neighboring card/control targets and following sections keep their positions during inspection. Explicit disclosure, navigation and edits may change layout; preserve useful focus and scroll position. Keep essential information reachable by keyboard and touch.
+- **Predictable text layout:** define what wraps, truncates or moves to details for repeated cards, tables and group headers. Align corresponding fields and actions across peers. Check long names, large counts and incomplete price summaries. Essential labels, validation and instructions reflow; compact summaries retain access to full values. Support enlarged text rather than enforcing fixed heights everywhere.
+- **Task-focused copy:** visible text names an action, identifies its target or scope, reports a meaningful result or explains recovery. Prefer clearer controls and labels before adding explanatory sentences. Put optional provenance, storage/API mechanics and calculation policy in relevant details/help. Keep actionable errors and material uncertainty visible.
+- **Clear hierarchy:** emphasize the current task and parent section; group controls with their values and feedback. Use available width for scanning without spreading related information apart. Render selection summaries when selections exist; use concise empty states with useful next actions.
+- **Contextual disclosure:** keep frequent actions discoverable and reveal secondary tools deliberately near their task. Reuse established menus, dialogs and previews with consistent names, focus and dismissal behavior. Required guidance and destructive-action scope remain visible when needed.
+- **Consistent meaning:** equivalent actions share labels and behavior across surfaces. Examples remain distinct from entered values. Saved metadata, named destinations and partial-data truth survive presentation changes.
+
+Selected current issue criteria define intentional behavior changes. Identify conflicts with existing contracts before implementing, then update affected descriptions and assertions together. Preserve unrelated behavior and keep unresolved product decisions explicit. Follow [UI acceptance](docs/DEVELOPMENT.md#ui-acceptance) before handoff.
+
+Existing stack reveals and hover captions described below record current behavior. [#186](https://github.com/RuneBrix/magic-the-deckbuilder/issues/186), [#188](https://github.com/RuneBrix/magic-the-deckbuilder/issues/188) and [#193](https://github.com/RuneBrix/magic-the-deckbuilder/issues/193) request stable browsing, concise metadata and aligned headers; implement their selected criteria with the corresponding contract/test changes. This instruction update does not claim those application changes are complete.
+
 ## Typography and icons
 
 Self-hosted Newsreader gives headings and the wordmark an editorial character. Public Sans carries controls and dense deck rows. Font licenses and provenance live in public/fonts/. Headings use moderate weight and tracking no tighter than -0.025em. Body copy names concrete tasks, with no decorative slogans.
