@@ -1,0 +1,75 @@
+import {test,expect} from '@playwright/test';
+import {prepareApp,cards} from './fixtures.mjs';
+
+test('cheapest scans retry one failed identity and apply reviewed regular printings safely',async({page,isMobile},testInfo)=>{
+  await prepareApp(page);
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key)),d=data.decks[0];
+    d.cards=d.cards.slice(0,4);
+    d.cards[1].tags=['Draw','Private secondary'];
+    d.cards[1].card.name='A long card name for reviewing the selected printing without losing deck functions';
+    d.cards[2].finish='foil';
+    d.cards[3].zone='maybeboard';
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.reload();
+  const attempts=new Map();
+  await page.route('**/api/search?**',async route=>{
+    const params=new URL(route.request().url()).searchParams,id=params.get('q').match(/oracleid:([^ )]+)/)[1],pageNumber=Number(params.get('page'));
+    attempts.set(id,(attempts.get(id)||0)+1);
+    if(id===cards[1].oracle_id && attempts.get(id)===1){await route.fulfill({status:503,json:{error:'Temporary printing lookup failure'}});return;}
+    const card=cards.find(card=>card.oracle_id===id);
+    const last=id!==cards[0].oracle_id || pageNumber===5;
+    await route.fulfill({json:{data:[{...card,id:'cheaper-'+card.id,set:'low',games:['paper'],prices:{eur:last?'0.25':'9.00',usd:'0.50'}}],has_more:!last}});
+  });
+  const open=async()=>{await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();await page.getByRole('tab',{name:'Ownership & costs',exact:true}).click();};
+  await open();
+  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')));
+  const withoutTime=data=>({...data,cards:data.cards.map(entry=>{const {legalityUpdatedAt,...card}=entry.card;return {...entry,card};}),updated:undefined});
+  const before=await stored();
+  await page.getByRole('button',{name:'Check cheapest printings',exact:true}).press('Enter');
+  const retry=page.getByRole('button',{name:'Retry incomplete scans',exact:true});
+  await expect(retry).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('1 card scan needs retry');
+  await expect(page.getByText('Checked 3 of 4 cards.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('row').filter({hasText:'A long card name'})).toContainText('Scan incomplete');
+  expect(attempts.get(cards[0].oracle_id)).toBe(5);
+  await retry.press('Enter');
+  await expect(page.getByRole('button',{name:'Check cheapest printings',exact:true})).toBeVisible();
+  expect(attempts.get(cards[0].oracle_id)).toBe(5);expect(attempts.get(cards[1].oracle_id)).toBe(2);
+  expect(withoutTime((await stored()).decks[0])).toEqual(withoutTime(before.decks[0]));
+  const apply=page.getByRole('button',{name:'Apply cheapest printings…',exact:true});
+  if(isMobile)await apply.tap();else await apply.press('Enter');
+  const dialog=page.getByRole('dialog');
+  await expect(dialog).toContainText('Main deck, Command zone, Sideboard');
+  await expect(dialog).toContainText('3 copies to update');
+  await expect(dialog).toContainText('Foil, etched, basic lands');
+  await expect(dialog.getByRole('button',{name:'Keep printings',exact:true})).toBeFocused();
+  await dialog.getByRole('button',{name:'Keep printings',exact:true}).press('Enter');
+  expect(withoutTime((await stored()).decks[0])).toEqual(withoutTime(before.decks[0]));
+  await apply.click();
+  await dialog.getByText('Review 2 printing changes',{exact:true}).click();
+  await page.screenshot({path:testInfo.outputPath('cheapest-review.png')});
+  expect(await dialog.evaluate(el=>{const b=el.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.top>=0&&b.bottom<=innerHeight;})).toBe(true);
+  await page.evaluate(()=>{
+    const original=Storage.prototype.setItem;window.failCheapest=true;
+    Storage.prototype.setItem=function(key,value){if(key==='arcana.workspace.v2'&&window.failCheapest)throw Error('Quota');return original.call(this,key,value);};
+  });
+  const confirm=dialog.getByRole('button',{name:'Apply 3 copies',exact:true});
+  await confirm.click();
+  await expect(dialog.getByRole('alert')).toContainText('Browser storage is full');
+  expect(withoutTime((await stored()).decks[0])).toEqual(withoutTime(before.decks[0]));
+  await page.evaluate(()=>window.failCheapest=false);await confirm.click();
+  await expect(dialog).not.toBeVisible();
+  await expect(apply).toBeFocused();
+  const after=await stored();
+  expect(after.decks[0].cards[0].card.id).toBe('cheaper-'+cards[0].id);
+  expect(after.decks[0].cards[1].card.id).toBe('cheaper-'+cards[1].id);
+  expect(after.decks[0].cards[1].tags).toEqual(['Draw','Private secondary']);
+  expect(after.decks[0].cards[2].card.id).toBe(cards[2].id);expect(after.decks[0].cards[2].finish).toBe('foil');
+  expect(after.decks[0].cards[3].card.id).toBe(cards[3].id);expect(after.collection).toEqual(before.collection);
+  await page.reload();await open();
+  expect((await stored()).decks[0].cards.map(e=>[e.card.id,e.zone,e.qty,e.tags])).toEqual(after.decks[0].cards.map(e=>[e.card.id,e.zone,e.qty,e.tags]));
+  await page.screenshot({path:testInfo.outputPath('cheapest-applied.png'),fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+});

@@ -1,5 +1,10 @@
 # Changelog
 
+## Complete cheapest scans and printing application
+
+- Scan each nonbasic card independently through its final page, remove the 200-card/four-page batch limits, show progress and per-card errors, and retain completed/last-good results through cancellation and retry (#167).
+- Review and apply verified regular English cheapest printings to selected zones. Preserve foil/etched entries, basic lands, unverified results, quantities, zones and functions; combine converging variants and save before applying changes. Inventory remains unchanged (#174).
+
 ## Deck currency and basic-land costs
 
 - Save a euro or US dollar currency for each deck and apply its actual finish quotes across Cards, previews, printing dialogs, ownership estimates, price refresh and cheapest comparisons. Currency changes discard stale cheapest results (#171).
