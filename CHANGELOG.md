@@ -1,5 +1,11 @@
 # Changelog
 
+## Stable card visuals and ownership — 2026-11-16
+
+- Use the developer-selected fixed full-card layouts and permanent price-only captions; hover/focus no longer moves card targets or following sections (#186).
+- Add static foil color sheen and neutral etched treatment to selected deck/Collection artwork and deck previews, keeping finish accessible and data unchanged (#194).
+- Use outlined, filled and split quantity markers for zero, full and partial collection coverage; show unassessed zones/identities distinctly and keep numbers readable on opaque backings (#197).
+
 ## Deck navigation and Statistics layout — 2026-11-16
 
 - Return My decks to the last opened deck during the session; add Back to library above the deck title, retain library startup/reload and remove the redundant Find cards to add button (#187).

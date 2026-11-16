@@ -239,7 +239,7 @@ test('left preview follows pointer and focus by zone, survives rerender and clea
   assert.equal(vm.runInContext('previewKey',w.context),''); // Same card identity in a different deck must not inherit the old selection.
 });
 
-test('all four deck views share filters, grouping, quantities, printing and menus; horizontal visual stacks are the default', () => {
+test('all four deck views share filters, grouping, quantities, printing and menus; horizontal visual cards are the default', () => {
   const d=editorDeck();d.cards.push({...structuredClone(d.cards[1]),zone:'maybeboard',qty:3});
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor')",w.context);
   assert.equal(vm.runInContext('editorOptions.layout',w.context),'visual-horizontal');
@@ -251,13 +251,13 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     assert.deepEqual(headings,['Command zone','Main deck','Maybeboard']);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="deck-card-name" aria-label="Leader" title="Leader · Unknown set/);
     else {
-      assert.match(w.node('#app').innerHTML,/<span class="entry-quantity"[^>]*>\d+<\/span><div class="card-side-controls">[\s\S]*?<\/div><button class="card-art"/);
+      assert.match(w.node('#app').innerHTML,/<span class="entry-quantity"[^>]*>[\s\S]*?<span class="quantity-number">\d+<\/span><\/span><div class="card-side-controls">[\s\S]*?<\/div><button class="card-art"/);
       assert.doesNotMatch(w.node('#app').innerHTML,/card-toolbar/);
     }
     assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,layout.startsWith('visual')?3:0);
     assert.equal((w.node('#app').innerHTML.match(/data-card-menu=/g)||[]).length,3);
     const largeQuantity=vm.runInContext('deckEntry({...decks[0].cards[0],qty:500})',w.context);
-    if(layout.startsWith('visual'))assert.match(largeQuantity,/class="entry-quantity three-digits" aria-label="500 copies">500<\/span>/);
+    if(layout.startsWith('visual'))assert.match(largeQuantity,/class="entry-quantity three-digits"[^>]*aria-label="500 copies[^\"]*"[\s\S]*?class="quantity-number">500<\/span>/);
     else assert.doesNotMatch(largeQuantity,/three-digits/);
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
@@ -270,16 +270,14 @@ test('all four deck views share filters, grouping, quantities, printing and menu
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 
-test('horizontal stack slots follow visible group entries without changing quantities or saved data', () => {
+test('fixed visual card slots follow visible group entries without changing quantities or saved data', () => {
   const d=editorDeck();
   for(let i=0;i<20;i++)d.cards.push({card:{...structuredClone(d.cards[1].card),id:'stack-'+i,oracle_id:'stack-'+i,name:'Stack card '+i},qty:1,tags:[],zone:'main'});
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor');editorOptions.group='none';render()",w.context);
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,22);
-  assert.match(w.node('#app').innerHTML,/--stack-divisor:19/);
   w.node('#editor-search').input({target:{value:'Stack card'}});
   assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,20);
-  assert.match(w.node('#editor-card-area').outerHTML,/--stack-divisor:18/);
   w.node('#editor-search').input({target:{value:'Stack card 19'}});
   assert.equal((w.node('#editor-card-area').outerHTML.match(/class="card-slot"/g)||[]).length,1);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
@@ -299,8 +297,8 @@ test('deck prices and preview follow visible quantities, primary functions and s
   const html = () => w.node('#app').innerHTML;
   assert.match(html(), /Sorcery <span>· 5 cards<\/span><\/h4><p[^>]+>\$2\.20 · 3 copies unpriced/);
   assert.match(html(), /Main deck · 5<span[^>]+> · \$2\.20 · 3 copies unpriced/);
-  assert.match(html(), /Ramp spell<\/span><span>ONE · \$1\.10/);
-  assert.match(html(), /Other spell<\/span><span>Set unknown · Price unavailable/);
+  assert.match(html(), /class="stack-card-meta"[^>]*>\$1\.10<\/div>/);
+  assert.match(html(), /class="stack-card-meta"[^>]*>Price unavailable<\/div>/);
 
   w.node('#editor-search').input({ target: { value: 'Ramp' } });
   assert.match(w.node('#editor-card-area').outerHTML, /Main deck · 5 · 2 shown<span[^>]+> · \$2\.20 for shown cards/);
@@ -313,8 +311,8 @@ test('deck prices and preview follow visible quantities, primary functions and s
   w.context.replacement = { ...ramp.card, id: 'foil-version', set: 'two', finishes: ['foil'], prices: { usd: '99.00', usd_foil: '0.75' } };
   vm.runInContext(`setEntryPrinting(current(), ${JSON.stringify(key)}, replacement);render()`, w.context);
   assert.match(html(), /\$2\.25 for shown cards/);
-  assert.match(html(), /TWO · \$0\.75/);
-  assert.match(html(), /\$0\.75 · foil/);
+  assert.match(html(), /class="stack-card-meta"[^>]*>\$0\.75<\/div>/);
+  assert.match(html(), /data-finish="foil"/);
   assert.deepEqual(core.deckPrintingPrice({ finishes: ['etched'], prices: { usd_etched: '0.00' } }), { finish: 'etched', field:'usd_etched', cents: 0 });
   assert.equal(core.deckPrintingPrice({ finishes: ['foil'], prices: { usd: '5.00' } }).cents, null);
   assert.equal(core.deckPrintingPrice({ finishes: ['foil', 'etched'], prices: { usd_foil: '5.00' } }).cents, null);
@@ -421,4 +419,28 @@ test('My decks remembers only deliberately opened session decks and falls back s
   const reloaded=workspace({savedDecks:JSON.stringify([a,b]),initialView:null});
   assert.equal(vm.runInContext('rememberedDeck',reloaded.context),'');
   assert.equal(vm.runInContext('view',reloaded.context),'decks');
+});
+
+test('visual ownership markers use the existing allocation before filtering and never change stored data',()=>{
+  const d=editorDeck();
+  const side={...structuredClone(d.cards[1]),qty:1,zone:'sideboard'};
+  d.cards.push(side,{card:editorCard('Owned'),qty:12,tags:[],zone:'main'}, {...structuredClone(d.cards[1]),qty:1,zone:'maybeboard'});
+  const lots=[{card:{...editorCard('alternate'),oracle_id:'Ramp spell'},finish:'foil',qty:1},{card:editorCard('Owned'),finish:'regular',qty:12}];
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],lots))});
+  vm.runInContext("openDeck('editor')",w.context);
+  const before=vm.runInContext('JSON.stringify({decks,collection})',w.context);
+  const badge=(id,zone)=>vm.runInContext(`entryBadge(decks[0].cards.find(e=>e.card.id==='${id}'&&e.zone==='${zone}'),true,collectionReport(decks[0],collection).rows.find(r=>r.entry.card.id==='${id}'&&r.zone==='${zone}'))`,w.context);
+  assert.match(badge('Leader','command'),/data-ownership="missing"/);
+  assert.match(badge('Ramp spell','main'),/data-ownership="partial"[\s\S]*1 of 2 copies covered by collection; 1 missing/);
+  assert.match(badge('Owned','main'),/data-ownership="owned"[\s\S]*12 of 12 copies covered/);
+  assert.match(badge('Ramp spell','sideboard'),/data-ownership="missing"/);
+  assert.match(badge('Ramp spell','maybeboard'),/data-ownership="excluded"[\s\S]*outside ownership scope/);
+  w.node('#editor-search').input({target:{value:'Owned'}});
+  assert.equal(vm.runInContext('JSON.stringify({decks,collection})',w.context),before);
+  vm.runInContext("decks[0].ownershipMatch='printing'",w.context);
+  assert.match(badge('Ramp spell','main'),/data-ownership="missing"/);
+  vm.runInContext("decks[0].ownershipMatch='rules';decks[0].budgetZones=['sideboard']",w.context);
+  assert.match(badge('Ramp spell','sideboard'),/data-ownership="owned"/);
+  assert.match(badge('Ramp spell','main'),/data-ownership="excluded"/);
+  assert.equal(w.writes.length,0);
 });
