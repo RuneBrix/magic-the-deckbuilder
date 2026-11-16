@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck navigation and Statistics layout — 2026-11-16
+
+- Return My decks to the last opened deck during the session; add Back to library above the deck title, retain library startup/reload and remove the redundant Find cards to add button (#187).
+- Reduce top-navigation padding while retaining readable labels, 44px controls and measured sticky/menu/drag/anchor offsets (#196).
+- Center and widen Statistics, emphasize section headings and align values with clear section separation; preserve every calculation and tool (#169).
+
 ## Settings, palettes and welcome guide — 2026-11-16
 
 - Move Settings into a normal page with a named Back action that preserves the prior deck/search/collection workflow (#177).

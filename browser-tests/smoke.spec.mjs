@@ -149,7 +149,7 @@ test('deck navigation, sticky header, statistics and ownership fit the viewport'
   await expect(page.getByRole('heading', { name: 'About bracket data' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Current official Commander brackets and Game Changers' })).toBeVisible();
   await noPageOverflow(page);
-  await page.getByRole('button', { name: 'My decks', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to library', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
 });
 
@@ -233,7 +233,7 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await expect(page.getByRole('table', { name: 'Draw chances by card type' }).getByRole('row', { name: /Creature/ })).toContainText('100%');
   await noPageOverflow(page);
 
-  await page.getByRole('button', { name: 'My decks', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to library', exact: true }).click();
   await page.getByRole('button', { name: 'Empty Statistics', exact: true }).click();
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
   await expect(page.getByText('Add cards to Main deck to calculate draw chances.')).toBeVisible();
@@ -489,7 +489,8 @@ test('commander minus confirms from the deck and tracker', async ({ page, isMobi
   await expect(minus).toBeFocused();
   expect(await storedDeck()).toEqual(original);
 
-  await page.getByRole('button', { name: 'Find cards to add', exact: true }).click();
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Track deck', exact: true }).selectOption('smoke-deck');
   await activate(minus);
   await expect(keep).toBeFocused();
   await page.keyboard.press('Escape');
@@ -706,9 +707,10 @@ test('Explore navigation starts fresh and tracker guidance follows the selector'
   const track = page.getByRole('combobox', { name: 'Track deck', exact: true });
   const raw = page.locator('#raw');
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
-  await page.getByRole('button', { name: 'Find cards to add', exact: true }).click();
+  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Track deck', exact: true }).selectOption('smoke-deck');
   await expect(track).toHaveValue('smoke-deck');
-  await expect(raw).toBeFocused();
+  await raw.focus();
   await expect(raw).toHaveValue('');
   const target = page.locator('.exploration-target');
   await expect(target.getByText('Default destination: Smoke Garden · Main deck')).toBeVisible();

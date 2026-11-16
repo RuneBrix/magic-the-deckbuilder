@@ -53,7 +53,7 @@ test('only removing the last command-zone copy asks first and confirms for that 
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards)',w.context)),d.cards.slice(1));
 });
 
-test('the full deck editor can return to the current search with its deck tracked',async()=>{
+test('the full deck editor retains its tab and query through page navigation',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("filters=parseQuery('draw')",w.context);
   const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
   await click({view:'decks'});
@@ -69,7 +69,10 @@ test('the full deck editor can return to the current search with its deck tracke
   assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
   await click({tab:'checks'});assert.match(w.node('#app').innerHTML,/Manual review/);
   await click({tab:'stats'});assert.match(w.node('#app').innerHTML,/Mana curve/);
-  await click({action:'find-cards'});
+  await click({view:'collection'});
+  await click({view:'decks'});
+  assert.equal(vm.runInContext('view',w.context),'deck');
+  assert.equal(vm.runInContext('deckTab',w.context),'stats');
   assert.equal(vm.runInContext('filters.query',w.context),'draw');
   assert.equal(vm.runInContext('tracker.id',w.context),'editor');
 });
@@ -384,4 +387,38 @@ test('navigation height tracks wrapped header dimensions without touching deck s
   vm.runInContext('render()',w.context);
   assert.deepEqual(sizes,[['--nav-height','125px'],['--nav-height','76px']]);
   assert.equal(w.writes.length,0);
+});
+
+test('My decks remembers only deliberately opened session decks and falls back safely after deletion',async()=>{
+  const a=editorDeck(),b={...editorDeck(),id:'second',name:'Second deck'};
+  const w=workspace({savedDecks:JSON.stringify([a,b]),initialView:null});
+  const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
+  await click({view:'collection'});await click({view:'decks'});
+  assert.equal(vm.runInContext('view',w.context),'decks');
+  await click({deck:'editor'});await click({tab:'stats'});
+  for(const destination of ['collection','explore']) {
+    await click({view:destination});
+    if(destination==='explore')vm.runInContext("trackDeck('second');filters=parseQuery('otag:ramp')",w.context);
+    await click({view:'decks'});
+    assert.equal(vm.runInContext('view',w.context),'deck');
+    assert.equal(vm.runInContext('active',w.context),'editor');
+    assert.equal(vm.runInContext('deckTab',w.context),'stats');
+  }
+  vm.runInContext('settings()',w.context);await click({view:'decks'});
+  assert.equal(vm.runInContext('active',w.context),'editor');
+  assert.equal(vm.runInContext('tracker.id',w.context),'second');
+  assert.equal(vm.runInContext('filters.query',w.context),'otag:ramp');
+  assert.match(w.node('#app').innerHTML,/data-home data-view="decks"[^>]*>.*Back to library/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Find cards to add/);
+  await click({view:'decks',home:''});
+  assert.equal(vm.runInContext('view',w.context),'decks');
+  await click({deck:'second'});await click({view:'collection'});await click({view:'decks'});
+  assert.equal(vm.runInContext('active',w.context),'second');
+  assert.ok(w.writes.every(([key])=>key==='arcana.explorer.v1'));
+  vm.runInContext('deleteDeck(decks[1])',w.context);w.node('#confirm-delete').onclick();
+  await click({view:'collection'});await click({view:'decks'});
+  assert.equal(vm.runInContext('view',w.context),'decks');
+  const reloaded=workspace({savedDecks:JSON.stringify([a,b]),initialView:null});
+  assert.equal(vm.runInContext('rememberedDeck',reloaded.context),'');
+  assert.equal(vm.runInContext('view',reloaded.context),'decks');
 });
