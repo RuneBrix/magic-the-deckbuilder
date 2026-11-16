@@ -137,7 +137,7 @@ function appliedFiltersSummary() {
   if(filters.error)return 'Query incomplete or invalid';
   const labels=relaxationOptions(filters,current()).map(option=>option.label);
   if(filters.opaque.length)labels.push(`${filters.opaque.length} query-only ${filters.opaque.length===1?'expression':'expressions'}`);
-  return labels.join(' · ')||'No filters applied';
+  return labels.join(' · ');
 }
 const clearFilterButton = (name, label) => `<button type="button" class="guided-clear" data-clear-filter="${name}" aria-label="Clear ${esc(label)}" title="Clear ${esc(label)}">${icon('close',16)}</button>`;
 const clearable = (name, label, control) => `<div class="guided-entry">${control}${clearFilterButton(name,label)}</div>`;
@@ -175,7 +175,7 @@ function guidedControls() {
   const removeRow=(family,i,total)=>`<button type="button" class="remove-filter-row" data-remove-filter="${family}" data-filter-index="${i}" aria-label="Remove ${repeatableFilters[family].label} filter ${i+1}" title="Remove ${repeatableFilters[family].label} filter ${i+1}" ${total===1?'disabled':''}>${icon('close',16)}</button>`;
   const values=filters.values.length?filters.values:[repeatableFilters.mv.empty()],phrases=filters.oracle.length?filters.oracle:[repeatableFilters.oracle.empty()];
   const valueRows=`<div class="filter-rows" role="region" aria-label="Mana-value comparisons" tabindex="0"><div class="filter-column-head mana-columns" aria-hidden="true"><span>Comparison</span><span>Mana value</span><span></span></div>${values.map((row,i)=>`<div class="repeatable-filter-row mana-columns">${mode('mv-op-'+i,row.op,[['<=','At most (≤)'],['<','Less than (<)'],['=','Exactly (=)'],['>=','At least (≥)'],['>','More than (>)'],['!=','Not equal (≠)']],'Comparison '+(i+1))}${clearable('mv-'+i,'mana value '+(i+1),`<input type="number" min="0" step="any" name="mv-${i}" value="${esc(row.value)}" aria-label="Mana value ${i+1}" placeholder="Any">`)}${removeRow('mv',i,values.length)}</div>`).join('')}</div>`;
-  const oracleRows=`<div class="filter-rows" role="region" aria-label="Oracle phrases" tabindex="0"><div class="filter-column-head oracle-columns" aria-hidden="true"><span>Text source</span><span>Rules-text phrase</span><span></span></div>${phrases.map((row,i)=>`<div class="repeatable-filter-row oracle-columns">${mode('oracle-mode-'+i,row.mode,[['o','Oracle'],['fo','Full oracle']],'Text source '+(i+1))}${clearable('oracle-'+i,'rules-text phrase '+(i+1),`<input name="oracle-${i}" value="${esc(row.text)}" aria-label="Rules-text phrase ${i+1}" maxlength="300" placeholder="e.g. whenever ~ attacks">`)}${removeRow('oracle',i,phrases.length)}</div>`).join('')}</div><p class="hint">Full oracle includes reminder text.</p>`;
+  const oracleRows=`<div class="filter-rows" role="region" aria-label="Oracle phrases" tabindex="0"><div class="filter-column-head oracle-columns" aria-hidden="true"><span>Text source</span><span>Rules-text phrase</span><span></span></div>${phrases.map((row,i)=>`<div class="repeatable-filter-row oracle-columns"><label class="oracle-source"><span class="filter-row-label">Text source</span>${mode('oracle-mode-'+i,row.mode,[['o','Oracle'],['fo','Full oracle']],'Text source '+(i+1))}</label>${clearable('oracle-'+i,'rules-text phrase '+(i+1),`<label><span class="filter-row-label">Rules-text phrase</span><input name="oracle-${i}" value="${esc(row.text)}" aria-label="Rules-text phrase ${i+1}" maxlength="300" placeholder="e.g. whenever ~ attacks"></label>`)}${removeRow('oracle',i,phrases.length)}</div>`).join('')}</div><p class="hint">Full oracle includes reminder text.</p>`;
   const colorFamily=colorTarget||colorTargets.find(([family])=>filters.parts.some(part=>part.affected.includes(family)))?.[0]||'color';
   const colorTitle=colorTargets.find(([family])=>family===colorFamily)[1];
   const {mode:colorMode,values:colors}=filters[colorFamily];
@@ -207,6 +207,7 @@ function guidedControls() {
 }
 function uniqueFormats(){return [...new Set([...FORMATS,...(filters.legal?[filters.legal]:[])])];}
 function selectedFunctions() {
+  if (!filters.tags.length) return '';
   return `<section class="selected-functions" aria-label="Selected function filters"><div class="selected-functions-heading"><h3>Selected functions</h3><label>Combine functions by<select id="tag-match"><option value="all" ${filters.match==='all'?'selected':''}>Matching all (AND)</option><option value="any" ${filters.match==='any'?'selected':''}>Matching any (OR)</option></select></label></div><div class="active-tags">${filters.tags.map(t=>`<button class="tag-option selected" data-tag="${esc(t)}" aria-label="Remove ${esc(t)} filter">${esc(t.replaceAll('-',' '))} ${icon('close',12)}</button>`).join('')}</div></section>`;
 }
 function searchPanels() {
@@ -226,6 +227,7 @@ function searchPanels() {
       <input id="tag-search" type="search" value="${esc(tagSearch)}" maxlength="200" placeholder="e.g. ramp or removal" aria-describedby="tag-match-count">
       <p id="tag-match-count" role="status">${tagMatchCount(matches)}</p>
       <div id="tag-options">${tagOptions(matches)}</div>
+      <details class="query-help function-data-help"><summary>About function data</summary><p>Card counts are direct taggings in the <a href="${esc(TAG_CATALOG.source)}" target="_blank" rel="noreferrer">Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}</a>. Live search totals can differ.</p></details>
     </div>
   </details>`;
 }
@@ -247,7 +249,7 @@ function tagMatches() {
   return tagSearch.trim()?findTags(tagSearch):TAGS.map(([id])=>tagById.get(id)||resolveTag(id)).filter(Boolean);
 }
 function tagMatchCount(matches) {
-  return tagSearch.trim()?`${matches.length.toLocaleString()} matching ${matches.length===1?'tag':'tags'}`:`${matches.length} starting points · Search ${TAG_CATALOG.tags.length.toLocaleString()} tags`;
+  return tagSearch.trim()?`${matches.length.toLocaleString()} matching ${matches.length===1?'tag':'tags'}`:'';
 }
 function unlistedFunctionOption(locked) {
   const value=tagSearch.trim(),slug=value.toLowerCase().replace(/\s+/g,'-');
@@ -281,8 +283,7 @@ function tagOptions(matches) {
   const start=(tagPage-1)*TAG_PAGE_SIZE,shown=matches.slice(start,start+TAG_PAGE_SIZE);
   const locked=filters.locked.includes('tags');
   return `${locked?'<p class="hint">Function expressions in a complex query group must be edited in the query above.</p>':''}
-    ${shown.length?`<div class="tag-grid-heading"><p class="hint">Directly tagged cards · ${esc(TAG_CATALOG.updated.slice(0,10))} snapshot</p>
-      ${pages>1?`<label for="tag-page">Page <select id="tag-page">${Array.from({length:pages},(_,i)=>`<option value="${i+1}" ${i+1===tagPage?'selected':''}>${i+1} of ${pages}</option>`).join('')}</select></label>`:''}</div>
+    ${shown.length?`${pages>1?`<div class="tag-grid-heading"><label for="tag-page">Page <select id="tag-page">${Array.from({length:pages},(_,i)=>`<option value="${i+1}" ${i+1===tagPage?'selected':''}>${i+1} of ${pages}</option>`).join('')}</select></label></div>`:''}
     <ul class="tag-options">${shown.map(tag=>{
       const action=tagFilterAction(tag.id);
       return `<li class="tag-choice"><strong>${esc(tagName(tag.id))}</strong><span class="tag-card-count">${tagCardCount(tag)}</span>

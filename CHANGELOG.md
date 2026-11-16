@@ -1,5 +1,11 @@
 # Changelog
 
+## Explore filter readability
+
+- Give guided filters wider columns, more space between selected chips and repeated values, and balanced empty panel headings (#182).
+- Preserve complete focus outlines in scrolling filter rows, stack labeled Oracle controls in narrow panels, and center the generic-mana help symbol (#190).
+- Hide empty selected-function summaries, emphasize Find a function and move snapshot/count context into About function data (#192).
+
 ## Deck summaries and stack headers
 
 - Combine all four zone counts with the editor's playing-deck summary; keep Maybeboard outside playing totals (#165).

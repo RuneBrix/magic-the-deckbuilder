@@ -28,7 +28,9 @@ test('tag discovery pages through alias matches with snapshot counts and inline 
   const html = w.node('#app').innerHTML;
   assert.match(html, /Add flicker filter/);
   assert.match(html, /data-browse-tag="flicker"/);
-  assert.match(html, /Directly tagged cards/);
+  assert.doesNotMatch(html, /Directly tagged cards|starting points/);
+  assert.match(html, /About function data/);
+  assert.match(html, /Scryfall Oracle Tags snapshot from/);
   assert.match(html, /class="tag-card-count">[\d,.]+ cards?/);
   assert.match(html, /outside this snapshot/);
   assert.match(html, /id="tag-match-count"[^>]*>[\d,.]+ matching tags?/);
