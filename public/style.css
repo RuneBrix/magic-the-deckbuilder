@@ -1066,6 +1066,7 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .collection-row>div:first-child{display:grid;gap:3px;min-width:0}.collection-row span{color:var(--muted);font-size:12px;overflow-wrap:anywhere}.collection-row .row-actions{display:flex;gap:6px}
 .planning{width:100%;min-width:0}.planning-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-bottom:14px}
 .planning-actions{display:flex;flex-wrap:wrap;gap:8px}
+.planning-actions button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .planning-scope{min-width:0;margin:0 0 12px;padding:0;border:0}.planning-scope legend{padding:0;font-size:12px;font-weight:600}
 .planning-scope>div{display:flex;flex-wrap:wrap;gap:0 16px}.planning-scope label{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--ink);cursor:pointer}.planning-scope input{margin:0}
 .planning-summaries{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:24px 40px;margin:8px 0 24px}

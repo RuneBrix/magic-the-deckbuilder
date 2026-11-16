@@ -1,8 +1,6 @@
-import { parseEuroQuote, rulesIdentity } from './core.js';
+import { parseEuroQuote, rulesIdentity, validateBackup, setEntryPrinting, entryKey, deckCurrency, deckPrintingPrice, isBasicLand, zoneFor, DEFAULT_BUDGET_ZONES } from './core.js';
 
-const IDENTITIES_PER_SCAN = 200;
-const IDENTITIES_PER_QUERY = 8;
-const PAGES_PER_QUERY = 4;
+const MAX_PAGES = 1000; // Same pagination boundary as the local search proxy.
 
 export function priceIdentity(card) {
   const id = rulesIdentity(card);
@@ -22,31 +20,80 @@ export function refreshPriceQuotes(card, source, currency='EUR') {
   return { ...card, prices, ...(productId ? { cardmarket_id: productId } : {}) };
 }
 
-// Every identity in a truncated batch stays unpriced. A later page may contain a lower quote.
-export async function cheapestPrintings(cards, fetchPage, currency='EUR') {
-  const ids = [...new Set(cards.map(priceIdentity).filter(Boolean))].sort().slice(0, IDENTITIES_PER_SCAN);
-  const quotes = new Map();
-  for (let offset = 0; offset < ids.length; offset += IDENTITIES_PER_QUERY) {
-    const batch = ids.slice(offset, offset + IDENTITIES_PER_QUERY);
-    const matches = new Map(batch.map(id => [id, null]));
-    const q = `game:paper lang:en is:nonfoil unique:prints (${batch.map(id => `oracleid:${id}`).join(' OR ')})`;
-    let incomplete = true;
-    for (let page = 1; page <= PAGES_PER_QUERY; page++) {
-      const result = await fetchPage(q, page);
-      if (!Array.isArray(result.data) || typeof result.has_more !== 'boolean') throw Error('Printing search returned an incomplete response.');
-      for (const card of result.data) {
-        const id = priceIdentity(card);
-        if (!matches.has(id) || card.lang !== 'en' || !Array.isArray(card.games) || !card.games.includes('paper') || !Array.isArray(card.finishes) || !card.finishes.includes('nonfoil')) continue;
-        const cents = parseEuroQuote(card.prices?.[currency.toLowerCase()]);
-        const previous = matches.get(id);
-        if (cents !== null && (!previous || cents < previous.cents)) matches.set(id, { cents, card });
+const eligible = card => card.lang === 'en' && Array.isArray(card.games) && card.games.includes('paper') && Array.isArray(card.finishes) && card.finishes.includes('nonfoil');
+
+// An identity becomes complete only after its final page. Retry skips completed
+// identities and restarts the interrupted identity, retaining last-complete quotes.
+export async function cheapestPrintings(cards, fetchPage, currency='EUR', {state={},signal,onProgress=()=>{}}={}) {
+  const ids=[...new Set(cards.map(priceIdentity).filter(Boolean))].sort();
+  state.quotes ??= new Map();state.completed ??= new Set();state.errors ??= new Map();
+  state.completed=new Set([...state.completed].filter(id=>ids.includes(id)));
+  for(const id of state.errors.keys())if(!ids.includes(id))state.errors.delete(id);
+  state.total=ids.length;
+  const names=new Map(cards.map(card=>[priceIdentity(card),card.name]));
+  for(const id of ids){
+    signal?.throwIfAborted();
+    if(state.completed.has(id))continue;
+    const q=`game:paper lang:en is:nonfoil unique:prints (oracleid:${id})`;
+    let best=null;
+    try{
+      for(let page=1;page<=MAX_PAGES;page++){
+        signal?.throwIfAborted();
+        onProgress({completed:state.completed.size,total:ids.length,name:names.get(id),page});
+        const result=await fetchPage(q,page);
+        signal?.throwIfAborted();
+        if(!Array.isArray(result.data) || typeof result.has_more!=='boolean')throw Error('Printing search returned an incomplete response.');
+        for(const card of result.data){
+          if(priceIdentity(card)!==id || !eligible(card))continue;
+          const cents=parseEuroQuote(card.prices?.[currency.toLowerCase()]);
+          if(cents!==null && (!best || cents<best.cents || cents===best.cents && String(card.id??'').localeCompare(String(best.card.id??''))<0))best={cents,card};
+        }
+        if(!result.has_more){
+          state.quotes.set(id,best);state.completed.add(id);state.errors.delete(id);
+          break;
+        }
+        if(page===MAX_PAGES)throw Error('Printing scan reached the proxy pagination limit. No partial minimum was used.');
       }
-      if (!result.has_more) {
-        incomplete = false;
-        break;
+    }catch(error){
+      if(signal?.aborted || error.name==='AbortError')throw error;
+      const message=`${error.message}${error.status?' (HTTP '+error.status+')':''}`;
+      state.errors.set(id,message);
+      if(!state.quotes.has(id) || state.quotes.get(id)?.incomplete)state.quotes.set(id,{incomplete:true,error:message});
+      if(error.status===429)break;
+    }
+  }
+  onProgress({completed:state.completed.size,total:ids.length});
+  return state.quotes;
+}
+
+export function cheapestDeckPlan(deck, comparison) {
+  validateBackup([deck]);
+  if(!comparison || comparison.currency!==deckCurrency(deck) || comparison.status==='checking')throw Error('Finish a price check in this deck currency first.');
+  const staged=structuredClone(deck),zones=deck.budgetZones??DEFAULT_BUDGET_ZONES,changes=[];
+  let skipped=0,already=0;
+  for(const entry of staged.cards){
+    if(!zones.includes(zoneFor(entry)))continue;
+    const id=priceIdentity(entry.card),quote=comparison.quotes?.get(id);
+    if(isBasicLand(entry.card) || deckPrintingPrice(entry.card,entry.finish).finish!=='regular' || !quote?.card || quote.incomplete || comparison.errors?.has(id) || comparison.completed && !comparison.completed.has(id)
+      || priceIdentity(quote.card)!==id || !eligible(quote.card) || parseEuroQuote(quote.card.prices?.[comparison.currency.toLowerCase()])!==quote.cents){skipped+=entry.qty;continue;}
+    if(entry.card.id===quote.card.id){already+=entry.qty;continue;}
+    const change={from:entry.card.name,fromSet:entry.card.set,toSet:quote.card.set,zone:zoneFor(entry),qty:entry.qty};
+    // Validate the replacement and retain latest legality before merging variants.
+    setEntryPrinting({cards:[entry]},entryKey(entry),quote.card,'regular');
+    changes.push(change);
+  }
+  const merged=[];
+  for(const entry of staged.cards){
+    const same=merged.find(other=>rulesIdentity(other.card)===rulesIdentity(entry.card) && other.card.id===entry.card.id && zoneFor(other)===zoneFor(entry) && (other.finish??deckPrintingPrice(other.card).finish)===(entry.finish??deckPrintingPrice(entry.card).finish));
+    if(same){
+      same.qty+=entry.qty;same.tags=[...new Set([...same.tags,...entry.tags])];
+      if(entry.companion)same.companion=true;
+      if(entry.card.legalities && entry.card.legalityUpdatedAt && (!same.card.legalityUpdatedAt || entry.card.legalityUpdatedAt>same.card.legalityUpdatedAt)){
+        same.card.legalities=entry.card.legalities;same.card.legalityUpdatedAt=entry.card.legalityUpdatedAt;
       }
     }
-    for (const [id, quote] of matches) quotes.set(id, incomplete ? { incomplete } : quote);
+    else merged.push(entry);
   }
-  return quotes;
+  staged.cards=merged;validateBackup([staged]);
+  return {deck:staged,changes,changed:changes.reduce((sum,change)=>sum+change.qty,0),skipped,already,merged:deck.cards.length-merged.length};
 }

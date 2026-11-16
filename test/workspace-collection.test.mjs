@@ -424,3 +424,35 @@ test('deck currency saves atomically, clears cheapest quotes and ignores late sc
   assert.equal(vm.runInContext('priceStates.has(current())',w.context),false);
   assert.equal(vm.runInContext('JSON.stringify(current().cards)',w.context),before);
 });
+
+test('cheapest printing application reviews scope, cancels safely and commits atomically with stale-result protection',()=>{
+  const d=editorDeck();
+  const oracle='00000000-0000-4000-8000-000000000001';
+  d.cards[1].card.oracle_id=oracle;
+  const owned={card:structuredClone(d.cards[1].card),qty:1,finish:'regular'};
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[owned]))});
+  w.context.cheaper={...d.cards[1].card,id:'cheaper',set:'low',lang:'en',games:['paper'],finishes:['nonfoil'],prices:{eur:'0.25'}};
+  vm.runInContext(`openDeck('editor');deckTab='planning';cheapestPriceStates.set(current(),{currency:'EUR',status:'done',quotes:new Map([['${oracle}',{card:cheaper,cents:25}]])});applyCheapestDialog()`,w.context);
+  const before=vm.runInContext('JSON.stringify({decks,collection})',w.context);
+  assert.match(w.node('#dialog').innerHTML,/Main deck, Command zone, Sideboard/);
+  assert.match(w.node('#dialog').innerHTML,/2 copies to update/);
+  w.node('#cancel-cheapest').onclick();
+  assert.equal(vm.runInContext('JSON.stringify({decks,collection})',w.context),before);assert.equal(w.writes.length,0);
+
+  vm.runInContext('applyCheapestDialog()',w.context);
+  const write=w.context.localStorage.setItem;
+  w.context.localStorage.setItem=()=>{throw Error('Quota');};
+  w.node('#confirm-cheapest').onclick();
+  assert.match(w.node('#apply-cheapest-error').textContent,/Browser storage is full/);
+  assert.equal(vm.runInContext('JSON.stringify({decks,collection})',w.context),before);
+  w.context.localStorage.setItem=write;
+  w.node('#confirm-cheapest').onclick();
+  const restored=core.readWorkspaceFile(JSON.parse(w.writes.at(-1)[1]));
+  assert.equal(restored.decks[0].cards[1].card.id,'cheaper');
+  assert.equal(restored.decks[0].cards[1].qty,2);assert.deepEqual(restored.decks[0].cards[1].tags,['Removal','Ramp']);
+  assert.deepEqual(restored.collection,[owned]);
+
+  vm.runInContext('applyCheapestDialog();current().cards[1].qty++',w.context);
+  const writes=w.writes.length;w.node('#confirm-cheapest').onclick();
+  assert.match(w.node('#apply-cheapest-error').textContent,/deck or price results changed/);assert.equal(w.writes.length,writes);
+});

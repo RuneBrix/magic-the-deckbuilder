@@ -4,7 +4,7 @@ import { collectionPage, CONDITION_LABELS, collectionChoices } from './collectio
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
 import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions } from './core.js';
-import { cheapestPrintings, refreshPriceQuotes } from './deck-prices.js';
+import { cheapestPrintings, refreshPriceQuotes, cheapestDeckPlan } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
 const $ = s => document.querySelector(s);
@@ -1555,6 +1555,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='refresh')refresh();
   if(action==='refresh-prices')await refreshPrices();
   if(action==='cheapest-prices')await checkCheapestPrices();
+  if(action==='apply-cheapest')applyCheapestDialog();
   if(action==='add-owned')collectionLotDialog();
   if(action==='import-collection')collectionImport();
   if(action==='clear-collection')clearCollection();
@@ -1928,7 +1929,8 @@ async function checkCheapestPrices(d=current()) {
     return;
   }
   const controller=new AbortController();
-  const state={currency,quotes:previous?.currency===currency?previous.quotes:undefined,checkedAt:previous?.checkedAt,status:'checking',controller};
+  const resume=previous?.currency===currency && ['cancelled','failed'].includes(previous.status);
+  const state={currency,quotes:new Map(previous?.currency===currency?previous.quotes:[]),completed:new Set(resume?previous.completed:[]),errors:new Map(resume?previous.errors:[]),status:'checking',controller};
   cheapestPriceStates.set(d,state);
   render();
   try {
@@ -1940,14 +1942,39 @@ async function checkCheapestPrices(d=current()) {
         if(error.status===404&&/no cards|0 cards|didn.t match any cards/i.test(error.message))return {data:[],has_more:false};
         throw error;
       }
-    },currency);
+    },currency,{state,signal:controller.signal,onProgress:progress=>{
+      if(controller.signal.aborted || cheapestPriceStates.get(d)!==state)return;
+      state.progress=progress;
+      if(view==='deck'&&current()===d&&deckTab==='planning'){
+        const status=$('#cheapest-progress');
+        if(status)status.textContent=`Checked ${progress.completed} of ${progress.total} cards.${progress.page?' '+progress.name+' · page '+progress.page:''}`;
+      }
+    }});
     if(controller.signal.aborted||!decks.includes(d)||deckCurrency(d)!==currency)return;
-    Object.assign(state,{quotes,checkedAt:new Date().toISOString(),status:'done'});
+    Object.assign(state,{quotes,checkedAt:new Date().toISOString(),status:state.errors.size?'failed':'done'});
   } catch(error) {
     if(controller.signal.aborted||!decks.includes(d))return;
     Object.assign(state,{status:'failed',error:error.message});
   }
   if(view==='deck'&&current()===d&&deckTab==='planning')render();
+}
+function applyCheapestDialog(d=current()){
+  if(!d)return;
+  const comparison=cheapestPriceStates.get(d),snapshot=()=>JSON.stringify({cards:d.cards,currency:deckCurrency(d),zones:d.budgetZones??DEFAULT_BUDGET_ZONES});
+  let plan;
+  try{plan=cheapestDeckPlan(d,comparison);}catch(error){toast(error.message);return;}
+  const before=snapshot(),zones=(d.budgetZones??DEFAULT_BUDGET_ZONES).map(zone=>ZONES[zone]).join(', ')||'None';
+  const summary=`${plan.changed} copies to update · ${plan.already} already use these printings · ${plan.skipped} left unchanged`;
+  showDialog(`<h2>Apply cheapest printings?</h2><p>${esc(d.name)} · ${esc(zones)}</p><p>Use verified regular English paper printings in ${currencySymbol(deckCurrency(d))}. Foil, etched, basic lands and cards without a completed result stay unchanged. Collection quantities stay intact.</p><p>${summary}</p>${plan.merged?`<p>${plan.merged} converging entries will combine their function lists in deck entry order.</p>`:''}${plan.changes.length?`<details><summary>Review ${plan.changes.length} printing changes</summary><ul>${plan.changes.map(change=>`<li>${change.qty} × ${esc(change.from)} · ${ZONES[change.zone]} · ${esc(change.fromSet?.toUpperCase()||'Unknown set')} → ${esc(change.toSet?.toUpperCase()||'Unknown set')}</li>`).join('')}</ul></details>`:''}<p id="apply-cheapest-error" role="alert"></p><div class="settings-actions"><button class="secondary" id="cancel-cheapest">Keep printings</button><button class="primary" id="confirm-cheapest" ${!plan.changed?'disabled':''}>Apply ${plan.changed} copies</button></div>`);
+  $('#cancel-cheapest').onclick=()=>closeDialog();
+  $('#confirm-cheapest').onclick=()=>{
+    try{
+      if(snapshot()!==before || cheapestPriceStates.get(d)!==comparison || !decks.includes(d))throw Error('The deck or price results changed. Close this review and try again.');
+      commitDeckSnapshot(d,plan.deck);
+      closeDialog();render();$('[data-action="apply-cheapest"]')?.focus();toast(`Updated ${plan.changed} copies; ${plan.already+plan.skipped} left unchanged.`);
+    }catch(error){$('#apply-cheapest-error').textContent=error.message;}
+  };
+  $('#cancel-cheapest').focus();
 }
 function importDialog(target=current()){
   showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste Archidekt text using “1 Card Name” and generic Commander, Mainboard, Sideboard or Maybeboard headings. Main deck and Command zone also work. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><div id="import-preview" aria-live="polite"></div><button class="primary">Review import</button></form>`);

@@ -353,7 +353,7 @@ test('ownership compares selected and cheapest printings without changing deck c
     if (++attempts === 1) await waitForCancel;
     const query = new URL(route.request().url()).searchParams.get('q');
     expect(query).toContain('game:paper lang:en is:nonfoil unique:prints');
-    for (const card of cards.slice(0,3)) expect(query).toContain(`oracleid:${card.oracle_id}`);
+    expect(cards.slice(0,3).some(card=>query.includes(`oracleid:${card.oracle_id}`))).toBe(true);
     const data = ['0.50','0.33','0.25'].map((eur,i)=>({...cards[i],games:['paper'],set_name:'Cheaper set',prices:{eur}}));
     await route.fulfill({ json: { data, has_more: false } });
   });
@@ -370,8 +370,8 @@ test('ownership compares selected and cheapest printings without changing deck c
   await expect(cancel).toBeFocused();
   await cancel.press('Enter');
   release();
-  await expect(page.getByText('Cheapest-printing check cancelled.')).toBeVisible();
-  await check.press('Enter');
+  await expect(page.getByText('Price check cancelled. Resume keeps completed cards and restarts the interrupted card.')).toBeVisible();
+  await page.getByRole('button',{name:'Resume price check',exact:true}).press('Enter');
   await expect(cancel).toHaveCount(0);
   await expect(check).toBeFocused();
   const row = page.getByRole('row').filter({ hasText: 'Smoke Card 2' });
