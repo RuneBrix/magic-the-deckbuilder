@@ -52,6 +52,7 @@ test('compact deck summary retains every zone through quantity edits, moves and 
 test('stack headers align card starts with long functions and partial prices and keep horizontal costs inline', async ({ page, isMobile }, testInfo) => {
   await page.evaluate(() => {
     const key = 'arcana.workspace.v2', data = JSON.parse(localStorage.getItem(key));
+    data.decks[0].currency='USD';
     const entries = data.decks[0].cards.slice(1, 5);
     entries[0].tags = ['A very long personal function with many words'];
     entries[0].qty = 500;
@@ -86,7 +87,7 @@ test('stack headers align card starts with long functions and partial prices and
   };
   for (const view of ['visual-vertical', 'text-vertical', 'visual-horizontal', 'text-horizontal']) {
     await page.locator('#editor-layout').selectOption(view);
-    await expect(groups.first().locator('.deck-group-price')).toHaveText('61,728,390.00 USD · 499 copies unpriced');
+    await expect(groups.first().locator('.deck-group-price')).toHaveText('$61,728,390.00 · 499 copies unpriced');
     await checkGeometry(view.endsWith('vertical'));
     if (view.endsWith('horizontal')) {
       const header = groups.nth(1).locator('.deck-group-header');

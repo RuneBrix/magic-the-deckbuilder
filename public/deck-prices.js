@@ -13,9 +13,9 @@ export function cardmarketProductId(card) {
   return Number.isSafeInteger(card.cardmarket_id) && card.cardmarket_id > 0 ? card.cardmarket_id : null;
 }
 
-export function refreshEuroQuote(card, source) {
+export function refreshPriceQuotes(card, source, currency='EUR') {
   const prices = { ...card.prices };
-  for (const field of ['eur', 'eur_foil']) {
+  for (const field of currency==='USD' ? ['usd','usd_foil','usd_etched'] : ['eur','eur_foil']) {
     if (parseEuroQuote(source.prices?.[field]) !== null) prices[field] = source.prices[field];
   }
   const productId = cardmarketProductId(source);
@@ -23,7 +23,7 @@ export function refreshEuroQuote(card, source) {
 }
 
 // Every identity in a truncated batch stays unpriced. A later page may contain a lower quote.
-export async function cheapestPrintings(cards, fetchPage) {
+export async function cheapestPrintings(cards, fetchPage, currency='EUR') {
   const ids = [...new Set(cards.map(priceIdentity).filter(Boolean))].sort().slice(0, IDENTITIES_PER_SCAN);
   const quotes = new Map();
   for (let offset = 0; offset < ids.length; offset += IDENTITIES_PER_QUERY) {
@@ -37,7 +37,7 @@ export async function cheapestPrintings(cards, fetchPage) {
       for (const card of result.data) {
         const id = priceIdentity(card);
         if (!matches.has(id) || card.lang !== 'en' || !Array.isArray(card.games) || !card.games.includes('paper') || !Array.isArray(card.finishes) || !card.finishes.includes('nonfoil')) continue;
-        const cents = parseEuroQuote(card.prices?.eur);
+        const cents = parseEuroQuote(card.prices?.[currency.toLowerCase()]);
         const previous = matches.get(id);
         if (cents !== null && (!previous || cents < previous.cents)) matches.set(id, { cents, card });
       }

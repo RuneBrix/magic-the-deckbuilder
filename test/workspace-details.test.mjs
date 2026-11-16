@@ -86,6 +86,7 @@ test('automatic printing lookup supports retry and pagination; detached dialog i
 
 test('add form is staged; existing copies span zones and the chosen finish has its own price and entry',()=>{
   const d=editorDeck(),base=d.cards[1];
+  d.currency='USD';
   base.card=finishCard(base.card);
   d.cards.push({...base,qty:1,zone:'maybeboard'});
   const w=workspace({savedDecks:JSON.stringify([d])});
@@ -96,7 +97,7 @@ test('add form is staged; existing copies span zones and the chosen finish has i
   assert.match(w.node('#add-existing').textContent,/across all zones and printings: 3/);
   w.node('#deck-card-finish').value='foil';
   w.node('#deck-card-finish').onchange();
-  assert.match(w.node('#deck-card-price').textContent,/5\.00 USD/);
+  assert.match(w.node('#deck-card-price').textContent,/\$5\.00/);
   w.node('#add-zone').value='main';
   w.node('#add-quantity').value='2';
   w.node('#add-primary').value='Draw';
@@ -108,6 +109,19 @@ test('add form is staged; existing copies span zones and the chosen finish has i
     [1,'maybeboard',undefined,['Removal','Ramp']],
     [2,'main','foil',['Draw']],
   ]);
+});
+
+test('printing dialog follows the selected destination deck currency without changing saved data',()=>{
+  const dollar=editorDeck();dollar.currency='USD';
+  dollar.cards[1].card.prices={usd:'5.00',eur:'2.00'};
+  const euro={...structuredClone(dollar),id:'euro',name:'Euro deck',currency:'EUR'};
+  const w=workspace({savedDecks:JSON.stringify([dollar,euro])});
+  w.node('#add-destination').value='editor';
+  vm.runInContext("openDeck('editor');deckCardDialog(current().cards[1].card,{deck:current()})",w.context);
+  assert.match(w.node('#deck-card-price').textContent,/\$5\.00/);
+  w.node('#add-destination').value='euro';w.node('#add-destination').onchange();
+  assert.equal(w.node('#deck-card-price').textContent,w.context.money(200,'EUR')+' per copy');
+  assert.equal(w.writes.length,0);
 });
 
 test('in-deck editor cancel preserves all data; save changes only the targeted variant',()=>{

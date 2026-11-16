@@ -1075,7 +1075,7 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .planning-summary th{text-align:left;font-weight:400;padding-right:20px}
 .planning-summary td{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 .planning-summary small,.planning-table small{display:block;color:var(--muted);font-size:12px;font-weight:400}
-.planning-controls{max-width:28rem;margin-bottom:16px}
+.planning-controls{display:grid;gap:12px;max-width:28rem;margin-bottom:16px}
 .planning-help{margin:0 0 20px}.planning-help p{max-width:70ch;margin-top:8px}
 .planning-controls select{text-transform:none}
 #owned-matches{position:static;max-height:min(260px,40vh);margin-top:4px}
@@ -1089,7 +1089,7 @@ html{scroll-padding-top:calc(var(--nav-height,76px) + 12px)}
 .planning-table td small{margin-top:4px}
 @media(max-width:800px){.planning-summaries{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){
-  .planning-scope>div{display:grid;grid-template-columns:repeat(2,max-content);column-gap:20px}
+  .planning-scope>div{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));column-gap:20px}
   .planning-table table{min-width:34rem}.planning-table th,.planning-table td{padding-inline:5px}
   .planning-table th:first-child{min-width:70px}
 }

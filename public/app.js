@@ -1,10 +1,10 @@
 import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
-import { esc, mana, printingLabel, icon } from './view-utils.js';
+import { esc, mana, printingLabel, icon, money, currencySymbol } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
-import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions } from './core.js';
-import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
+import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions } from './core.js';
+import { cheapestPrintings, refreshPriceQuotes } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
 const $ = s => document.querySelector(s);
@@ -52,8 +52,8 @@ const SEARCH_SORTS = {
   edhrec: { label: 'Popular first', params: { order: 'edhrec' } },
   cmc: { label: 'Mana value', params: { order: 'cmc' } },
   name: { label: 'Name A–Z', params: { order: 'name' } },
-  'usd-asc': { label: 'USD: low first', params: { order: 'usd', dir: 'asc' } },
-  'usd-desc': { label: 'USD: high first', params: { order: 'usd', dir: 'desc' } },
+  'usd-asc': { label: '$: low first', params: { order: 'usd', dir: 'asc' } },
+  'usd-desc': { label: '$: high first', params: { order: 'usd', dir: 'desc' } },
 };
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
 const TAG_PAGE_SIZE = 40;
@@ -402,7 +402,8 @@ function restoreSearch() {
 function cardTile(c) {
   const copies = deckCardCopies(current(),c,'main');
   const image = imageFor(c);
-  const price = c.prices?.usd ? esc(c.prices.usd) + ' USD' : 'Price unavailable';
+  const quote=deckPrintingPrice(c,'regular','USD');
+  const price = quote.cents===null ? 'Price unavailable' : money(quote.cents,'USD');
   return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${copies ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${copies ? `<span>${copies}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${price}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}</article>`;
 }
 function deckPanel(d) {
@@ -635,7 +636,7 @@ function deckWorkspace(d, statistics, previousStatistics) {
   const s=statistics ?? stats(d), report=legalityReport(d);
   const tabs=[['cards','Cards'],['stats','Statistics'],['planning','Ownership & costs'],['checks','Checks']];
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price '+currencySymbol(deckCurrency(d))+' (low first)'],['price-desc','Price '+currencySymbol(deckCurrency(d))+' (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
 }
 function quickAddMarkup(d) {
   return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p id="quick-add-status" class="hint" role="status"></p></section>`;
@@ -732,24 +733,24 @@ function checksPanel(d, report) {
   return `<div class="checks"><h2>Deck legality checks</h2><p>Deck construction and card legality are checked together for ${esc(formatLabel(d.format))}.</p><h3 class="check-summary check-${status}">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3><p>${scope} Card legality uses stored data; freshness is shown below.</p>${freshnessNotice(d)}${companionControl}${section('Failed checks',report.failed,'failure','close','These supported rules fail with the stored deck and card data. Review freshness before relying on card legality results.')}${section('Data unavailable',report.unavailable,'warning','book','Missing or unrecognized card data prevents these checks. This does not mean the affected cards are banned.')}${section('Manual review',report.manual,'info','book','The app cannot fully check these rules. Verify them yourself before playing.')}<p class="hint">Passing supported checks is not tournament certification. Supported companion predicates and remaining special cases are listed in the results. Zirda and special card layouts require manual review.</p>${bracketPanel(d)}</div>`;
 }
 
-const usdAmount = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const usd = cents => usdAmount.format(cents / 100) + ' USD';
-function deckPriceTotal(entries) {
+function deckPriceTotal(entries, d=current()) {
   let total = 0, unpriced = 0, priced = 0;
   for (const entry of entries) {
-    const { cents } = deckPrintingPrice(entry.card,entry.finish);
+    if(isBasicLand(entry.card))continue;
+    const { cents } = deckPrintingPrice(entry.card,entry.finish,deckCurrency(d));
     if (cents === null) unpriced += entry.qty;
     else { total += cents * entry.qty; priced += entry.qty; }
   }
   const unknownCopies = `${unpriced} ${unpriced === 1 ? 'copy' : 'copies'} unpriced`;
   if (!Number.isSafeInteger(total)) return unpriced ? `Price total unavailable · ${unknownCopies}` : 'Price total unavailable';
-  if (!unpriced) return usd(total);
-  return priced ? `${usd(total)} · ${unknownCopies}` : unknownCopies;
+  if (!entries.some(entry=>!isBasicLand(entry.card)) && entries.length) return 'Basic lands excluded';
+  if (!unpriced) return money(total,deckCurrency(d));
+  return priced ? `${money(total,deckCurrency(d))} · ${unknownCopies}` : unknownCopies;
 }
 function stackCardMeta({card,finish}) {
-  const { cents } = deckPrintingPrice(card,finish);
+  const currency=deckCurrency(current()), { cents } = deckPrintingPrice(card,finish,currency);
   const setCode = typeof card.set === 'string' && card.set.trim() ? card.set.toUpperCase() : 'Set unknown';
-  return `<div class="stack-card-meta"><span>${esc(card.name)}</span><span>${esc(setCode)}${finish ? ' · '+finish : ''} · ${cents === null ? 'Price unavailable' : usd(cents)}</span></div>`;
+  return `<div class="stack-card-meta"><span>${esc(card.name)}</span><span>${esc(setCode)}${finish ? ' · '+finish : ''} · ${cents === null ? 'Price unavailable' : money(cents,currency)}</span></div>`;
 }
 function faceAttributes(card, enabled=true) {
   const front=safeUrl(imageFor(card),true), back=safeUrl(card.card_faces?.[1]?.image_uris?.normal,true);
@@ -768,8 +769,8 @@ function previewMarkup(d) {
   const entry=deckEntries(d,editorOptions).find(e=>entryKey(e)===previewKey);
   if(!entry)return '<p class="hint">Point to a card or focus its name to preview.</p>';
   const image=safeUrl(imageFor(entry.card),true);
-  const { cents, finish } = deckPrintingPrice(entry.card,entry.finish);
-  const price = cents === null ? 'Price unavailable' : usd(cents);
+  const { cents, finish } = deckPrintingPrice(entry.card,entry.finish,deckCurrency(d));
+  const price = cents === null ? 'Price unavailable' : money(cents,deckCurrency(d));
   const faces=faceAttributes(entry.card,editorOptions.layout.startsWith('visual'));
   return `<figure${faces}>${faces?flipControl(entry.card):''}${image?`<img src="${esc(image)}" alt="${esc(entry.card.name)}">`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}<span>${esc(primaryRole(entry))}</span><span>${price}${finish && finish !== 'regular' ? ' · ' + finish : ''}</span></figcaption></figure>`;
 }
@@ -825,11 +826,11 @@ function deckList(d, full=false) {
       const target = grouping === 'role' && items.some(e => e.tags[0] === group)
         ? ` data-drop-zone="${zone}" data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"` : '';
       const groupQty = group ? count({ cards: items }) : 0;
-      const summary = group ? `<header class="deck-group-header"><h4>${esc(group)} <span>· ${groupQty} ${filtering ? 'shown' : groupQty === 1 ? 'card' : 'cards'}</span></h4><p class="deck-group-price">${deckPriceTotal(items)}</p></header>` : '';
+      const summary = group ? `<header class="deck-group-header"><h4>${esc(group)} <span>· ${groupQty} ${filtering ? 'shown' : groupQty === 1 ? 'card' : 'cards'}</span></h4><p class="deck-group-price">${deckPriceTotal(items,d)}</p></header>` : '';
       return `<section class="deck-group"${target}>${summary}<div class="deck-group-items" style="--stack-divisor:${Math.max(1, items.length - 2)}">${cards}</div></section>`;
     }).join('');
     const shown = filtering ? ` · ${count({ cards: entries })} shown` : '';
-    const price = full ? `<span class="deck-zone-price"> · ${deckPriceTotal(entries)}${filtering ? ' for shown cards' : ''}</span>` : '';
+    const price = full ? `<span class="deck-zone-price"> · ${deckPriceTotal(entries,d)}${filtering ? ' for shown cards' : ''}</span>` : '';
     const empty = `<p class="hint">${full && qty ? 'No cards match these filters.' : 'No cards in this zone.'}</p>`;
     return `<section class="deck-zone"${full ? ` data-drop-zone="${zone}"` : ''}><h3>${label} · ${qty}${shown}${price}</h3><div class="deck-group-list">${groupSections || empty}</div></section>`;
   }).join('');
@@ -1404,6 +1405,16 @@ function bind() {
     d.budgetZones=[...zones];d.updated=new Date().toISOString();save();render();
   });
   $('#ownership-match')?.addEventListener('change',e=>{const d=current();if(!d)return;d.ownershipMatch=e.target.value;d.updated=new Date().toISOString();save();render();});
+  $('#deck-currency')?.addEventListener('change',e=>{
+    const d=current(),currency=e.target.value;
+    if(!d || !['EUR','USD'].includes(currency) || currency===deckCurrency(d))return;
+    try{
+      commitDeckSnapshot(d,{...d,currency,updated:new Date().toISOString()});
+      cheapestPriceStates.get(d)?.controller?.abort();
+      cheapestPriceStates.delete(d);priceStates.delete(d);
+    }catch(error){toast(error.message);}
+    render();$('#deck-currency')?.focus();
+  });
   $('#search-filters')?.addEventListener('toggle',e=>{if(e.target.isConnected)filtersOpen=e.target.open;});
   $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected)tagsOpen=e.target.open;});
   $('#search-form')?.addEventListener('submit',e=>{e.preventDefault();readFilters();search();});
@@ -1832,8 +1843,8 @@ function deckCardDialog(card, {deck,zone='main',source,edit,back,printings}={}) 
     </form>`);
   const finish=$('#deck-card-finish'), destination=()=>decks.find(d=>d.id===$('#add-destination').value);
   const showPrice=()=>{
-    const {cents}=deckPrintingPrice(state.card,finish.value);
-    $('#deck-card-price').textContent=cents===null?'Price unavailable for this printing and finish.':usd(cents)+' per copy';
+    const currency=deckCurrency(edit?.deck || destination()),{cents}=deckPrintingPrice(state.card,finish.value,currency);
+    $('#deck-card-price').textContent=cents===null?'Price unavailable for this printing and finish.':money(cents,currency)+' per copy';
   };
   const showFinishes=(preferred=finish.value)=>{
     const options=deckFinishOptions(state.card);
@@ -1846,7 +1857,7 @@ function deckCardDialog(card, {deck,zone='main',source,edit,back,printings}={}) 
       const d=destination();
       $('#add-existing').textContent=d?`Copies already in this deck across all zones and printings: ${deckCardCopies(d,card)}.`:'Choose a deck to see its existing copies.';
     };
-    $('#add-destination').onchange=showCopies;
+    $('#add-destination').onchange=()=>{showCopies();showPrice();};
     showCopies();
   }
   $('#deck-card-cancel').onclick=back || closeDialog;
@@ -1886,28 +1897,30 @@ async function fetchCollection(values,key='names') {const cards=[],missing=[];fo
 async function refreshPrices(d=current()){
   if(!d)return;
   if(priceStates.get(d)?.status==='refreshing')return;
+  const currency=deckCurrency(d);
   const zones=d.budgetZones??DEFAULT_BUDGET_ZONES;
   const entries=d.cards.filter(entry=>zones.includes(zoneFor(entry))).map(entry=>({entry,id:entry.card.id})),ids=[...new Set(entries.map(snapshot=>snapshot.id))];
   if(!ids.length){toast('No scoped cards to refresh.');return;}
-  priceStates.set(d,{status:'refreshing'});render();
+  const state={status:'refreshing'};
+  priceStates.set(d,state);render();
   try{
     const {cards,missing}=await fetchCollection(ids,'ids'),byId=new Map(cards.map(card=>[card.id,card]));
     if(missing.length||ids.some(id=>!byId.has(id)))throw Error('Some stored printings could not be refreshed.');
-    if(!decks.includes(d))return;
+    if(!decks.includes(d)||deckCurrency(d)!==currency||priceStates.get(d)!==state)return;
     const updates=entries.filter(snapshot=>d.cards.includes(snapshot.entry)&&snapshot.entry.card.id===snapshot.id);
     let kept=0;
     for(const {entry,id} of updates){
-      const source=byId.get(id),{field,cents}=storedEuroPrice(entry);
+      const source=byId.get(id),{field,cents}=deckPrintingPrice(entry.card,entry.finish,currency);
       if(cents!==null&&parseEuroQuote(source.prices?.[field])===null)kept++;
-      entry.card=refreshEuroQuote(entry.card,source);
+      entry.card=refreshPriceQuotes(entry.card,source,currency);
     }
     if(updates.length){d.priceUpdatedAt=new Date().toISOString();d.updated=d.priceUpdatedAt;save();}
-    priceStates.set(d,{status:'fresh',kept});render();toast(storageError?'Prices kept for this session. Export a workspace copy.':'Stored EUR prices checked.');
-  }catch(error){priceStates.set(d,{status:'failed',error:error.message});render();}
+    priceStates.set(d,{status:'fresh',kept});render();toast(storageError?'Prices kept for this session. Export a workspace copy.':'Stored '+currencySymbol(currency)+' prices checked.');
+  }catch(error){if(deckCurrency(d)!==currency||priceStates.get(d)!==state)return;priceStates.set(d,{status:'failed',error:error.message});render();}
 }
 async function checkCheapestPrices(d=current()) {
   if (!d) return;
-  const previous=cheapestPriceStates.get(d);
+  const currency=deckCurrency(d),previous=cheapestPriceStates.get(d);
   if (previous?.status==='checking') {
     previous.controller.abort();
     previous.status='cancelled';
@@ -1915,11 +1928,11 @@ async function checkCheapestPrices(d=current()) {
     return;
   }
   const controller=new AbortController();
-  const state={quotes:previous?.quotes,checkedAt:previous?.checkedAt,status:'checking',controller};
+  const state={currency,quotes:previous?.currency===currency?previous.quotes:undefined,checkedAt:previous?.checkedAt,status:'checking',controller};
   cheapestPriceStates.set(d,state);
   render();
   try {
-    const quotes=await cheapestPrintings(d.cards.map(entry=>entry.card),async(q,page)=>{
+    const quotes=await cheapestPrintings(d.cards.filter(entry=>!isBasicLand(entry.card)).map(entry=>entry.card),async(q,page)=>{
       if (!decks.includes(d)) controller.abort();
       controller.signal.throwIfAborted();
       try {return await api('/api/search?'+new URLSearchParams({q,page,order:'name'}),{signal:controller.signal});}
@@ -1927,8 +1940,8 @@ async function checkCheapestPrices(d=current()) {
         if(error.status===404&&/no cards|0 cards|didn.t match any cards/i.test(error.message))return {data:[],has_more:false};
         throw error;
       }
-    });
-    if(controller.signal.aborted||!decks.includes(d))return;
+    },currency);
+    if(controller.signal.aborted||!decks.includes(d)||deckCurrency(d)!==currency)return;
     Object.assign(state,{quotes,checkedAt:new Date().toISOString(),status:'done'});
   } catch(error) {
     if(controller.signal.aborted||!decks.includes(d))return;

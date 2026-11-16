@@ -249,6 +249,7 @@ test('deck groups show copy counts and prices, and visual stacks reveal card met
     const key = 'arcana.workspace.v2';
     const data = JSON.parse(localStorage.getItem(key));
     const entries = data.decks[0].cards;
+    data.decks[0].currency='USD';
     data.decks[0].cards = entries.slice(0, 4);
     entries[2].card.prices.usd = null;
     entries[3].zone = 'maybeboard';
@@ -263,8 +264,8 @@ test('deck groups show copy counts and prices, and visual stacks reveal card met
   for (const view of ['visual-horizontal', 'text-horizontal', 'text-vertical', 'visual-vertical']) {
     await layout.selectOption(view);
     await expect(group.getByRole('heading')).toHaveText('Creature · 3 cards');
-    await expect(group.locator('.deck-group-price')).toHaveText('3.00 USD · 1 copy unpriced');
-    await expect(main.locator('.deck-zone-price')).toContainText('3.00 USD · 1 copy unpriced');
+    await expect(group.locator('.deck-group-price')).toHaveText('$3.00 · 1 copy unpriced');
+    await expect(main.locator('.deck-zone-price')).toContainText('$3.00 · 1 copy unpriced');
     if (view.startsWith('text')) await expect(main.locator('.stack-card-meta')).toHaveCount(0);
     await noPageOverflow(page);
   }
@@ -274,9 +275,9 @@ test('deck groups show copy counts and prices, and visual stacks reveal card met
   if (!isMobile) {
     await first.locator('.card-art').hover({ position: { x: 25, y: 25 } });
     await expect(caption).toBeVisible();
-    await expect(caption).toContainText('TST · 1.50 USD');
+    await expect(caption).toContainText('TST · $1.50');
     await expect(preview.locator('figcaption span').nth(0)).toHaveText('Draw');
-    await expect(preview.locator('figcaption span').nth(1)).toHaveText('1.50 USD');
+    await expect(preview.locator('figcaption span').nth(1)).toHaveText('$1.50');
     const bottom = (await caption.boundingBox()).y + (await caption.boundingBox()).height;
     expect((await main.locator('.card-art').nth(1).boundingBox()).y).toBeGreaterThan(bottom);
   }
@@ -288,7 +289,7 @@ test('deck groups show copy counts and prices, and visual stacks reveal card met
   await expect(group.getByRole('heading')).toHaveText('Draw · 3 cards');
   await page.locator('#editor-search').fill('Smoke Card 2');
   await expect(group.getByRole('heading')).toHaveText('Draw · 2 shown');
-  await expect(main.getByRole('heading', { level: 3 })).toHaveText('Main deck · 3 · 2 shown · 3.00 USD for shown cards');
+  await expect(main.getByRole('heading', { level: 3 })).toHaveText('Main deck · 3 · 2 shown · $3.00 for shown cards');
   await noPageOverflow(page);
 });
 
@@ -545,6 +546,8 @@ test('search, printing dialog, keyboard dismissal and reload retain deck data', 
 });
 
 test('card details, additive Add and the entry editor preserve distinct printings and finishes', async ({ page, isMobile }, testInfo) => {
+  await page.evaluate(()=>{const data=JSON.parse(localStorage.getItem('arcana.workspace.v2'));data.decks[0].currency='USD';localStorage.setItem('arcana.workspace.v2',JSON.stringify(data));});
+  await page.reload();
   const stored = () => page.evaluate(() => JSON.parse(localStorage.getItem('arcana.workspace.v2')));
   const printCard = cards[1];
   const alternate = { ...printCard, id: 'second-printing', set_name: 'Second Release', prices: { usd:'2.50', usd_foil:'6.00' } };
@@ -569,7 +572,7 @@ test('card details, additive Add and the entry editor preserve distinct printing
   await expect(dialog.getByLabel('Destination deck')).toHaveValue('smoke-deck');
   await expect(dialog.locator('#add-existing')).toContainText('all zones and printings: 2');
   await dialog.getByLabel('Finish',{exact:true}).selectOption('foil');
-  await expect(dialog.locator('#deck-card-price')).toHaveText('6.00 USD per copy');
+  await expect(dialog.locator('#deck-card-price')).toHaveText('$6.00 per copy');
   await expect(dialog.locator('#load-printings')).toBeHidden();
   await page.screenshot({path:testInfo.outputPath('add-card.png')});
   await dialog.getByLabel('Quantity to add').fill('2');
@@ -762,11 +765,11 @@ test('Explore sorts USD prices in both directions and labels unavailable quotes'
   await expect(sort).toBeVisible();
   await sort.focus();
   const quotes = page.locator('.card-meta span:last-child');
-  await sort.selectOption({ label: 'USD: low first' });
-  await expect(quotes).toHaveText(['0.25 USD', 'Price unavailable', '12.00 USD']);
+  await sort.selectOption({ label: '$: low first' });
+  await expect(quotes).toHaveText(['$0.25', 'Price unavailable', '$12.00']);
   await expect(sort).toBeFocused();
-  await sort.selectOption({ label: 'USD: high first' });
-  await expect(quotes).toHaveText(['12.00 USD', 'Price unavailable', '0.25 USD']);
+  await sort.selectOption({ label: '$: high first' });
+  await expect(quotes).toHaveText(['$12.00', 'Price unavailable', '$0.25']);
   await expect(sort).toBeFocused();
   await expect(raw).toHaveValue(query);
   await noPageOverflow(page);
