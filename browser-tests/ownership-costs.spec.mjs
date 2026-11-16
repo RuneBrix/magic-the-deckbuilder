@@ -61,7 +61,7 @@ test('ownership costs sort without changing allocations and fit long, empty and 
   await page.screenshot({path:testInfo.outputPath('ownership-enlarged.png')});
   await page.reload();await open();
   await page.route('**/api/collection',route=>route.fulfill({status:500,json:{error:'Offline fixture'}}));
-  await page.getByRole('button',{name:'Refresh EUR prices',exact:true}).click();
+  await page.getByRole('button',{name:'Refresh € prices',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('Last usable prices were retained');
   await expect(missing).toContainText(/25[.,]75/);
   for(const coverage of ['none','full']){
@@ -77,7 +77,7 @@ test('ownership costs sort without changing allocations and fit long, empty and 
   await page.evaluate(()=>{const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key));data.decks[0].cards=[];localStorage.setItem(key,JSON.stringify(data));});
   await page.reload();await open();
   await expect(copies.getByRole('cell')).toHaveText(['0','0','0']);
-  await expect(page.getByRole('button',{name:'Refresh EUR prices',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Refresh € prices',exact:true})).toBeDisabled();
   await expect(page.getByText('Add cards to see ownership and costs here.',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

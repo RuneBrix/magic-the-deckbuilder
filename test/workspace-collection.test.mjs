@@ -389,3 +389,38 @@ test('EUR refresh skips a printing changed while its exact-id request is in flig
   vm.runInContext("decks[0].cards[0].card={...decks[0].cards[0].card,id:'new-printing',prices:{eur:'8.00'}}",w.context);release();await pending;
   assert.equal(vm.runInContext("decks[0].cards[0].card.prices.eur",w.context),'8.00');assert.equal(vm.runInContext("decks[0].cards[1].card.prices.eur",w.context),'2.50');
 });
+
+test('deck currency saves atomically, clears cheapest quotes and ignores late scans and refreshes',async()=>{
+  const d=editorDeck();
+  for(const [index,entry] of d.cards.entries()){
+    entry.card.oracle_id=`00000000-0000-4000-8000-${String(index+1).padStart(12,'0')}`;
+    entry.card.prices={eur:'1.00',usd:'3.00'};
+  }
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
+  const before=JSON.stringify(d.cards);
+  let release;
+  w.context.fetch=()=>new Promise(resolve=>{release=()=>resolve({ok:true,json:async()=>({data:d.cards.map(e=>({...e.card,games:['paper'],lang:'en',finishes:['nonfoil'],prices:{eur:'0.01'}})),has_more:false})});});
+  const pending=vm.runInContext('checkCheapestPrices()',w.context);await Promise.resolve();
+  w.node('#deck-currency').change({target:{value:'USD'}});
+  release();await pending;
+  assert.equal(vm.runInContext('cheapestPriceStates.has(current())',w.context),false);
+  assert.equal(vm.runInContext('current().currency',w.context),'USD');
+  assert.match(w.node('#app').innerHTML,/\$9\.00/);
+  assert.equal(JSON.stringify(JSON.parse(w.writes.at(-1)[1]).decks[0].cards),before);
+  assert.equal(core.readWorkspaceFile(JSON.parse(w.writes.at(-1)[1])).decks[0].currency,'USD');
+
+  const write=w.context.localStorage.setItem;
+  w.context.localStorage.setItem=()=>{throw Error('Full');};
+  w.node('#deck-currency').change({target:{value:'EUR'}});
+  assert.equal(vm.runInContext('current().currency',w.context),'USD');
+  assert.match(w.node('#toast').textContent,/Browser storage is full/);
+  w.context.localStorage.setItem=write;
+
+  const refresh=vm.runInContext('refreshPrices()',w.context);await Promise.resolve();
+  w.node('#deck-currency').change({target:{value:'EUR'}});
+  w.node('#deck-currency').change({target:{value:'USD'}});
+  release();await refresh;
+  assert.equal(vm.runInContext('priceStates.has(current())',w.context),false);
+  assert.equal(vm.runInContext('JSON.stringify(current().cards)',w.context),before);
+});

@@ -202,7 +202,7 @@ test('deck controls compose live text filtering, grouping and sorting without re
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
   const shell=w.node('#app').innerHTML,field=w.node('#editor-search'),before=vm.runInContext('JSON.stringify(decks)',w.context);
   assert.match(shell,/Group by/);assert.match(shell,/>Type<\/option>/);assert.match(shell,/>Function<\/option>/);
-  assert.match(shell,/Sort by/);assert.match(shell,/Price USD \(high first\)/);assert.match(shell,/Power \(low first\)/);assert.match(shell,/Toughness \(high first\)/);
+  assert.match(shell,/Sort by/);assert.match(shell,/Price € \(high first\)/);assert.match(shell,/Power \(low first\)/);assert.match(shell,/Toughness \(high first\)/);
   assert.doesNotMatch(shell,/Order by|editor-type|editor-role|role-help/);
   field.input({target:{value:'SORCERY ramp'}});
   assert.equal(w.node('#app').innerHTML,shell);assert.equal(w.node('#editor-search'),field);
@@ -284,6 +284,7 @@ test('horizontal stack slots follow visible group entries without changing quant
 
 test('deck prices and preview follow visible quantities, primary functions and stored printing finishes', async () => {
   const d = editorDeck();
+  d.currency='USD';
   const ramp = d.cards[1];
   ramp.card.set = 'one';
   ramp.card.prices = { usd: '1.10', usd_foil: '10.00', eur: '5.00' };
@@ -293,25 +294,25 @@ test('deck prices and preview follow visible quantities, primary functions and s
   const w = workspace({ savedDecks: JSON.stringify([d]) });
   vm.runInContext("openDeck('editor')", w.context);
   const html = () => w.node('#app').innerHTML;
-  assert.match(html(), /Sorcery <span>· 5 cards<\/span><\/h4><p[^>]+>2\.20 USD · 3 copies unpriced/);
-  assert.match(html(), /Main deck · 5<span[^>]+> · 2\.20 USD · 3 copies unpriced/);
-  assert.match(html(), /Ramp spell<\/span><span>ONE · 1\.10 USD/);
+  assert.match(html(), /Sorcery <span>· 5 cards<\/span><\/h4><p[^>]+>\$2\.20 · 3 copies unpriced/);
+  assert.match(html(), /Main deck · 5<span[^>]+> · \$2\.20 · 3 copies unpriced/);
+  assert.match(html(), /Ramp spell<\/span><span>ONE · \$1\.10/);
   assert.match(html(), /Other spell<\/span><span>Set unknown · Price unavailable/);
 
   w.node('#editor-search').input({ target: { value: 'Ramp' } });
-  assert.match(w.node('#editor-card-area').outerHTML, /Main deck · 5 · 2 shown<span[^>]+> · 2\.20 USD for shown cards/);
+  assert.match(w.node('#editor-card-area').outerHTML, /Main deck · 5 · 2 shown<span[^>]+> · \$2\.20 for shown cards/);
   assert.match(w.node('#editor-card-area').outerHTML, /Sorcery <span>· 2 shown/);
   w.node('#app').focusin({ target: { closest: () => ({ dataset: { previewEntry: key } }) } });
-  assert.match(w.node('#deck-card-preview').innerHTML, /Removal<\/span><span>1\.10 USD<\/span>/);
+  assert.match(w.node('#deck-card-preview').innerHTML, /Removal<\/span><span>\$1\.10<\/span>/);
   await w.node('#app').click({ target: { closest: () => ({ dataset: { zonePlus: key } }) } });
-  assert.match(html(), /3\.30 USD for shown cards/);
+  assert.match(html(), /\$3\.30 for shown cards/);
 
   w.context.replacement = { ...ramp.card, id: 'foil-version', set: 'two', finishes: ['foil'], prices: { usd: '99.00', usd_foil: '0.75' } };
   vm.runInContext(`setEntryPrinting(current(), ${JSON.stringify(key)}, replacement);render()`, w.context);
-  assert.match(html(), /2\.25 USD for shown cards/);
-  assert.match(html(), /TWO · 0\.75 USD/);
-  assert.match(html(), /0\.75 USD · foil/);
-  assert.deepEqual(core.deckPrintingPrice({ finishes: ['etched'], prices: { usd_etched: '0.00' } }), { finish: 'etched', cents: 0 });
+  assert.match(html(), /\$2\.25 for shown cards/);
+  assert.match(html(), /TWO · \$0\.75/);
+  assert.match(html(), /\$0\.75 · foil/);
+  assert.deepEqual(core.deckPrintingPrice({ finishes: ['etched'], prices: { usd_etched: '0.00' } }), { finish: 'etched', field:'usd_etched', cents: 0 });
   assert.equal(core.deckPrintingPrice({ finishes: ['foil'], prices: { usd: '5.00' } }).cents, null);
   assert.equal(core.deckPrintingPrice({ finishes: ['foil', 'etched'], prices: { usd_foil: '5.00' } }).cents, null);
 });

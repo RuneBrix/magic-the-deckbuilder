@@ -216,11 +216,14 @@ function defaultDeckFinish(card) {
   const options=deckFinishOptions(card);
   return options.includes('regular')?'regular':options.length===1?options[0]:null;
 }
-export function deckPrintingPrice(card, finish=defaultDeckFinish(card)) {
-  const field = finish === 'regular' ? 'usd' : finish === 'foil' ? 'usd_foil' : finish === 'etched' ? 'usd_etched' : null;
+export const deckCurrency = deck => deck?.currency ?? 'EUR';
+export const isBasicLand = card => /\bBasic\b/.test(deckTypeLine(card).split(' — ')[0]) && isLand(card);
+export function deckPrintingPrice(card, finish=defaultDeckFinish(card), currency='USD') {
+  const base = currency.toLowerCase();
+  const field = finish === 'regular' ? base : finish === 'foil' ? base+'_foil' : finish === 'etched' && currency === 'USD' ? 'usd_etched' : null;
   const quote = field ? card.prices?.[field] : null;
-  const cents = parseCurrencyCents(typeof quote === 'number' ? String(quote) : quote);
-  return { finish: field ? finish : null, cents };
+  const cents = parseEuroQuote(typeof quote === 'number' ? String(quote) : quote);
+  return { finish, field, cents };
 }
 const numeric = value => typeof value==='number' && Number.isFinite(value) ? value
   : typeof value==='string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim()) && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -230,7 +233,7 @@ export function deckEntries(deck, { type = '', role = '', search = '', order = '
   const mode=order.replace(/-desc$/,''), descending=order.endsWith('-desc') || mode==='quantity';
   const value=entry=>{
     const c=entry.card;
-    if(mode==='price')return deckPrintingPrice(c,entry.finish).cents;
+    if(mode==='price')return deckPrintingPrice(c,entry.finish,deckCurrency(deck)).cents;
     if(mode==='power' || mode==='toughness')return combatValue(c,mode);
     return mode==='mana'?numeric(c.cmc):mode==='quantity'?entry.qty:null;
   };
@@ -509,6 +512,7 @@ export function validateBackup(data) {
     if (!d || typeof d.id !== 'string' || ids.has(d.id) || typeof d.name !== 'string' || d.name.length > 100 || !FORMATS.includes(d.format) || !Array.isArray(d.cards) || d.cards.length > 1000) throw new Error('Invalid deck backup.');
     if (d.bracket !== undefined && (!Number.isInteger(d.bracket) || !Object.hasOwn(BRACKETS,d.bracket))) throw Error('Invalid assigned Commander bracket.');
     if (d.budgetCents !== undefined && (!Number.isInteger(d.budgetCents) || d.budgetCents < 0 || d.budgetCents > 100_000_000)) throw Error('Invalid deck budget.');
+    if (d.currency !== undefined && !['EUR','USD'].includes(d.currency)) throw Error('Invalid deck currency.');
     if (d.budgetBasis !== undefined && !['missing','full'].includes(d.budgetBasis)) throw Error('Invalid deck budget basis.');
     if (d.budgetZones !== undefined && (!Array.isArray(d.budgetZones) || new Set(d.budgetZones).size !== d.budgetZones.length || ![...d.budgetZones].every(zone=>BUDGET_ZONE_ORDER.includes(zone)))) throw Error('Invalid budget zones.');
     if (d.ownershipMatch !== undefined && !['rules','printing'].includes(d.ownershipMatch)) throw Error('Invalid ownership match mode.');
@@ -574,9 +578,7 @@ export function parseEuroQuote(value) {
 }
 
 export function storedEuroPrice(entry) {
-  const finish = entry.finish ?? deckPrintingPrice(entry.card).finish;
-  const field = finish === 'regular' ? 'eur' : finish === 'foil' ? 'eur_foil' : null;
-  return { finish, field, cents: field ? parseEuroQuote(entry.card.prices?.[field]) : null };
+  return deckPrintingPrice(entry.card,entry.finish,'EUR');
 }
 
 export function collectionReport(deck, collection) {
@@ -586,19 +588,21 @@ export function collectionReport(deck, collection) {
   const matchKey=card=>mode==='printing'?card.id:rulesIdentity(card);
   const available=new Map();
   for(const lot of collection){const key=matchKey(lot.card);if(key)available.set(key,(available.get(key)||0)+lot.qty);}
-  let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0;
+  let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0,basicCopies=0;
   const rows=entries.map(entry=>{
     const key=matchKey(entry.card),zone=zoneFor(entry),included=zones.includes(zone);
-    const { cents: unitCents, finish } = storedEuroPrice(entry);
-    const row={entry,zone,included,demand:entry.qty,unitCents,finish,identityResolved:Boolean(key)};
+    const { cents: unitCents, finish } = deckPrintingPrice(entry.card,entry.finish,deckCurrency(deck));
+    const costExcluded=isBasicLand(entry.card);
+    const row={entry,zone,included,costExcluded,demand:entry.qty,unitCents,finish,identityResolved:Boolean(key)};
     if(!included)return {...row,owned:null,missing:null};
     const have=available.get(key)||0,used=Math.min(entry.qty,have),needed=entry.qty-used;
     if(key)available.set(key,have-used);
     demand+=entry.qty;owned+=used;missing+=needed;
-    if(unitCents===null){fullUnpriced+=entry.qty;missingUnpriced+=needed;}else{fullCents+=unitCents*entry.qty;missingCents+=unitCents*needed;}
+    if(costExcluded)basicCopies+=entry.qty;
+    else if(unitCents===null){fullUnpriced+=entry.qty;missingUnpriced+=needed;}else{fullCents+=unitCents*entry.qty;missingCents+=unitCents*needed;}
     return {...row,owned:used,missing:needed};
   });
-  return {mode,zones,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced};
+  return {mode,zones,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced,basicCopies};
 }
 
 

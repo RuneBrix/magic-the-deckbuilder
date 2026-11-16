@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck currency and basic-land costs
+
+- Save a euro or US dollar currency for each deck and apply its actual finish quotes across Cards, previews, printing dialogs, ownership estimates, price refresh and cheapest comparisons. Currency changes discard stale cheapest results (#171).
+- Exclude basic lands, snow basics and Wastes from costs and unpriced warnings while retaining deck counts and ownership coverage; disclose excluded rows/copies (#168).
+- Use € and $ symbols for displayed prices and currency labels throughout the interface (#207).
+
 ## Ownership and costs
 
 - Separate copy quantities from monetary estimates, use the available page width and move calculation policy into secondary help (#170).

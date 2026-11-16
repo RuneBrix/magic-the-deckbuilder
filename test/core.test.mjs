@@ -135,7 +135,7 @@ test('deck text matching requires every case-insensitive term across names, type
 });
 
 test('deck numeric sorting uses stored USD printings and numeric front-face characteristics; missing values stay last in either direction', () => {
-  const d={cards:[
+  const d={currency:'USD',cards:[
     entry(card('Missing','Creature',0,[],{prices:{usd:null,usd_foil:'0.01'},power:'*',toughness:'1+*'})),
     entry(card('Higher','Creature',3,[],{prices:{usd:'5.00'},power:'4',toughness:'-1'})),
     entry(card('Lower','Creature',1,[],{prices:{usd:'0.50'},power:'-2',toughness:'5'})),
