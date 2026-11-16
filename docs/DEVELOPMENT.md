@@ -1,75 +1,70 @@
 # Development workflow
 
-Work lives in [GitHub Issues and PRs](https://github.com/RuneBrix/magic-the-deckbuilder). The primary checkout is `F:/Magic The Deckbuilder`; developer inspection uses the existing browser/profile at **http://localhost:3000/**.
+Work lives in [GitHub Issues and PRs](https://github.com/RuneBrix/magic-the-deckbuilder). Deliver in `F:/Magic The Deckbuilder`; developer inspection uses the existing browser/profile at **http://localhost:3000/**.
 
 ## Feedback to merged change
 
-1. Read the identified feedback; separate reported problems, desired behavior and open decisions. Keep personal files out of commits.
-2. When asked, search existing issues/PRs before creating focused issues. Include priority, observable criteria, relevant sources/dependencies and only change-specific verification. Link this workflow instead of repeating its general checklist. Issue creation alone does not authorize implementation.
-3. Read selected issue criteria/discussions and affected source/tests. Resolve routine reversible choices; keep material undecided product scope explicit.
-4. Implement on a focused `codex/` branch in the primary checkout, preserving unrelated edits. Link the PR with `Closes` for complete scope or `Refs` for partial scope. Update the affected contract, feature inventory when capability status changes, and changelog for completed user-facing behavior. Update roadmap only when direction changes.
-5. Verify using the table below. Hand off with PR/issue links, actual results, gaps, local-only review differences and short localhost inspection steps. Refresh after frontend changes; restart the developer's CMD server here and refresh after server changes. Preserve server ownership and existing data.
-6. Revise the same PR after feedback; rerun affected checks and identify the revised inspection steps.
-7. Merge only after explicit developer approval of the current revision and required checks passing. Close only satisfied issues; keep remaining gaps tracked. Preserve approved changes in the primary checkout. PR readiness or a merge does not itself update the running checkout.
+1. Read the selected feedback/criteria and discussions; distinguish reported problems, requested outcomes and open decisions. Inspect affected source/tests. Preserve unrelated edits and personal data.
+2. When asked to create issues, search for duplicates first. Record priority, observable criteria, dependencies and change-specific verification; link this workflow. Issue creation alone does not authorize implementation.
+3. Implement authorized scope on a focused `codex/` branch in this checkout. Resolve routine reversible choices; leave material undecided product scope explicit. Link a PR with `Closes` for completed criteria or `Refs` for partial scope.
+4. Verify using the table below. Update affected contracts where intent/preservation boundaries change, feature inventory when capability status changes and changelog for completed user-facing behavior. Roadmap changes only when direction changes.
+5. Hand off with actual checks/gaps, PR/issue links and local-only review differences. Give short localhost inspection steps: refresh after frontend changes; restart the developer's CMD server here and refresh after server changes. Preserve server ownership, origin and storage.
+6. Revise the same PR after feedback and recheck changed behavior. Merge only after explicit developer approval of the current revision and required checks passing. Close only satisfied issues; keep remaining gaps tracked. Preserve approved changes in this checkout. PR readiness is not approval, and a remote merge does not update the running checkout.
 
 ## Issue batching
 
-When asked to find issues to solve, select at least two compatible issues, preferably three, for one reviewable PR. Compare criteria, dependencies, active PRs, affected files and shared verification; state the selection briefly. Honor explicitly named/narrower scope. Use fewer only for explicit scope, too few suitable issues or concrete size/risk/dependency/open-decision constraints; explain the exception. Keep unrelated large features separate. Each issue retains its own acceptance criteria.
+When asked to find issues to solve, select at least two compatible issues, preferably three, for one reviewable PR. Compare criteria, dependencies, active PRs, affected files and shared verification. Honor named/narrower scope. Use fewer only for explicit scope, too few suitable issues or concrete size/risk/dependency/open-decision constraints; state the exception. Each issue retains its own criteria.
 
 ## Context and tool output
 
-Read AGENTS, PRODUCT and this workflow once per session; reuse them until changed. Use [CODE_MAP.md](CODE_MAP.md) to locate affected source/tests/contracts. Read the relevant sections, not every linked document. FEATURES is for capability inventory questions; ROADMAP is for direction or broad issue selection. Source/tests establish current behavior; GitHub holds criteria/review state. Historical changelogs and archives are context only.
+Read AGENTS, PRODUCT and this workflow once per session; reuse until changed. Use [CODE_MAP.md](CODE_MAP.md) and `rg` to locate affected source/tests. Inspect those before relying on behavioral summaries. Read only contract sections needed for intent, preservation or external-source boundaries; a linked document is not a request to load its links recursively. FEATURES is for capability questions and ROADMAP for direction/selection.
 
-Use `rg` to locate symbols/headings before reading large ranges. Generated tag data, full app/test files, complete backlogs and full PR diffs are not default context: retrieve the specific portion needed. List GitHub issue/PR numbers and titles first, then fetch candidate bodies; retrieve metadata without diffs when possible. Filter large tool responses to needed fields before returning them to the model. If output truncates, narrow the query instead of repeating the dump.
+| Evidence | What it establishes |
+| --- | --- |
+| Current user instructions and selected issue criteria | Intended outcome and authorized scope. |
+| Source and observed application behavior | Current implementation, including existing defects. |
+| Tests | Specific regression expectations; older assertions can encode superseded behavior. |
+| Active contracts | Confirmed decisions, reasons and non-obvious preservation/compatibility constraints. Check behavioral claims against implementation. |
+| Archives, audits and research | Dated evidence or tentative interpretation; load only for an explicit historical/source question. |
 
-Keep status updates and PR descriptions concise. Run independent reads together; keep edits and dependent work sequential. Poll CI/running tasks at bounded intervals and report meaningful changes. Reuse verification within a batch. New evidence, changed code or a failure justifies repeating a check; unchanged passing checks do not need another run for each issue or handoff message.
+If these disagree, state the conflict and resolve it within selected scope. An observed pattern or agent inference is not a confirmed product decision. Propose a new principle with supporting feedback rather than silently promoting it to required behavior.
+
+Avoid full app/test dumps, generated catalogs, entire backlogs and historical reports as default context. List issue/PR titles before fetching selected bodies; filter large responses and narrow truncated output. Run independent reads together and keep mutations/dependencies sequential. Keep progress/PR text concise, reuse verification within a batch and report meaningful CI changes rather than unchanged snapshots.
 
 ## Verification and data
 
-`package.json` owns commands. `npm run test:agent` runs the full native suite, prints a summary on success and full output on failure, and writes the latest complete output to ignored `test-results/agent-tests.log`. Exit status is preserved. `npm test` remains unchanged for humans/CI and needs no installed packages. Browser smoke is separate: `npm run test:browser` after its development-only setup; see [BROWSER_TESTING.md](BROWSER_TESTING.md). Pass focused selectors after `--`, for example:
+`package.json` owns commands. Prefer `npm run test:agent`: compact results, failures/nonzero status and full logs under ignored `test-results/agent-tests.log`. It runs the native suite without live Scryfall access or package installation. Narrow development checks by file/name:
 
 ```sh
 npm run test:agent -- --test-name-pattern="optional viewing zones" test/workspace-deck.test.mjs
 ```
 
-| Change | Development checks | Before PR handoff |
+| Change | During development | Before PR handoff |
 | --- | --- | --- |
-| Documentation/instructions only | Links, paths, preserved rules and diff hygiene | Same checks; no app suite or browser sweep |
-| Labels, CSS or local UI behavior | Relevant rendering/interaction tests if behavior changes; inspect affected workflow | One full suite plus affected desktop/narrow-screen, keyboard and appearance checks under [UI acceptance](#ui-acceptance) |
-| Query, statistics, deck or collection logic | Focused valid/invalid/edge-case regressions | One full suite plus affected user flow |
-| Storage, backup/import, shared navigation/theme or server | Focused failure/data-preservation checks | One full suite; broader checks across affected surfaces/appearances and request/storage boundaries |
-| Revision after a checked PR | Recheck changed behavior | Repeat affected checks; rerun full suite when shared logic, new failures or integration risk warrants it |
+| Documentation/instructions | Links/anchors, source-backed claims, preserved rules and diff scope | Same checks; no app suite or browser sweep. |
+| Labels, CSS or local UI behavior | Relevant behavior checks and affected workflow inspection | One full suite and [UI acceptance](#ui-acceptance). |
+| Query, statistics, deck or collection logic | Focused valid/invalid/edge regressions | One full suite and affected user flow. |
+| Storage/import, shared navigation/theme or server | Focused failure and data-preservation checks | One full suite; checks across affected surfaces/appearances and request/storage boundaries. |
+| Revision of a verified PR | Check changed behavior | Repeat affected checks; rerun full suite for shared logic, new failures or integration risk. |
 
-Add tests for meaningful changed behavior/risk; wording-only edits need no new implementation-mirroring assertions. Pure CSS geometry requires browser inspection; markup tests alone cannot establish it. Run the relevant automated browser smoke flows when touching their modules or shared layout, then inspect changed visual details that the assertions do not cover. Share browser checks across related issues. Record actual automated/manual results and untested platforms separately. The final full suite remains required for code PRs. Use `git diff --check` on the intended changes.
+Add meaningful behavior/risk regressions; wording-only edits need no new tests. CSS geometry requires browser evidence, not markup assertions alone. Run relevant [browser smoke flows](BROWSER_TESTING.md) when their modules/shared layout change and inspect visual details outside their assertions. Record automated/manual results and untested platforms separately. One final full native suite remains required for code PRs. Check the intended diff with `git diff --check`.
 
-Loopback EACCES is an environment restriction, not a passing test or evidence of an app regression. Resolve permitted loopback access once before repeating server/launcher checks; report a remaining block accurately. Keep live-network tests opt-in. Use synthetic fixtures/disposable browser data. Preserve the player's origin/storage/server; localhost, 127.0.0.1 and different ports have separate storage. Never clear personal data to test.
+Use synthetic fixtures and isolated browser storage/server. Never clear personal storage to test. Different origins/ports have separate storage. Keep live-network tests opt-in. Loopback EACCES is an environment restriction, not a passing check; resolve permitted access before retrying, and report any remaining block.
 
 ## UI acceptance
 
-For UI changes, apply [the interface principles](../DESIGN.md#interface-principles) within the affected workflow. Before implementation, identify the player's task, an existing pattern to reuse, variable-content/interaction risks and conflicts with selected newer criteria. Resolve routine reversible choices as agent work; material undecided product scope remains explicit.
+Apply [the interface principles](../DESIGN.md#interface-principles) within the affected workflow. Identify the player's task, an existing pattern to reuse, variable-content/interaction risks and conflicts with selected criteria before implementation. This is agent work, not a routine developer approval checkpoint.
 
-Before handoff, inspect affected desktop/narrow states and the keyboard, appearance and touch-relevant paths required by the verification table. Exercise long names/labels, large counts, empty/partial data and relevant loading/error states. During hover/focus, inspect neighboring targets and following sections before, during and after the interaction; confirm the next action stays reachable. Check first/middle/last cards and Command zone above Main deck when stack behavior changes. For repeated cards/tables/headers, compare corresponding fields and actions through relevant filtering/sorting transitions. Verify enlarged text, visible focus and access to complete values where summaries truncate.
+Inspect affected desktop/narrow, keyboard, appearance and touch-relevant paths. Exercise long labels/names, large counts, empty/partial data and relevant loading/error states. Compare neighboring targets and following sections before/during/after hover or focus; confirm the next action remains reachable. Stack changes include first/middle/last cards and Command zone above Main deck. Repeated-content changes include corresponding fields/actions through relevant filtering/sorting transitions, enlarged text, visible focus and access to full truncated values. Conditional summaries include zero/one/many selections.
 
-Review added visible copy against the current task: what decision, outcome or recovery does each sentence support? Improve labels and controls first; optional reference detail belongs in relevant help. Retain destination/scope, destructive consequences, actionable errors and material missing-data warnings where needed. Inspect zero/one/many selections when conditional summaries change.
+Review added copy for the current decision, outcome or recovery it supports. Improve labels/controls first; optional reference detail belongs in help. Retain destination/scope, destructive consequences, actionable errors and material missing-data warnings.
 
-Fix observed violations before handoff. Add focused browser regressions for recurring geometry/interaction risks using [isolated fixtures](BROWSER_TESTING.md); target position/reachability rather than only markup or visibility. Inspect relevant transition states as well as resting screenshots: transforms can move hit targets without changing document flow. Saved screenshots and passing older assertions do not establish acceptance of revised behavior. Reuse existing checks within the batch; record actual affected-state evidence and specific unperformed checks in the PR. The existing full-suite and explicit developer merge-approval gates remain in force.
-
-When feedback establishes a reusable principle or replaces a prior decision, update its authoritative guidance and affected assertions within the selected scope; keep one-off requests in their issue/contract. For the next three comparable UI batches, use PR discussions to distinguish corrections against existing criteria from changed requirements, noting review rounds and developer review time when available. Use that evidence to improve the rule or check; no separate tracking system is required.
+Fix observed violations and add focused browser regressions for recurring geometry/interaction risks. Check transition states as well as resting screenshots: transforms can move hit targets without changing flow. Saved screenshots or passing old assertions do not establish revised acceptance. Record affected-state evidence and specific unperformed checks in the PR; existing suite and merge-approval gates remain.
 
 ## Documentation ownership
 
-Feature contracts own behavior and preservation rules; FEATURES summarizes implemented/partial/planned status without contradictory historical rows. Replace stale statements when behavior changes instead of adding corrections above them. ROADMAP groups future direction without caching issue status. GitHub records progress and verification; CHANGELOG records implemented changes and reversals. Package version 0.1.0 is not proof of a published/reviewed release.
+Keep one authoritative home for each confirmed rule. DESIGN owns interface intent; feature contracts own preservation/compatibility boundaries, not exhaustive copies of source. Replace stale statements when behavior changes. FEATURES summarizes capabilities, ROADMAP groups direction, CHANGELOG records delivered changes and GitHub owns progress/review evidence. A package version or old test count is not proof of a release or current acceptance.
 
-For interrupted work, use the local TASK_TEMPLATE handoff and selected issue/PR for durable status. Retain unique uncommitted work; remove temporary worktrees only after authorized changes reach the primary checkout. Native packaging/cloud sync and account/model/plugin settings are separate decisions.
+Keep dated research/decisions in `docs/archive/`, clearly labeled as historical. Preserve unique rationale and source links; archive original proposals after extracting confirmed constraints. Local audit screenshots/logs belong in ignored `test-results/`, not routine context. Keep inferred observations tentative until confirmed by the developer. For the next three comparable UI batches, use existing PR discussion to distinguish missed criteria from changed requirements and note review rounds/time when available.
 
-Pure rendering/import modules, feature-grouped workspace tests and isolated Chromium smoke automation were authorized and added in PR #133. Extend these along cohesive features rather than replacing the whole app.
-
-## Options left for developer decision
-
-| Option | Benefit | Cost / decision |
-| --- | --- | --- |
-| Adjust model, reasoning and unused tool connections | May reduce session usage | Changes account/client workflow and quality tradeoffs. No settings change is part of this repository work. |
-| Use a fresh chat for each coherent implementation batch | Reduces unrelated conversation history | Requires a concise issue/PR handoff; keep revisions in the same implementation chat. The developer chooses when to start a chat. |
-| Compare usage across three similar batches | Reveals whether changes reduce actual allowance consumption | Record elapsed time and token/account usage only where available, plus retries and check counts. No telemetry or token-saving percentage is promised by this PR. |
-
-Keep the existing local full-suite gate and cross-platform CI: reducing output/context is the initial optimization, while retaining behavior and data checks. Parallel agents, larger unrelated batches and new dependencies are not automatic cost savings.
+Use the local TASK_TEMPLATE and selected issue/PR for interrupted work. Local overrides and `.codex/local/` stay excluded. Preserve unique uncommitted work; do not remove temporary worktrees before authorized changes reach this checkout. Skills do not authorize delegation, installation, configuration changes, extra chats or merging. Native packaging, cloud sync and account/model/plugin settings are separate decisions.

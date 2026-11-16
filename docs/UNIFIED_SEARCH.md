@@ -55,7 +55,7 @@ Mixed-family OR groups, mixed Boolean logic within one family, repeated name/for
 
 Incomplete quotes/regexes/groups, dangling AND/OR and unfinished recognized clauses pause guided edits and search, keeping the exact typed query. This does not validate every Scryfall expression: other invalid syntax is reported by Scryfall. Queries are bounded to 1,500 characters and 40 nested groups. No deck data or filter state is migrated or stored.
 
-Comparison broadening removes only a representable independent condition (the entire function group for any/all), preserves query-only expressions, and restores the exact original query. It cannot relax one operand inside a mixed group safely.
+Search broadening removes only a representable independent condition (the entire function group for any/all), preserves query-only expressions, and restores the exact original query. It cannot relax one operand inside a mixed group safely.
 
 ## Function discovery
 
@@ -69,4 +69,4 @@ Native Node regression checks cover Boolean projection, exact source preservatio
 
 On 2026-10-28, all seven required color/minimum-symbol query examples returned successful live responses through the existing Scryfall proxy. The returned batches (up to 175 cards per query, all 28 for `{C}`) matched the expected property on the card or at least one face; this is sampling, not whole-dataset certification. Windows desktop and 390px light/dark browser checks cover query/control synchronization, numeric editing, cursor insertion, tag removal/matching, relationship browsing and responsive layouts. The Impeccable engine/detector is unavailable; no detector pass is claimed. macOS/Safari remain untested.
 
-Exploration hierarchy and optional tracking (#19/#20) are documented in [Exploration](EXPLORATION.md); candidate removal (#47) is recorded in [Candidates](CANDIDATES.md), and retained broadening in [Search broadening](EFFECT_COMPARISON.md).
+Exploration hierarchy and optional tracking (#19/#20) are documented in [Exploration](EXPLORATION.md); candidate removal (#47) is recorded in [Candidate removal](EFFECT_COMPARISON.md#removed-candidate-workflow-47), and retained broadening in [Search broadening](EFFECT_COMPARISON.md).

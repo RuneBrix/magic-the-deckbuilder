@@ -269,7 +269,7 @@ Record completed user-facing changes here. Future work belongs in [GitHub issues
 
 ### Changed
 
-- Collect up to 20 session-only candidates from results/details and review them separately, with optional two-card comparison; keep reversible search broadening secondary and independent ([#24](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24); [scope](docs/CANDIDATES.md)).
+- Collect up to 20 session-only candidates from results/details and review them separately, with optional two-card comparison; keep reversible search broadening secondary and independent ([#24](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24); [scope](docs/EFFECT_COMPARISON.md#removed-candidate-workflow-47)).
 - Assign Commander brackets manually and review named Game Changers against a dated official snapshot with conditional discussion ranges, human-review caveats and stale/missing-data states. Preserve assignments in JSON and duplication ([#29](https://github.com/RuneBrix/magic-the-deckbuilder/issues/29); [sources and bounds](docs/COMMANDER_BRACKETS.md)).
 
 - Separate card facts/artwork from explicit named-deck controls, autosave validated role and zone edits, and keep invalid drafts visible for correction or deliberate discard ([#25](https://github.com/RuneBrix/magic-the-deckbuilder/issues/25)).

@@ -1,5 +1,7 @@
 # Collection upload efficiency
 
+> Historical evidence, archived 16 November 2026 from `docs/COLLECTION_IMPORT_RESEARCH.md`. Original measurements, proposals and review statements describe their dated baseline; they are not current requirements. Use [the source map](../CODE_MAP.md) and selected criteria for current work.
+
 Investigated 3 November 2026 for [PR #86](https://github.com/RuneBrix/magic-the-deckbuilder/pull/86).
 
 ## Primary evidence and limits
