@@ -3,7 +3,7 @@ import { esc, mana, printingLabel, icon } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel, budgetComparison } from './budget-view.js';
-import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions } from './core.js';
+import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions } from './core.js';
 import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -100,6 +100,14 @@ function saveWorkspaceCopy(source=decks,name='arcana-workspace.json') {
 }
 function changeNamedDeck(d,fn){if(!decks.includes(d))throw Error('That deck is no longer available.');const result=fn(d);d.updated=new Date().toISOString();save();render();return result;}
 function changeDeck(fn) { const d=current();if(d)return changeNamedDeck(d,fn); }
+function commitDeckSnapshot(d,staged) {
+  if(!decks.includes(d))throw Error('That deck is no longer available.');
+  staged.updated=new Date().toISOString();
+  const content=JSON.stringify(workspaceFile(decks.map(deck=>deck===d?staged:deck),collection));
+  try{localStorage.setItem('arcana.workspace.v2',content);}
+  catch{throw Error('Browser storage is full or unavailable. Save a workspace copy or free browser space, then try again.');}
+  Object.assign(d,staged);storageError='';updateBackupStatus();
+}
 
 function updateNavigationHeight() {
   document.documentElement.style?.setProperty('--nav-height',Math.ceil($('.workspace-nav').getBoundingClientRect().height)+'px');
@@ -655,10 +663,7 @@ function bindQuickAdd(deck) {
     try{
       const staged=structuredClone(deck);
       addDeckCopies(staged,card,1,'main','regular');
-      staged.updated=new Date().toISOString();
-      try{localStorage.setItem('arcana.workspace.v2',JSON.stringify(workspaceFile(decks.map(d=>d===deck?staged:d),collection)));}
-      catch{throw Error('Browser storage is full or unavailable. Save a workspace copy or free browser space, then try again.');}
-      Object.assign(deck,staged);storageError='';updateBackupStatus();render();
+      commitDeckSnapshot(deck,staged);render();
       $('#quick-add-name').focus();$('#quick-add-status').textContent=`Added ${card.name} to Main deck.`;
       toast(`Added ${card.name}`);
     }catch(error){status.textContent='Card was not added. '+error.message;status.classList.add('query-error');input.focus();}
@@ -1130,7 +1135,24 @@ addEventListener('scroll',e=>{
 },true);
 const formatLabel = format => format.charAt(0).toUpperCase()+format.slice(1);
 function deckMenu(d) {
-  return `<details class="deck-menu" name="deck-actions"><summary aria-label="Deck actions for ${esc(d.name)}" title="Deck actions">${icon('more',20)}</summary><div class="deck-menu-actions">${[['rename','Rename / format'],['import','Import cards'],['export','Export deck'],['duplicate','Duplicate'],['delete','Delete deck…']].map(([action,label])=>`<button class="${action==='delete'?'danger':''}" data-manage="${action}" data-target="${esc(d.id)}">${label}</button>`).join('')}</div></details>`;
+  return `<details class="deck-menu" name="deck-actions"><summary aria-label="Deck actions for ${esc(d.name)}" title="Deck actions">${icon('more',20)}</summary><div class="deck-menu-actions">${[['rename','Rename / format'],['import','Import cards'],...(view==='deck'?[['suggest-functions','Assign missing functions…']]:[]),['export','Export deck'],['duplicate','Duplicate'],['delete','Delete deck…']].map(([action,label])=>`<button class="${action==='delete'?'danger':''}" data-manage="${action}" data-target="${esc(d.id)}">${label}</button>`).join('')}</div></details>`;
+}
+function assignMissingFunctionsDialog(d) {
+  const review=unassignedFunctionSuggestions(d),copies=review.reduce((sum,row)=>sum+row.qty,0);
+  if(!review.length){toast('No suggestions for unassigned cards in '+d.name+'.');return;}
+  showDialog(`<h2>Assign missing functions</h2><p>Assign functions to ${review.length} unassigned card ${review.length===1?'entry':'entries'} (${copies} ${copies===1?'copy':'copies'}) in ${esc(d.name)} across all zones. Existing functions and explicit Unassigned choices stay unchanged.</p><ul class="function-suggestions" tabindex="0" aria-label="Suggested function assignments">${review.map(row=>`<li>${row.qty} ${esc(row.name)} · ${ZONES[row.zone]} — <strong>${esc(row.primary)}</strong></li>`).join('')}</ul><p id="function-suggestions-error" class="query-error" role="alert"></p><div class="settings-actions"><button id="apply-function-suggestions" class="primary">Assign suggested functions</button><button id="cancel-function-suggestions" class="secondary">Cancel</button></div>`);
+  $('#cancel-function-suggestions').onclick=closeDialog;
+  $('#cancel-function-suggestions').focus();
+  $('#apply-function-suggestions').onclick=()=>{
+    if($('#dialog').open===false)return;
+    try{
+      const staged=structuredClone(d);
+      if(JSON.stringify(unassignedFunctionSuggestions(staged))!==JSON.stringify(review))throw Error('Unassigned cards changed. Close this review and open Assign missing functions again.');
+      for(const row of review)assignEntryFunction(staged,row.key,row.primary);
+      commitDeckSnapshot(d,staged);closeDialog();render();$('.deck-menu>summary')?.focus();
+      toast(`Assigned functions to ${copies} ${copies===1?'copy':'copies'}.`);
+    }catch(error){$('#function-suggestions-error').textContent=error.message;}
+  };
 }
 function deckCover(d) {
   const commander=d.cards.find(e=>zoneFor(e)==='command');
@@ -1483,7 +1505,7 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.removeOwned!==undefined){removeCollectionLot(Number(button.dataset.removeOwned));return;}
   if(button.dataset.cardMenu){openCardActions(button.dataset.cardMenu,button);return;}
   if(button.dataset.deck){openDeck(button.dataset.deck);return;}
-  if(button.dataset.manage){const menu=button.closest?.('.deck-menu');if(menu){menu.open=false;menu.querySelector('summary').focus();}const d=decks.find(d=>d.id===button.dataset.target);if(!d)return;const action=button.dataset.manage;if(action==='rename')deckForm(d);if(action==='duplicate')duplicateDeck(d);if(action==='delete')deleteDeck(d);if(action==='import')importDialog(d);if(action==='export')exportDialog(d);return;}
+  if(button.dataset.manage){const menu=button.closest?.('.deck-menu');if(menu){menu.open=false;menu.querySelector('summary').focus();}const d=decks.find(d=>d.id===button.dataset.target);if(!d)return;const action=button.dataset.manage;if(action==='rename')deckForm(d);if(action==='duplicate')duplicateDeck(d);if(action==='delete')deleteDeck(d);if(action==='import')importDialog(d);if(action==='suggest-functions')assignMissingFunctionsDialog(d);if(action==='export')exportDialog(d);return;}
   if(button.dataset.tab){deckTab=button.dataset.tab;render();return;}
   if(button.dataset.relax){await broaden(button.dataset.relax);return;}
   if(button.dataset.browseTag){browseFunctions(button.dataset.browseTag);return;}

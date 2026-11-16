@@ -3,6 +3,7 @@
 ## Card addition defaults
 
 - Default ordinary single-faced lands to Land alongside existing tag-derived functions. Offer an explicit suggested function for existing entries and an Unassigned choice without rewriting saved manual functions (#163).
+- Cover broader tag families for card advantage, combat control, untapping, attack taxes and cost reduction, including all ten reported Karona cards. Review and apply missing functions to existing empty entries without reimporting copies or changing manual/explicit Unassigned choices (#163).
 - Add one default nonfoil copy immediately from Quick add, preserve other printing/finish variants, and retain saved/live copies on a failed save. Explain printings without nonfoil in the detailed form (#166).
 - Store known default finishes for ordinary add paths and show resolved set/collector metadata in text rows regardless of entry origin, with honest unknowns for incomplete older records (#195).
 

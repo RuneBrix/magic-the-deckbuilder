@@ -26,6 +26,8 @@ export const TAGS = [
 export const tagById = new Map(TAG_CATALOG.tags.map(t => [t.id, t]));
 // More specific interaction functions precede broad resource/value functions.
 const FUNCTION_PRECEDENCE = ['sweeper','counterspell','removal','ramp','draw','tutor','reanimate','sacrifice-outlet','protection','flicker','repeatable-token-generator','lifegain'];
+// Broader families fill gaps only when no existing supported function matches.
+const FUNCTION_FALLBACKS = [['pillowfort','Protection'],['cost-reducer','Ramp'],['card-advantage','Card advantage'],['combat-manipulation','Combat control'],['untapper','Untap']];
 export function functionMemberships(card) {
   return (TAG_CATALOG.memberships?.[card.oracle_id?.toLowerCase()] ?? []).map(index => TAG_CATALOG.tags[index]);
 }
@@ -38,7 +40,14 @@ export function suggestedFunctions(card) {
     supported.add(id);
     pending.push(...(tagById.get(id)?.parents ?? []));
   }
-  return FUNCTION_PRECEDENCE.filter(id => supported.has(id)).map(id => TAGS.find(([slug]) => slug===id)[1]);
+  const functions=FUNCTION_PRECEDENCE.filter(id => supported.has(id)).map(id => TAGS.find(([slug]) => slug===id)[1]);
+  return functions.length?functions:FUNCTION_FALLBACKS.filter(([id])=>supported.has(id)).map(([,label])=>label);
+}
+export function unassignedFunctionSuggestions(deck) {
+  return deck.cards.filter(entry=>entry.tags.length===0).flatMap(entry=>{
+    const primary=suggestedFunctions(entry.card)[0];
+    return primary?[{key:entryKey(entry),name:entry.card.name,primary,zone:zoneFor(entry),qty:entry.qty}]:[];
+  });
 }
 const normalizeTag = value => value.trim().toLowerCase().replace(/[-_\s]+/g, ' ');
 export function findTags(value) {

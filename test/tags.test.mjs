@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { TAG_CATALOG, TAGS, tagById, findTags, resolveTag, queryFor } from '../public/core.js';
 import { buildTagCatalog } from '../scripts/update-tags.mjs';
@@ -65,6 +66,16 @@ test('catalog conversion keeps all memberships, stable sorted indexes and reject
 });
 
 const beast={id:'beast-printing',oracle_id:'7735eeba-693b-47e2-bd51-414379cf1016',name:'Beast Within',type_line:'Instant',cmc:3,color_identity:['G'],colors:['G']};
+const karona=JSON.parse(await readFile(new URL('./fixtures/karona-functions.json',import.meta.url),'utf8')).cards;
+test('the ten reported Karona cards receive broad functions from their actual bundled memberships',()=>{
+  assert.ok(karona.every(({card})=>functionMemberships(card).length>0));
+  assert.deepEqual(karona.map(({card})=>[card.name,suggestedFunctions(card)[0] || 'Unassigned']),karona.map(({card,expectedFunction})=>[card.name,expectedFunction]));
+  const deck={id:'karona',name:'Karona',format:'commander',cards:[]};
+  for(const {card} of karona)addDeckCopies(deck,card,1,'main');
+  assert.deepEqual(deck.cards.map(primaryRole),karona.map(row=>row.expectedFunction));
+  assert.deepEqual({...stats(deck).tags},{'Untap':1,'Card advantage':2,'Combat control':3,Protection:2,Ramp:2});
+  assert.deepEqual(readWorkspaceFile(JSON.parse(JSON.stringify(workspaceFile([deck],[])))).decks,[deck]);
+});
 test('ordinary lands default to Land while double-faced cards retain tag-based functions', () => {
   assert.deepEqual(suggestedFunctions({type_line:'Basic Land — Forest',layout:'normal'}),['Land']);
   assert.deepEqual(suggestedFunctions({type_line:'Artifact Land'}),['Land']);

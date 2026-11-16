@@ -686,6 +686,9 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 #tag-match-count{margin:8px 0 12px;font-size:12px;color:var(--muted)}
 #tag-options{margin-top:12px}
 .function-data-help{margin:16px 0 0}
+.function-suggestions{max-height:40dvh;overflow:auto;margin:12px 0;padding-inline-start:22px}
+.function-suggestions li{margin:8px 0;overflow-wrap:anywhere}
+.function-suggestions:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 .unlisted-function button{max-width:100%;overflow-wrap:anywhere;text-align:left}
 .tag-browser-content{container-type:inline-size}
 .tag-grid-heading{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
