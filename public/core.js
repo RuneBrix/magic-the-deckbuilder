@@ -26,10 +26,13 @@ export const TAGS = [
 export const tagById = new Map(TAG_CATALOG.tags.map(t => [t.id, t]));
 // More specific interaction functions precede broad resource/value functions.
 const FUNCTION_PRECEDENCE = ['sweeper','counterspell','removal','ramp','draw','tutor','reanimate','sacrifice-outlet','protection','flicker','repeatable-token-generator','lifegain'];
+// Broader families fill gaps only when no existing supported function matches.
+const FUNCTION_FALLBACKS = [['pillowfort','Protection'],['cost-reducer','Ramp'],['card-advantage','Card advantage'],['combat-manipulation','Combat control'],['untapper','Untap']];
 export function functionMemberships(card) {
   return (TAG_CATALOG.memberships?.[card.oracle_id?.toLowerCase()] ?? []).map(index => TAG_CATALOG.tags[index]);
 }
 export function suggestedFunctions(card) {
+  if ((!card.layout || card.layout==='normal') && !card.card_faces?.length && !card.type_line?.includes('//') && isLand(card)) return ['Land'];
   const supported = new Set(), pending = functionMemberships(card).map(tag => tag.id);
   while (pending.length) {
     const id = pending.pop();
@@ -37,7 +40,14 @@ export function suggestedFunctions(card) {
     supported.add(id);
     pending.push(...(tagById.get(id)?.parents ?? []));
   }
-  return FUNCTION_PRECEDENCE.filter(id => supported.has(id)).map(id => TAGS.find(([slug]) => slug===id)[1]);
+  const functions=FUNCTION_PRECEDENCE.filter(id => supported.has(id)).map(id => TAGS.find(([slug]) => slug===id)[1]);
+  return functions.length?functions:FUNCTION_FALLBACKS.filter(([id])=>supported.has(id)).map(([,label])=>label);
+}
+export function unassignedFunctionSuggestions(deck) {
+  return deck.cards.filter(entry=>entry.tags.length===0).flatMap(entry=>{
+    const primary=suggestedFunctions(entry.card)[0];
+    return primary?[{key:entryKey(entry),name:entry.card.name,primary,zone:zoneFor(entry),qty:entry.qty}]:[];
+  });
 }
 const normalizeTag = value => value.trim().toLowerCase().replace(/[-_\s]+/g, ' ');
 export function findTags(value) {
@@ -116,6 +126,7 @@ export function copyEntryToDeck(source, key, target, qty, zone, selection) {
 export function addDeckCopies(deck, card, qty, zone, finish, primary='', inheritedTags=[]) {
   if(!Number.isInteger(qty) || qty<1 || qty>500)throw Error('Choose 1–500 copies.');
   if(typeof zone!=='string' || !Object.hasOwn(ZONES,zone))throw Error('Choose a destination zone.');
+  finish ??= Array.isArray(card.finishes) && card.finishes.length ? deckFinishOptions(card)[0] : undefined;
   if(finish!==undefined && !deckFinishOptions(card).includes(finish))throw Error('Choose a finish available for this printing.');
   if(typeof primary!=='string' || primary.trim().length>80 || primary.includes(','))throw Error('Use one function name of up to 80 characters, without commas.');
   if(deckCardCopies(deck,card,zone)+qty>500)throw Error('Maximum 500 copies per card and zone. Nothing added.');

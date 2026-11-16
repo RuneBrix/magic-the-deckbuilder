@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { TAG_CATALOG, TAGS, tagById, findTags, resolveTag, queryFor } from '../public/core.js';
 import { buildTagCatalog } from '../scripts/update-tags.mjs';
@@ -65,6 +66,30 @@ test('catalog conversion keeps all memberships, stable sorted indexes and reject
 });
 
 const beast={id:'beast-printing',oracle_id:'7735eeba-693b-47e2-bd51-414379cf1016',name:'Beast Within',type_line:'Instant',cmc:3,color_identity:['G'],colors:['G']};
+const karona=JSON.parse(await readFile(new URL('./fixtures/karona-functions.json',import.meta.url),'utf8')).cards;
+test('the ten reported Karona cards receive broad functions from their actual bundled memberships',()=>{
+  assert.ok(karona.every(({card})=>functionMemberships(card).length>0));
+  assert.deepEqual(karona.map(({card})=>[card.name,suggestedFunctions(card)[0] || 'Unassigned']),karona.map(({card,expectedFunction})=>[card.name,expectedFunction]));
+  const deck={id:'karona',name:'Karona',format:'commander',cards:[]};
+  for(const {card} of karona)addDeckCopies(deck,card,1,'main');
+  assert.deepEqual(deck.cards.map(primaryRole),karona.map(row=>row.expectedFunction));
+  assert.deepEqual({...stats(deck).tags},{'Untap':1,'Card advantage':2,'Combat control':3,Protection:2,Ramp:2});
+  assert.deepEqual(readWorkspaceFile(JSON.parse(JSON.stringify(workspaceFile([deck],[])))).decks,[deck]);
+});
+test('ordinary lands default to Land while double-faced cards retain tag-based functions', () => {
+  assert.deepEqual(suggestedFunctions({type_line:'Basic Land — Forest',layout:'normal'}),['Land']);
+  assert.deepEqual(suggestedFunctions({type_line:'Artifact Land'}),['Land']);
+  assert.deepEqual(suggestedFunctions({...beast,type_line:'Land // Instant',layout:'modal_dfc',card_faces:[{type_line:'Land'},{type_line:'Instant'}]}),['Removal']);
+  assert.deepEqual(suggestedFunctions({type_line:'Land // Land',layout:'modal_dfc'}),[]);
+  const deck={id:'lands',name:'Lands',format:'commander',cards:[]};
+  const land={...beast,id:'forest',oracle_id:'forest',type_line:'Basic Land — Forest',finishes:['nonfoil','foil']};
+  const entry=addDeckCopies(deck,land,1,'main');
+  assert.equal(primaryRole(entry),'Land');
+  assert.equal(entry.finish,'regular');
+  assignEntryFunction(deck,entryKey(entry),'');
+  addDeckCopies(deck,land,1,'main');
+  assert.equal(primaryRole(entry),'Unassigned');
+});
 test('Beast Within receives Removal from actual memberships, independently of search context', () => {
   assert.ok(functionMemberships(beast).some(t=>t.id==='removal-permanent'));
   assert.equal(suggestedFunctions(beast)[0],'Removal');

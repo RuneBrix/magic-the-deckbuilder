@@ -3,7 +3,7 @@ import { esc, mana, printingLabel, icon } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel, budgetComparison } from './budget-view.js';
-import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions } from './core.js';
+import { deckPrintingPrice, parseEuroQuote, storedEuroPrice, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions } from './core.js';
 import { cheapestPrintings, refreshEuroQuote } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -100,6 +100,14 @@ function saveWorkspaceCopy(source=decks,name='arcana-workspace.json') {
 }
 function changeNamedDeck(d,fn){if(!decks.includes(d))throw Error('That deck is no longer available.');const result=fn(d);d.updated=new Date().toISOString();save();render();return result;}
 function changeDeck(fn) { const d=current();if(d)return changeNamedDeck(d,fn); }
+function commitDeckSnapshot(d,staged) {
+  if(!decks.includes(d))throw Error('That deck is no longer available.');
+  staged.updated=new Date().toISOString();
+  const content=JSON.stringify(workspaceFile(decks.map(deck=>deck===d?staged:deck),collection));
+  try{localStorage.setItem('arcana.workspace.v2',content);}
+  catch{throw Error('Browser storage is full or unavailable. Save a workspace copy or free browser space, then try again.');}
+  Object.assign(d,staged);storageError='';updateBackupStatus();
+}
 
 function updateNavigationHeight() {
   document.documentElement.style?.setProperty('--nav-height',Math.ceil($('.workspace-nav').getBoundingClientRect().height)+'px');
@@ -630,7 +638,7 @@ function deckWorkspace(d, statistics, previousStatistics) {
   return `<div class="deck-workspace"><header class="deck-editor-header"><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions"><button class="primary" data-action="find-cards">${icon('plus',16)} Find cards to add</button>${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),budgetDrafts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual stacks'],['visual-vertical','Vertical visual stacks'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price USD (low first)'],['price-desc','Price USD (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
 }
 function quickAddMarkup(d) {
-  return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p class="hint">Destination: ${esc(d.name)} · Main deck by default.</p><p id="quick-add-status" class="hint" role="status">Type at least three characters.</p></section>`;
+  return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p id="quick-add-status" class="hint" role="status"></p></section>`;
 }
 function bindQuickAdd(deck) {
   const input=$('#quick-add-name'),matches=$('#quick-add-matches'),status=$('#quick-add-status');
@@ -644,15 +652,26 @@ function bindQuickAdd(deck) {
     revision++;clearTimeout(timer);controller?.abort();expanded(false);choices=[];matches.innerHTML='';
   };
   const choose=card=>{
-    if(!card || !decks.includes(deck))return;
-    reset();input.value='';status.textContent='Type at least three characters.';
-    deckCardDialog(card,{deck});
-    $('#dialog').onclose=()=>{if(view==='deck' && current()===deck)$('#quick-add-name')?.focus();};
+    if(!card || !input.isConnected || view!=='deck' || deckTab!=='cards' || current()!==deck || !decks.includes(deck))return;
+    reset();status.textContent='';
+    if(!deckFinishOptions(card).includes('regular')){
+      deckCardDialog(card,{deck});
+      $('#deck-card-error').textContent='This printing has no nonfoil version. Choose a printing and finish to add it.';
+      $('#dialog').onclose=()=>{if(view==='deck' && current()===deck)$('#quick-add-name')?.focus();};
+      return;
+    }
+    try{
+      const staged=structuredClone(deck);
+      addDeckCopies(staged,card,1,'main','regular');
+      commitDeckSnapshot(deck,staged);render();
+      $('#quick-add-name').focus();$('#quick-add-status').textContent=`Added ${card.name} to Main deck.`;
+      toast(`Added ${card.name}`);
+    }catch(error){status.textContent='Card was not added. '+error.message;status.classList.add('query-error');input.focus();}
   };
   input.oninput=e=>{
     reset();
     const value=input.value.trim();
-    status.textContent='Type at least three characters.';
+    status.textContent='';status.classList.remove('query-error');
     if(e.isComposing || value.length<3)return;
     const version=revision;
     const live=()=>version===revision && input.isConnected && view==='deck' && deckTab==='cards' && current()===deck;
@@ -767,13 +786,17 @@ function previewEntry(key) {
 function deckEntry(e, atLimit) {
   const key=entryKey(e),visual=editorOptions.layout.startsWith('visual'),image=safeUrl(imageFor(e.card),true),zone=ZONES[zoneFor(e)];
   const faces=faceAttributes(e.card,visual);
-  const variant=e.finish?` · ${esc(printingLabel(e.card))} · ${e.finish}`:'';
+  const finish=e.finish ?? (e.card.finishes?.length?deckPrintingPrice(e.card).finish:null);
+  const finishLabel=({regular:'Nonfoil',foil:'Foil',etched:'Etched'})[finish] || 'Finish unknown';
+  const printingTitle=` · ${esc(printingLabel(e.card))} · ${finishLabel}`;
+  const variant=e.finish?printingTitle:'';
+  const edition=[String(e.card.set||'').toUpperCase()||e.card.set_name||'Set unknown',e.card.collector_number?'#'+e.card.collector_number:'',finish==='regular'?'':finishLabel].filter(Boolean).join(' · ');
   const minus=`<button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">${icon('minus',14)}</button>`,plus=`<button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${atLimit?'disabled':''}>${icon('plus',14)}</button>`;
   const quantity=`<div class="card-quantity">${visual?plus+minus:minus+plus}</div>`;
   const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}${variant}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
   const badge=`<span class="entry-quantity${visual&&e.qty>=100?' three-digits':''}" aria-label="${e.qty} ${e.qty===1?'copy':'copies'}">${e.qty}</span>`;
   const art=`<button class="card-art" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
-  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}${variant}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e)}`:`${badge}<button class="deck-card-name" title="${esc(e.card.name)}${variant}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}${e.finish?`<small class="deck-card-variant">${esc(String(e.card.set||'').toUpperCase()||e.card.set_name||'Set unknown')} · #${esc(e.card.collector_number||'?')} · ${e.finish}</small>`:''}</button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}${variant}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e)}`:`${badge}<button class="deck-card-name" aria-label="${esc(e.card.name)}" title="${esc(e.card.name)}${printingTitle}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}<small class="deck-card-variant">${esc(edition)}</small></button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckList(d, full=false) {
   const filtered = full ? deckEntries(d, editorOptions) : d.cards;
@@ -970,7 +993,8 @@ function showCardSubmenu(type,focus=false) {
     let items;
     if(type==='function') {
       const functions=[...new Set(d.cards.map(e=>e.tags[0]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-      items=functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join('')+action('new-function','Add new function…');
+      const suggestion=suggestedFunctions(entry.card)[0];
+      items=(suggestion && entry.tags[0]!==suggestion?action('suggested-function',`Use suggested function: ${esc(suggestion)}`):'')+functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join('')+action('clear-function','Unassigned',`aria-checked="${primaryRole(entry)==='Unassigned'}"`,'menuitemradio')+action('new-function','Add new function…');
     } else {
       items=Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
     }
@@ -1061,6 +1085,14 @@ $('#card-actions').addEventListener('click',async e=>{
     if(action==='details')inspect(entry.card.id,key);
     if(action==='edit-printing')deckCardDialog(entry.card,{zone:zoneFor(entry),edit:{deck:d,entry,key}});
     if(action==='new-function')assignFunctionDialog(d,key);
+    if(action==='suggested-function'){
+      const suggestion=suggestedFunctions(entry.card)[0];
+      if(!suggestion)throw Error('No suggested function is available for this card.');
+      changeNamedDeck(d,deck=>assignEntryFunction(deck,key,suggestion));focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${suggestion}`);
+    }
+    if(action==='clear-function'){
+      changeNamedDeck(d,deck=>assignEntryFunction(deck,key,''));focusCardEntry(d,key);toast(`${entry.card.name} left Unassigned.`);
+    }
     if(action==='assign-function'){
       if(!d.cards.some(e=>e.tags[0]===button.dataset.function))throw Error('This function is no longer in this deck. Reopen the menu.');
       changeNamedDeck(d,deck=>assignEntryFunction(deck,key,button.dataset.function));focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${button.dataset.function}`);
@@ -1103,7 +1135,24 @@ addEventListener('scroll',e=>{
 },true);
 const formatLabel = format => format.charAt(0).toUpperCase()+format.slice(1);
 function deckMenu(d) {
-  return `<details class="deck-menu" name="deck-actions"><summary aria-label="Deck actions for ${esc(d.name)}" title="Deck actions">${icon('more',20)}</summary><div class="deck-menu-actions">${[['rename','Rename / format'],['import','Import cards'],['export','Export deck'],['duplicate','Duplicate'],['delete','Delete deck…']].map(([action,label])=>`<button class="${action==='delete'?'danger':''}" data-manage="${action}" data-target="${esc(d.id)}">${label}</button>`).join('')}</div></details>`;
+  return `<details class="deck-menu" name="deck-actions"><summary aria-label="Deck actions for ${esc(d.name)}" title="Deck actions">${icon('more',20)}</summary><div class="deck-menu-actions">${[['rename','Rename / format'],['import','Import cards'],...(view==='deck'?[['suggest-functions','Assign missing functions…']]:[]),['export','Export deck'],['duplicate','Duplicate'],['delete','Delete deck…']].map(([action,label])=>`<button class="${action==='delete'?'danger':''}" data-manage="${action}" data-target="${esc(d.id)}">${label}</button>`).join('')}</div></details>`;
+}
+function assignMissingFunctionsDialog(d) {
+  const review=unassignedFunctionSuggestions(d),copies=review.reduce((sum,row)=>sum+row.qty,0);
+  if(!review.length){toast('No suggestions for unassigned cards in '+d.name+'.');return;}
+  showDialog(`<h2>Assign missing functions</h2><p>Assign functions to ${review.length} unassigned card ${review.length===1?'entry':'entries'} (${copies} ${copies===1?'copy':'copies'}) in ${esc(d.name)} across all zones. Existing functions and explicit Unassigned choices stay unchanged.</p><ul class="function-suggestions" tabindex="0" aria-label="Suggested function assignments">${review.map(row=>`<li>${row.qty} ${esc(row.name)} · ${ZONES[row.zone]} — <strong>${esc(row.primary)}</strong></li>`).join('')}</ul><p id="function-suggestions-error" class="query-error" role="alert"></p><div class="settings-actions"><button id="apply-function-suggestions" class="primary">Assign suggested functions</button><button id="cancel-function-suggestions" class="secondary">Cancel</button></div>`);
+  $('#cancel-function-suggestions').onclick=closeDialog;
+  $('#cancel-function-suggestions').focus();
+  $('#apply-function-suggestions').onclick=()=>{
+    if($('#dialog').open===false)return;
+    try{
+      const staged=structuredClone(d);
+      if(JSON.stringify(unassignedFunctionSuggestions(staged))!==JSON.stringify(review))throw Error('Unassigned cards changed. Close this review and open Assign missing functions again.');
+      for(const row of review)assignEntryFunction(staged,row.key,row.primary);
+      commitDeckSnapshot(d,staged);closeDialog();render();$('.deck-menu>summary')?.focus();
+      toast(`Assigned functions to ${copies} ${copies===1?'copy':'copies'}.`);
+    }catch(error){$('#function-suggestions-error').textContent=error.message;}
+  };
 }
 function deckCover(d) {
   const commander=d.cards.find(e=>zoneFor(e)==='command');
@@ -1456,7 +1505,7 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.removeOwned!==undefined){removeCollectionLot(Number(button.dataset.removeOwned));return;}
   if(button.dataset.cardMenu){openCardActions(button.dataset.cardMenu,button);return;}
   if(button.dataset.deck){openDeck(button.dataset.deck);return;}
-  if(button.dataset.manage){const menu=button.closest?.('.deck-menu');if(menu){menu.open=false;menu.querySelector('summary').focus();}const d=decks.find(d=>d.id===button.dataset.target);if(!d)return;const action=button.dataset.manage;if(action==='rename')deckForm(d);if(action==='duplicate')duplicateDeck(d);if(action==='delete')deleteDeck(d);if(action==='import')importDialog(d);if(action==='export')exportDialog(d);return;}
+  if(button.dataset.manage){const menu=button.closest?.('.deck-menu');if(menu){menu.open=false;menu.querySelector('summary').focus();}const d=decks.find(d=>d.id===button.dataset.target);if(!d)return;const action=button.dataset.manage;if(action==='rename')deckForm(d);if(action==='duplicate')duplicateDeck(d);if(action==='delete')deleteDeck(d);if(action==='import')importDialog(d);if(action==='suggest-functions')assignMissingFunctionsDialog(d);if(action==='export')exportDialog(d);return;}
   if(button.dataset.tab){deckTab=button.dataset.tab;render();return;}
   if(button.dataset.relax){await broaden(button.dataset.relax);return;}
   if(button.dataset.browseTag){browseFunctions(button.dataset.browseTag);return;}
@@ -1788,7 +1837,7 @@ function deckCardDialog(card, {deck,zone='main',source,edit,back,printings}={}) 
       <div class="deck-card-printings"><label for="deck-card-finish">Finish</label><select id="deck-card-finish" required></select></div>
       <p id="deck-card-price" role="status"></p>
       ${edit?'':`<label>Primary function<input id="add-primary" maxlength="80" placeholder="e.g. Removal" value="${esc(source?.entry.tags[0]||'')}" aria-describedby="add-function-hint"></label>
-      <p id="add-function-hint" class="hint">${suggestion?`Automatic primary: ${esc(suggestion)}. Enter a function to override it.`:'No supported function in the offline snapshot; new cards start Unassigned unless you enter a function.'} Existing assignments stay in place when left blank. <a href="${TAG_CATALOG.source}" target="_blank" rel="noreferrer">Scryfall snapshot ${esc(TAG_CATALOG.updated.slice(0,10))}</a>.</p>
+      <p id="add-function-hint" class="hint">${suggestion?`Automatic primary: ${esc(suggestion)}. Enter a function to override it.`:'No automatic match for this card. Enter a primary function or leave it Unassigned.'} Existing assignments stay in place when left blank. <a href="${TAG_CATALOG.source}" target="_blank" rel="noreferrer">Scryfall function data</a>.</p>
       <label>Quantity to add<input id="add-quantity" type="number" min="1" max="500" step="1" value="1" required></label>`}
       <p id="deck-card-error" role="alert"></p><div class="settings-actions"><button class="primary">${edit?'Save printing and finish':'Add card(s) to deck'}</button>
       <button class="secondary" type="button" id="deck-card-cancel">${back?'Back to card details':'Cancel'}</button></div>

@@ -1,0 +1,245 @@
+{
+  "source": "https://api.scryfall.com/cards/collection",
+  "verifiedAt": "2026-11-16",
+  "cards": [
+    {
+      "card": {
+        "id": "2f497641-b73a-4399-bc89-5274c42e17cc",
+        "oracle_id": "b6689782-08d8-48e1-a05d-cd040dfe85bc",
+        "name": "Curse of Bounty",
+        "type_line": "Enchantment — Aura Curse",
+        "cmc": 2,
+        "color_identity": [
+          "G"
+        ],
+        "colors": [
+          "G"
+        ],
+        "finishes": [
+          "nonfoil"
+        ],
+        "set": "c17",
+        "set_name": "Commander 2017",
+        "collector_number": "30",
+        "layout": "normal"
+      },
+      "expectedFunction": "Untap"
+    },
+    {
+      "card": {
+        "id": "45bcb839-4cff-4349-9892-0c76ae81929c",
+        "oracle_id": "0fb70b94-0847-4155-8953-cb53fef82ef1",
+        "name": "Curse of Hospitality",
+        "type_line": "Enchantment — Aura Curse",
+        "cmc": 3,
+        "color_identity": [
+          "R"
+        ],
+        "colors": [
+          "R"
+        ],
+        "finishes": [
+          "nonfoil",
+          "foil"
+        ],
+        "set": "vow",
+        "set_name": "Innistrad: Crimson Vow",
+        "collector_number": "152",
+        "layout": "normal"
+      },
+      "expectedFunction": "Card advantage"
+    },
+    {
+      "card": {
+        "id": "186862e7-91ba-47e9-bc38-e8e20772d40c",
+        "oracle_id": "c288f184-0beb-4cc9-9b0a-5f3c4b9e70d7",
+        "name": "Eye of Nidhogg",
+        "type_line": "Legendary Enchantment — Aura",
+        "cmc": 3,
+        "color_identity": [
+          "B"
+        ],
+        "colors": [
+          "B"
+        ],
+        "finishes": [
+          "nonfoil",
+          "foil"
+        ],
+        "set": "fic",
+        "set_name": "Final Fantasy Commander",
+        "collector_number": "44",
+        "layout": "normal"
+      },
+      "expectedFunction": "Combat control"
+    },
+    {
+      "card": {
+        "id": "e1f723a8-0be9-4270-b451-a52d6b2fda4e",
+        "oracle_id": "e828b189-0e8f-43b8-b909-4c23e742e028",
+        "name": "Ghostly Prison",
+        "type_line": "Enchantment",
+        "cmc": 3,
+        "color_identity": [
+          "W"
+        ],
+        "colors": [
+          "W"
+        ],
+        "finishes": [
+          "nonfoil"
+        ],
+        "set": "soc",
+        "set_name": "Secrets of Strixhaven Commander",
+        "collector_number": "146",
+        "layout": "normal"
+      },
+      "expectedFunction": "Protection"
+    },
+    {
+      "card": {
+        "id": "e8e09dfa-ae8b-4fd5-9499-6ad145bf928d",
+        "oracle_id": "75a7cad2-782c-4a5b-9193-5ba789bf5326",
+        "name": "Incriminating Impetus",
+        "type_line": "Enchantment — Aura",
+        "cmc": 3,
+        "color_identity": [
+          "B",
+          "R"
+        ],
+        "colors": [
+          "B",
+          "R"
+        ],
+        "finishes": [
+          "nonfoil"
+        ],
+        "set": "clu",
+        "set_name": "Ravnica: Clue Edition",
+        "collector_number": "35",
+        "layout": "normal"
+      },
+      "expectedFunction": "Combat control"
+    },
+    {
+      "card": {
+        "id": "f1f66e3e-9f1f-4601-aa30-30b66805a5a8",
+        "oracle_id": "4abb227a-534e-4300-9009-065a10f10e8a",
+        "name": "Inquisitive Glimmer",
+        "type_line": "Enchantment Creature — Fox Glimmer",
+        "cmc": 2,
+        "color_identity": [
+          "U",
+          "W"
+        ],
+        "colors": [
+          "U",
+          "W"
+        ],
+        "finishes": [
+          "nonfoil",
+          "foil"
+        ],
+        "set": "dsk",
+        "set_name": "Duskmourn: House of Horror",
+        "collector_number": "217",
+        "layout": "normal"
+      },
+      "expectedFunction": "Ramp"
+    },
+    {
+      "card": {
+        "id": "41ccc31c-9377-4e8a-aede-248d16cd5264",
+        "oracle_id": "c8decfdf-1421-4649-acde-5215e7f08bb9",
+        "name": "Martial Impetus",
+        "type_line": "Enchantment — Aura",
+        "cmc": 3,
+        "color_identity": [
+          "W"
+        ],
+        "colors": [
+          "W"
+        ],
+        "finishes": [
+          "nonfoil"
+        ],
+        "set": "soc",
+        "set_name": "Secrets of Strixhaven Commander",
+        "collector_number": "156",
+        "layout": "normal"
+      },
+      "expectedFunction": "Combat control"
+    },
+    {
+      "card": {
+        "id": "ac943e31-26bc-4b54-b73f-460e6e402d86",
+        "oracle_id": "ea9709b6-4c37-4d5a-b04d-cd4c42e4f9dd",
+        "name": "Propaganda",
+        "type_line": "Enchantment",
+        "cmc": 3,
+        "color_identity": [
+          "U"
+        ],
+        "colors": [
+          "U"
+        ],
+        "finishes": [
+          "nonfoil",
+          "foil"
+        ],
+        "set": "msc",
+        "set_name": "Marvel Super Heroes Commander",
+        "collector_number": "151",
+        "layout": "normal"
+      },
+      "expectedFunction": "Protection"
+    },
+    {
+      "card": {
+        "id": "4d1e229a-ed04-4d8d-90a9-5a451ca81470",
+        "oracle_id": "2598294c-a9a7-4bef-a562-23f297a80536",
+        "name": "Songbirds' Blessing",
+        "type_line": "Enchantment — Aura",
+        "cmc": 4,
+        "color_identity": [
+          "W"
+        ],
+        "colors": [
+          "W"
+        ],
+        "finishes": [
+          "nonfoil"
+        ],
+        "set": "soc",
+        "set_name": "Secrets of Strixhaven Commander",
+        "collector_number": "174",
+        "layout": "normal"
+      },
+      "expectedFunction": "Card advantage"
+    },
+    {
+      "card": {
+        "id": "3f65afa5-e4f7-49c2-97f9-47ad5dbcacfa",
+        "oracle_id": "097992a9-7b88-4c3f-8191-1ff10a4a735d",
+        "name": "Strong Back",
+        "type_line": "Enchantment — Aura",
+        "cmc": 3,
+        "color_identity": [
+          "G"
+        ],
+        "colors": [
+          "G"
+        ],
+        "finishes": [
+          "nonfoil",
+          "foil"
+        ],
+        "set": "pip",
+        "set_name": "Fallout",
+        "collector_number": "83",
+        "layout": "normal"
+      },
+      "expectedFunction": "Ramp"
+    }
+  ]
+}
