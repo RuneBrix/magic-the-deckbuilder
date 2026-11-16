@@ -175,6 +175,13 @@ test('legacy and double-faced text entries keep honest metadata and stable contr
   await long.screenshot({path:testInfo.outputPath('long-printing-caption.png')});
   await old.screenshot({path:testInfo.outputPath('legacy-unknown-caption.png')});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(testInfo.project.name.startsWith('desktop')){
+    await page.evaluate(()=>document.documentElement.style.zoom=2);
+    await long.focus();
+    await expect(long).toBeFocused();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:testInfo.outputPath('enlarged-printing-caption.png')});
+  }
 });
 
 test('Quick add dismisses suggestions with Escape and rejects stale searches and departed views',async({page})=>{
