@@ -9,19 +9,27 @@ import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
 const $ = s => document.querySelector(s);
 const blankDeck = (name = 'Untitled deck', format = 'commander') => ({ id: crypto.randomUUID(), name, format, cards: [], updated: new Date().toISOString() });
-const DARK_PALETTES = [['green','Dark green'],['blue','Dark blue'],['white','Black / white'],['orange','Black / orange']];
-let palette = 'green';
-try { const saved = localStorage.getItem('arcana.palette.v1'); if (DARK_PALETTES.some(([key])=>key===saved)) palette=saved; } catch {}
+const PALETTES = [['green','Forest'],['blue','Blue'],['white','Monochrome'],['orange','Amber'],['rose','Rose'],['teal','Teal'],['sepia','Sepia']];
+const validPalette = value => PALETTES.some(([key])=>key===value);
+let palettes = { light: 'green', dark: 'green' };
+try {
+  const legacy=localStorage.getItem('arcana.palette.v1');
+  if(validPalette(legacy))palettes.dark=legacy;
+  const saved=JSON.parse(localStorage.getItem('arcana.palettes.v2'));
+  for(const mode of ['light','dark'])if(validPalette(saved?.[mode]))palettes[mode]=saved[mode];
+} catch {}
 let theme = 'system';
 try { const saved = localStorage.getItem('arcana.theme.v1'); if (['light','dark','system'].includes(saved)) theme = saved; } catch {}
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
+const appearance = () => theme === 'dark' || (theme === 'system' && systemTheme.matches) ? 'dark' : 'light';
 function applyTheme() {
-  const dark = theme === 'dark' || (theme === 'system' && systemTheme.matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  document.documentElement.dataset.palette = palette;
-  document.querySelector('meta[name="theme-color"]').content = dark ? ({green:'#171e1b',blue:'#141c29',white:'#101010',orange:'#101010'})[palette] : '#f4f1e9';
+  const mode=appearance();
+  document.documentElement.dataset.theme=mode;
+  document.documentElement.dataset.palette=palettes[mode];
+  const grounds={light:{green:'#f4f1e9',blue:'#eef2f7',white:'#f2f2f2',orange:'#faf0e3',rose:'#f8eff0',teal:'#edf4f1',sepia:'#f3eddf'},dark:{green:'#171e1b',blue:'#141c29',white:'#101010',orange:'#101010',rose:'#25191f',teal:'#122321',sepia:'#241e16'}};
+  document.querySelector('meta[name="theme-color"]').content=grounds[mode][palettes[mode]];
 }
-systemTheme.addEventListener('change', applyTheme);
+systemTheme.addEventListener('change',()=>{applyTheme();if(view==='settings')syncAppearanceControls();});
 applyTheme();
 let storageError = '';
 let requestedExportSnapshot=null, requestedExportAt='', downloadError='';
@@ -43,6 +51,7 @@ try {
     if (Number.isFinite(saved.width)) tracker.width = Math.max(280,Math.min(480,saved.width));
   }
 } catch {}
+let settingsReturn='decks', settingsScroll=0;
 let view = 'decks', deckTab = 'cards', results = [], total = 0, page = 1, more = false, loading = false, error = '', requestId = 0, searched = false;
 let filters = parseQuery('');
 let colorTarget = '';
@@ -129,12 +138,13 @@ function render() {
   const previousStatistics = statistics ? $('#deck-statistics') : null;
   $('#app').style.setProperty('--tracker-width', tracker.width+'px');
   $('#app').classList.toggle('has-tracker', view==='explore' && Boolean(d) && tracker.visible);
-  $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-view="decks" aria-label="Arcana home — My decks"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Explore cards</button><button data-view="collection" class="nav-item ${view==='collection'?'selected':''}" ${view==='collection'?'aria-current="page"':''}>Collection</button><button class="nav-item" data-action="settings">Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
-  <main>${storageError ? `<div class="storage-warning" role="alert">${esc(storageError)} <button data-action="backup">Export backup</button></div>` : ''}${view === 'decks' ? library() : view === 'deck' ? deckWorkspace(d, statistics, previousStatistics) : view==='collection'?collectionPage(collection,collectionOptions):explorer()}</main>${view === 'explore' && d && tracker.visible ? `<button class="mobile-deck-jump primary" data-action="jump-deck">View tracker · ${esc(d.name)}</button><aside id="deck-tracker" class="deck-panel" aria-label="Tracked deck: ${esc(d.name)}"><div id="tracker-resize" role="separator" tabindex="0" aria-label="Resize deck tracker" aria-orientation="vertical" aria-controls="deck-tracker" aria-valuemin="280" aria-valuemax="480" aria-valuenow="${tracker.width}" aria-valuetext="${tracker.width} pixels, subject to available space" title="Drag to resize. Left widens; Right narrows; Home and End set limits."></div>${deckPanel(d)}</aside>` : ''}`;
+  $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-view="decks" aria-label="Arcana home — My decks"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Explore cards</button><button data-view="collection" class="nav-item ${view==='collection'?'selected':''}" ${view==='collection'?'aria-current="page"':''}>Collection</button><button class="nav-item ${view==='settings'?'selected':''}" data-action="settings" ${view==='settings'?'aria-current="page"':''}>Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
+  <main>${storageError ? `<div class="storage-warning" role="alert">${esc(storageError)} <button data-action="backup">Export backup</button></div>` : ''}${view === 'decks' ? library() : view === 'deck' ? deckWorkspace(d, statistics, previousStatistics) : view==='collection'?collectionPage(collection,collectionOptions):view==='settings'?settingsPage():explorer()}</main>${view === 'explore' && d && tracker.visible ? `<button class="mobile-deck-jump primary" data-action="jump-deck">View tracker · ${esc(d.name)}</button><aside id="deck-tracker" class="deck-panel" aria-label="Tracked deck: ${esc(d.name)}"><div id="tracker-resize" role="separator" tabindex="0" aria-label="Resize deck tracker" aria-orientation="vertical" aria-controls="deck-tracker" aria-valuemin="280" aria-valuemax="480" aria-valuenow="${tracker.width}" aria-valuetext="${tracker.width} pixels, subject to available space" title="Drag to resize. Left widens; Right narrows; Home and End set limits."></div>${deckPanel(d)}</aside>` : ''}`;
   updateNavigationHeight();
   navigationObserver?.disconnect();
   navigationObserver?.observe($('.workspace-nav'));
   bind();
+  if(view==='settings')bindSettings();
   if (statistics) bindStatistics($('#deck-statistics'), statistics);
   if(focusSelector) {const target=document.querySelector(focusSelector)||document.querySelector('.deck-tabs [aria-selected="true"]');target?.focus({preventScroll:true});}
 }
@@ -1542,6 +1552,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='edit'&&current()) openDeck(current().id);
   if(action==='rename') deckForm(current());
   if(action==='settings')settings();
+  if(action==='settings-back'){view=settingsReturn;render();document.querySelector('[data-action="settings"]')?.focus({preventScroll:true});globalThis.scrollTo?.(0,settingsScroll);}
   if(action==='reset'){clearSearch();render();$('#raw')?.focus();}
   if(action==='retry'){$('#search-submit')?.focus();search(false,true);}
   if(action==='restore-search')await restoreSearch();
@@ -1559,7 +1570,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='add-owned')collectionLotDialog();
   if(action==='import-collection')collectionImport();
   if(action==='clear-collection')clearCollection();
-  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Pick function tags, combine them with Oracle text, then search. “Matching all” narrows your results; “Matching any” broadens them. The editable search bar is the exact query sent to Scryfall. Guided filters update that same query. Query-only expressions stay unchanged; affected controls explain when they cannot edit a complex expression.</p><p>Search names and aliases in the bundled Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}. Use Related to browse recorded broader and narrower relationships. When a name has no catalog match, add it as an unlisted function to try it in a Scryfall search.</p><p>My decks is the home page. Explore cards opens search; Broaden this search lets you ignore one condition and restore the original query. Create a deck to start adding cards. Open card details to view printings and ownership, or choose Add card to deck to set the destination and primary function.</p><p>Decks save in this browser. Export a JSON backup to move them to another device. Card exploration and import require internet access.</p><p>Modern checks cover main/sideboard size, combined copy limits and stored legality. Checks separates failed rules, unavailable data and manual review. Commander checks cover supported eligibility, pairings, combined identity and basic-land types. Choose a companion on Checks; supported starting-deck restrictions are checked, with special cases marked for manual review.</p>`);
+  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Welcome to Arcana, a place to turn card ideas into decks and keep track of the cards you own.</p><p>Start in <strong>My decks</strong>: create a deck or import a decklist, then add cards and arrange them by type or function. Statistics and Checks help you review your build.</p><p>Use <strong>Explore cards</strong> to find your next card by name, rules text or function. Open a card for a closer look, choose a printing and add it to your deck.</p><p>In <strong>Collection</strong>, record the copies you own or upload a card list. A deck’s Ownership &amp; costs shows what you have and what is missing.</p><p>Make Arcana your own in <strong>Settings</strong>. Save a workspace copy there to keep your decks and collection together or take them to another device.</p>`);
 });
 async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Object.assign(new Error(data.error || 'Request failed.'),{status:r.status,retryAfter:data.retryAfter});return data; }
 // Input blur may happen while the next row is receiving focus. Keep that form in place
@@ -1719,10 +1730,28 @@ function updateBackupStatus() {
   const error=$('#backup-download-error');if(error)error.textContent=downloadError;
 }
 function settings() {
-  showDialog(`<h2>Workspace settings</h2><p>Appearance and backups for this browser.</p><label class="theme-setting">Appearance<select id="theme">${[['system','Use device setting'],['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${theme===v?'selected':''}>${l}</option>`).join('')}</select></label><label class="theme-setting">Dark palette<select id="dark-palette">${DARK_PALETTES.map(([v,l])=>`<option value="${v}" ${palette===v?'selected':''}>${l}</option>`).join('')}</select></label><p class="hint">Used in Dark mode and when the device uses dark appearance.</p><h3 class="settings-heading">Portable workspace files</h3><p>Browser autosave keeps decks, collection and planning settings on this address and device. It does not update downloaded files.</p><p id="backup-status" role="status"></p><p id="backup-download-error" role="alert"></p><p>A file request starts a browser download; check Downloads to confirm it finished. If you cancel or cannot find it, request another copy.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Save workspace copy</button><button class="secondary" id="settings-restore">${icon('upload',16)} Open workspace file…</button></div><details class="backup-help"><summary>Move files and recover decks</summary><p>Save a complete JSON copy, then move it to your other device and use Open workspace file. Opening adds independent deck copies. A complete version 2 file also lets you explicitly keep or replace the current collection; collections are never silently combined.</p><p>An older file restores only deck snapshots and leaves the current collection unchanged. If browser saving fails, keep this page open and save a workspace copy before leaving.</p><p>Once Arcana is running, editing stored cards and opening or saving JSON work offline. Search, text imports, printing lookups, uncached images, legality and price refresh need internet. No account or cloud sync is used; external file-sync conflicts remain yours to resolve.</p></details>`);
+  if(view!=='settings'){settingsReturn=view;settingsScroll=globalThis.scrollY||0;}
+  view='settings';render();globalThis.scrollTo?.(0,0);$('#settings-title').focus();
+}
+function settingsPage() {
+  const destination=settingsReturn==='deck' ? current()?.name||'My decks' : ({decks:'My decks',explore:'Explore cards',collection:'Collection'})[settingsReturn]||'My decks';
+  return `<div class="settings-page"><button class="text-button settings-back" data-action="settings-back">Back to ${esc(destination)}</button><header class="page-heading"><h1 id="settings-title" tabindex="-1">Settings</h1></header><section aria-labelledby="appearance-title"><h2 id="appearance-title">Appearance</h2><div class="appearance-controls"><label class="theme-setting">Appearance<select id="theme">${[['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${appearance()===v?'selected':''}>${l}</option>`).join('')}</select></label><label class="theme-setting">Palette<select id="palette">${PALETTES.map(([v,l])=>`<option value="${v}" ${palettes[appearance()]===v?'selected':''}>${l}</option>`).join('')}</select></label></div></section><section class="workspace-files"><h2>Portable workspace files</h2><p>Browser autosave keeps decks, collection and planning settings on this address and device. It does not update downloaded files.</p><p id="backup-status" role="status"></p><p id="backup-download-error" role="alert"></p><p>A file request starts a browser download; check Downloads to confirm it finished. If you cancel or cannot find it, request another copy.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Save workspace copy</button><button class="secondary" id="settings-restore">${icon('upload',16)} Open workspace file…</button></div><details class="backup-help"><summary>Move files and recover decks</summary><p>Save a complete JSON copy, then move it to your other device and use Open workspace file. Opening adds independent deck copies. A complete version 2 file also lets you explicitly keep or replace the current collection; collections are never silently combined.</p><p>An older file restores only deck snapshots and leaves the current collection unchanged. If browser saving fails, keep this page open and save a workspace copy before leaving.</p><p>Once Arcana is running, editing stored cards and opening or saving JSON work offline. Search, text imports, printing lookups, uncached images, legality and price refresh need internet. No account or cloud sync is used; external file-sync conflicts remain yours to resolve.</p></details></section></div>`;
+}
+function syncAppearanceControls() {
+  $('#theme').value=appearance();$('#palette').value=palettes[appearance()];
+}
+function bindSettings() {
   updateBackupStatus();
-  $('#dark-palette').onchange=e=>{palette=e.target.value;applyTheme();try{localStorage.setItem('arcana.palette.v1',palette);}catch{toast('Palette changed for this session. Browser storage is unavailable.');}};
-  $('#theme').onchange=e=>{theme=e.target.value;applyTheme();try{localStorage.setItem('arcana.theme.v1',theme);}catch{toast('Appearance changed for this session. Browser storage is unavailable.');}};
+  $('#palette').onchange=e=>{
+    if(!validPalette(e.target.value))return;
+    palettes[appearance()]=e.target.value;applyTheme();
+    try{localStorage.setItem('arcana.palettes.v2',JSON.stringify(palettes));}catch{toast('Palette changed for this session. Browser storage is unavailable.');}
+  };
+  $('#theme').onchange=e=>{
+    if(!['light','dark'].includes(e.target.value))return;
+    theme=e.target.value;applyTheme();syncAppearanceControls();
+    try{localStorage.setItem('arcana.theme.v1',theme);}catch{toast('Appearance changed for this session. Browser storage is unavailable.');}
+  };
   $('#settings-backup').onclick=()=>saveWorkspaceCopy();
   $('#settings-restore').onclick=restore;
 }

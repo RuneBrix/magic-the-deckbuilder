@@ -111,11 +111,12 @@ test('sticky navigation keeps long surfaces, focus, overlays and trackers reacha
   await stickyNavigation(page,'My decks');
   await page.getByRole('button',{name:'Settings',exact:true}).click();
   const dialog=page.getByRole('dialog');
-  await withinViewport(dialog);
-  await dialog.locator('.backup-help > summary').press('Enter');
-  await dialog.locator('.backup-help p').last().scrollIntoViewIfNeeded();
-  await withinViewport(dialog.locator('.backup-help p').last());
-  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await page.locator('.backup-help > summary').press('Enter');
+  await page.locator('.backup-help p').last().scrollIntoViewIfNeeded();
+  await withinViewport(page.locator('.backup-help p').last());
+  await stickyNavigation(page,'Settings');
+  await page.getByRole('button',{name:'Back to My decks',exact:true}).click();
   await expect(page.getByRole('button',{name:'Settings',exact:true})).toBeFocused();
   await stickyNavigation(page,'My decks');
   await page.getByRole('button',{name:'My decks',exact:true}).click();
