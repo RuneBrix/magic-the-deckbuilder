@@ -1,8 +1,10 @@
 # Making agent-built interfaces more consistent
 
+> Historical evidence, archived 16 November 2026 from `docs/AGENT_DESIGN_RESEARCH.md`. Original measurements, proposals and review statements describe their dated baseline; they are not current requirements. Use [the source map](../CODE_MAP.md) and selected criteria for current work.
+
 Research date: 16 November 2026. Local source baseline: `384c9d8`, with pre-existing uncommitted documentation and UI-audit work. The findings and proposed wording below record the research snapshot before implementation.
 
-Follow-up: the developer requested implementation of the instruction changes. [AGENTS.md](../AGENTS.md), [the interface principles](../DESIGN.md#interface-principles), [UI acceptance](DEVELOPMENT.md#ui-acceptance), the surface brief and PR template now apply that guidance. Application changes for #186/#188/#193 remain separate issue work. Historical verification statements below describe the research pass.
+Follow-up: the developer requested implementation of the instruction changes. [AGENTS.md](../../AGENTS.md), [the interface principles](../../DESIGN.md#interface-principles), [UI acceptance](../DEVELOPMENT.md#ui-acceptance), the surface brief and PR template now apply that guidance. Application changes for #186/#188/#193 remain separate issue work. Historical verification statements below describe the research pass.
 
 ## Recommendation
 
@@ -36,9 +38,9 @@ The geometry and copy patterns cross multiple surfaces and feedback dates. They 
 
 ### A concrete contradiction agents currently inherit
 
-The local [DESIGN.md](../DESIGN.md), [.impeccable/surface.md](../.impeccable/surface.md) and [deck workspace contract](DECK_WORKSPACE.md#four-views-and-card-actions-41--43--44) explicitly retain following-card stack reveals. The contract says following slots translate on hover while the selected and preceding cards stay fixed. These instructions describe the existing implementation; they do not express the newer all-neighbor stability requested in [#186](https://github.com/RuneBrix/magic-the-deckbuilder/issues/186).
+The local [DESIGN.md](../../DESIGN.md), [.impeccable/surface.md](../../.impeccable/surface.md) and [deck workspace contract](../DECK_WORKSPACE.md#four-views-and-card-actions-41--43--44) explicitly retain following-card stack reveals. The contract says following slots translate on hover while the selected and preceding cards stay fixed. These instructions describe the existing implementation; they do not express the newer all-neighbor stability requested in [#186](https://github.com/RuneBrix/magic-the-deckbuilder/issues/186).
 
-The browser test beginning at [smoke.spec.mjs:247](../browser-tests/smoke.spec.mjs#L247) checks hover metadata, including that the next card's top lies below the revealed caption. It also requires wording such as `Function: Draw`, `per copy` and `regular`, which [#188](https://github.com/RuneBrix/magic-the-deckbuilder/issues/188) now asks to simplify. The caption is toggled from `display:none` to `display:block` in [style.css](../public/style.css), and following-card transforms implement the documented reveal.
+The browser test beginning at [smoke.spec.mjs:247](../../browser-tests/smoke.spec.mjs#L247) checks hover metadata, including that the next card's top lies below the revealed caption. It also requires wording such as `Function: Draw`, `per copy` and `regular`, which [#188](https://github.com/RuneBrix/magic-the-deckbuilder/issues/188) now asks to simplify. The caption is toggled from `display:none` to `display:block` in [style.css](../../public/style.css), and following-card transforms implement the documented reveal.
 
 This is a reason to revise criteria, contracts and assertions together when implementing #186/#188/#193. Adding a general stability instruction while preserving contradictory detailed requirements would leave agents to choose between them. Passing the old assertions would still not demonstrate the newly requested behavior.
 
@@ -46,7 +48,7 @@ There is also an important qualification: closed [#95](https://github.com/RuneBr
 
 ### A useful positive example already in the repository
 
-[#183](https://github.com/RuneBrix/magic-the-deckbuilder/issues/183) and [#185](https://github.com/RuneBrix/magic-the-deckbuilder/issues/185) are closed, with [PR #200](https://github.com/RuneBrix/magic-the-deckbuilder/pull/200) present in the local baseline. Its Collection implementation limits visual captions, gives table columns explicit sizing and keeps full data available in editing/accessibility paths. The browser regression at [smoke.spec.mjs:627](../browser-tests/smoke.spec.mjs#L627) uses long metadata and compares caption/row/column geometry through filtering and sorting.
+[#183](https://github.com/RuneBrix/magic-the-deckbuilder/issues/183) and [#185](https://github.com/RuneBrix/magic-the-deckbuilder/issues/185) are closed, with [PR #200](https://github.com/RuneBrix/magic-the-deckbuilder/pull/200) present in the local baseline. Its Collection implementation limits visual captions, gives table columns explicit sizing and keeps full data available in editing/accessibility paths. The browser regression at [smoke.spec.mjs:627](../../browser-tests/smoke.spec.mjs#L627) uses long metadata and compares caption/row/column geometry through filtering and sorting.
 
 That is the pattern to reuse: an explicit presentation contract, difficult content, observable geometry and access to full information. The exact 20px caption and table widths belong to Collection; they should not become arbitrary dimensions for every interface.
 
@@ -54,7 +56,7 @@ That is the pattern to reuse: an explicit presentation contract, difficult conte
 
 1. **It records many individual outcomes but few transferable constraints.** `DESIGN.md` contains extensive feature descriptions and visual identity. “Use concise copy” and “keep layout consistent” need concrete rules about the positions, states and decisions that matter.
 2. **Some detail is actively out of date with newer feedback.** Stack motion is the clearest example. An open issue is requested work, so the current-behavior contract should remain truthful until implementation; the implementation task must explicitly replace the older decision.
-3. **Verification is broad but can accept the wrong behavior.** [DEVELOPMENT.md](DEVELOPMENT.md#verification-and-data) already requires browser inspection for CSS geometry. The gap is deciding what to inspect: next-target stability, long summaries, changing counts and actual reading burden. A screenshot saved by a test is evidence to inspect, not automatically a visual comparison assertion.
+3. **Verification is broad but can accept the wrong behavior.** [DEVELOPMENT.md](../DEVELOPMENT.md#verification-and-data) already requires browser inspection for CSS geometry. The gap is deciding what to inspect: next-target stability, long summaries, changing counts and actual reading burden. A screenshot saved by a test is evidence to inspect, not automatically a visual comparison assertion.
 4. **Implementation facts can leak into ordinary UI.** Current source still renders allocation boilerplate in Collection, stored-price explanations in Cards and quote-policy prose in Ownership. [#71](https://github.com/RuneBrix/magic-the-deckbuilder/issues/71) did require honest allocation/price behavior. The product still needs that correctness, but [#170](https://github.com/RuneBrix/magic-the-deckbuilder/issues/170) and [#198](https://github.com/RuneBrix/magic-the-deckbuilder/issues/198) clarify that much of its explanation does not belong on the normal page.
 5. **Generic design skills cannot own this product's preferences.** Impeccable is already routed for UI work and the surface brief says Operate/preserve. Its general guidance is useful, but Arcana's repeated task, geometry and copy decisions need a project-owned source. Installing another skill or changing model settings is not an evidence-backed first intervention.
 6. **Some improved guidance is local-only today.** Existing uncommitted changes shorten `DESIGN.md`/the surface brief and improve the PR template. Remote or clean-checkout agents will not necessarily receive those changes. Reconcile and publish the intended shared guidance through the normal review cycle; keep local overrides excluded.
@@ -179,7 +181,7 @@ For UI changes, summarize the affected-state results and link evidence from
 | Explanatory text expands every feature | Review each added sentence: what present decision or recovery does it support? Keep labels, units, destination and partial-data warnings; move optional policy/provenance to an appropriate existing detail path or remove repetition. |
 | Stable dimensions cause clipping | Check narrow widths, enlarged text, focus outlines and complete-information access. A fixed caption contract is not permission to crop validation, primary instructions or controls. |
 
-Use existing isolated browser fixtures and the [browser-testing workflow](BROWSER_TESTING.md). For hover bugs, a static screenshot of the resting state is insufficient. For transitions, inspect intermediate frames where applicable as well as final rectangles; a transform can preserve document flow while still moving a hit target.
+Use existing isolated browser fixtures and the [browser-testing workflow](../BROWSER_TESTING.md). For hover bugs, a static screenshot of the resting state is insufficient. For transitions, inspect intermediate frames where applicable as well as final rectangles; a transform can preserve document flow while still moving a hit target.
 
 The existing suite takes screenshots but contains no `toHaveScreenshot` assertions at this baseline. Start with targeted geometry and interaction assertions, plus inspected screenshots. Add a small set of deliberately approved visual comparisons only if they catch meaningful recurring defects. Playwright documents both [visual comparison support and environment-dependent rendering](https://playwright.dev/docs/test-snapshots); an automatically generated baseline is not evidence that a design was approved.
 

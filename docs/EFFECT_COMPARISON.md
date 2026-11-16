@@ -1,6 +1,6 @@
 # Reversible search broadening
 
-[D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) introduced search broadening alongside manual comparison. [#47](https://github.com/RuneBrix/magic-the-deckbuilder/issues/47) removes the candidate shortlist and optional pair comparison at user request; [removal record](CANDIDATES.md). Independent broadening remains available in Explore cards.
+[D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) introduced search broadening alongside manual comparison. [#47](https://github.com/RuneBrix/magic-the-deckbuilder/issues/47) removes the candidate shortlist and optional pair comparison at user request. Independent broadening remains available in Explore cards.
 
 ## Broadening and restoration
 
@@ -9,3 +9,11 @@ Broaden this search is a separate secondary disclosure after results, shown only
 Advanced/complex source expressions remain intact and locked conditions are not offered for relaxation. Removing color or legality criteria may expose unsuitable cards, and loaded result pages are not exhaustive. See [Unified search](UNIFIED_SEARCH.md) for projection boundaries.
 
 Native Node checks cover exact restoration, original-condition relaxation, upstream failures, pagination, stale responses and preserved search state across home navigation. Browser verification and platform limits are recorded in the implementing PR. No inferred equivalence, upgrade recommendation, synergy or best-card score is provided.
+
+## Removed candidate workflow (#47)
+
+[#47](https://github.com/RuneBrix/magic-the-deckbuilder/issues/47) supersedes the candidate workflow introduced by [#24](https://github.com/RuneBrix/magic-the-deckbuilder/issues/24) in [PR #36](https://github.com/RuneBrix/magic-the-deckbuilder/pull/36). User feedback found the separate inspection workflow unnecessary.
+
+Save/remove candidate actions, counts/navigation, the separate overview, optional two-card comparison, session snapshots and their handlers/styles are removed. Candidates were session-only, so no deck migration or storage deletion is needed.
+
+Ordinary card exploration, printing previews, details, explicit deck destinations and all saved deck data remain. Reversible search broadening remains independent. No replacement recommendation or ranking system is introduced. [CARD_DETAILS.md](CARD_DETAILS.md) owns current details behavior.

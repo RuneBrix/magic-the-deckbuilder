@@ -1,48 +1,24 @@
 # Portable workspace files
 
-Decision for [D04 / #4](https://github.com/RuneBrix/magic-the-deckbuilder/issues/4), 1 November 2026: the user chose **portable local files**. Cloud synchronization and accounts are deferred. The versioned file reader/writer and staged additive open are implemented for review in #63; file-status and recovery guidance are implemented for review in #64.
+The confirmed transfer/recovery direction is portable local JSON files (#4); cloud accounts and synchronization are deferred. This contract owns compatibility and preservation. Verify current serialization and save/restore handlers in `public/core.js` and `public/app.js`, with `test/workspace-file.test.mjs` and `test/workspace-storage.test.mjs`.
 
-## Ownership and working copy
+## Storage and compatibility
 
-The player owns the downloaded JSON file and chooses where to keep or transfer it. No sign-in, cloud provider, server-side deck storage or paid infrastructure is required. The browser workspace remains the editable working copy with local autosave; a portable file is an explicitly saved snapshot. Changing an origin or clearing browser storage can still lose edits made since the last exported file. The app must distinguish browser autosave from file export and cannot certify that a download reached disk.
-
-## Compatibility and migration
-
-Continue accepting the current array-of-decks JSON backups. New exports use `{format:"arcana-workspace", version:1, exportedAt, decks}`. The reader validates the version and entire contents before changing any deck. Browser autosave remains the legacy array format, so this adds no browser-storage migration. Older app versions cannot read the new envelope; use a compatible version to open it. Retain full stored card/face and printing records, quantities, all zones, ordered functions, bracket choices, names, formats and timestamps. Do not use text exports as a migration format. Unsupported newer versions and malformed/oversized files leave the existing workspace untouched and explain the recovery action. Never delete or rewrite an old backup as part of migration.
+- Browser autosave writes the complete version-2 `arcana-workspace` envelope to `arcana.workspace.v2`, including decks and collection. Startup prefers it and falls back to the legacy `arcana.decks.v1` value when absent. Preserve legacy data; an unreadable saved workspace shows a warning and blocks saving rather than overwriting it.
+- Complete workspace downloads use `{format:"arcana-workspace", version:2, exportedAt, decks, collection}`. Deck-only exports use version 1 without collection. `readWorkspaceFile` accepts legacy deck arrays and versions 1/2, validates the entire contents and rejects unsupported versions. Empty collection and absent collection have distinct restore meanings.
+- Preserve stored card/face records, printing/finish, quantities, zones, ordered functions, brackets, companion designation and saved deck settings. Text interchange is narrower; see [DECKLIST_INTEROP.md](DECKLIST_INTEROP.md). Complete inventory keeps exact lots and quantities.
+- Malformed, unsupported or oversized imports leave existing data intact. Downloads/imports have a 15 MB limit. Never rewrite an old backup as migration or silently downgrade a complete workspace to a deck-only format.
 
 ## Open, save and recovery
 
-Use explicit browser download/save-copy and file-open controls first. No automatic filesystem access or permission-dependent API is required. Keep the current workspace and source file intact if selection is cancelled. Validate and stage a complete import before committing it; preserve a rollback snapshot when persistence fails and offer an export of recoverable in-memory data. Never show a failed localStorage write as saved.
+Browser autosave is an origin/profile-specific working copy. A requested download is a separate snapshot, not proof that a file reached disk. Settings records the request time and whether the workspace has changed since that request, for this session only; reload resets that reminder. A single-deck or pending-import export does not reset the complete-workspace reminder.
 
-Opening a file adds independent deck copies by default, consistent with current restore. A future replacement action must first offer export of the current workspace, show exactly which decks will be replaced and require explicit confirmation. Recovery means opening a known-good JSON copy; the UI should warn that later edits are absent. The player should retain multiple dated copies. Automatic retention, encryption and filesystem backup are not promised.
+Opening JSON previews its contents and adds independent deck copies with fresh IDs. A version-2 file offers explicit keep/replace inventory choices; version 1/legacy files leave inventory unchanged. Replacement applies to collection, not the whole deck workspace. Validate and persist the staged workspace before applying it. Cancellation, stale reads and failed writes retain current data; offer retry and recovery-copy downloads where available. A future whole-workspace replacement requires a separate explicit decision and safeguards.
 
-## Conflicts and devices
+Do not silently merge independently edited deck copies by ID/timestamp or add quantities from repeated backup imports. Manual file transfer does not supply app-level conflict resolution. Keep dated copies and distinguish unsaved browser changes from downloaded files. A failed autosave must remain visible even after a recovery-download request.
 
-Two edited copies remain independent. Do not choose a winner by deck id or modification timestamp, silently merge card quantities or overwrite either copy. Additive import gives restored decks new local identifiers, preserves their contents, and lets the player compare/rename/delete duplicates explicitly. Moving a file between devices is manual; external file synchronization tools do not create app-level conflict resolution.
+## Offline and verification limits
 
-## Offline limits
+Stored editing and JSON open/export do not require upstream access once the app runs. Search, name resolution, printing lookup, uncached artwork and legality refresh do. Keep last usable data and represent uncertainty honestly; this does not promise an offline installer or automatic retention/encryption.
 
-Editing stored deck data and opening/exporting JSON must not need a network connection once the app is running. Live search, name-based text resolution, printing lookup, artwork not already cached and legality refresh still need internet. Retain stored facts when offline and label freshness honestly. This decision does not promise offline application installation or cached server startup.
-
-## Implementation follow-ups
-
-- [#63: versioned files and safe recovery](https://github.com/RuneBrix/magic-the-deckbuilder/issues/63): reader/writer compatibility, staging, additive conflict behavior and failed-write recovery tests.
-- [#64: backup and recovery workflow](https://github.com/RuneBrix/magic-the-deckbuilder/issues/64): browser-save versus file-save status, portability instructions and explicit replacement safeguards.
-
-Current behavior: explicit complete JSON download requests (15 MB limit), versioned/legacy file opening with a named-deck preview, and additive confirmation. A staged import receives fresh deck ids and is persisted before replacing the in-memory working copy. A failed write leaves every current deck intact; Retry, Save current workspace copy and Save pending import copy retain recovery options. No replace-workspace action exists. Browser download initiation is not a guarantee that the file reached disk.
-
-Verification: Windows Node v24.14.1, 111 automated checks pass. Live Windows in-app-browser download and native file selection produced the expected independent-copy preview. Keyboard confirmation added a second independent deck that persisted after reload. Cancellation/stale reads are covered automatically; macOS/Safari and physical touch are untested.
-
-Decision review: [PR #66](https://github.com/RuneBrix/magic-the-deckbuilder/pull/66).
-
-File implementation review: [PR #68](https://github.com/RuneBrix/magic-the-deckbuilder/pull/68).
-
-## File request status and recovery guidance (#64)
-
-Settings separates browser autosave from portable files. Save workspace copy starts a download request and records a session-only snapshot/time. The status says whether the working copy has changed since that request; it does not inspect disk contents or claim download completion. Reload starts a new session with no export request recorded. A single-deck or pending-import export does not reset the whole-workspace reminder. Download initiation errors remain visible in Settings without changing the previous snapshot. If the browser cancels after initiation, use the check-Downloads guidance and request another copy; the app cannot observe that cancellation reliably.
-
-Move files and recover decks explains manual device transfer, duplicate-copy behavior, dated snapshots, offline editing and online-data limits. Keep the current page open and export in-memory edits if browser saving fails. Existing browser-save failure feedback remains active even after a recovery file request. No workspace replacement action is introduced; the earlier backup/explicit-confirmation requirement still applies to any future replacement design.
-
-Verification: Windows Node v24.14.1, 113 tests pass. Live Windows in-app browser confirmed download-request status, changed-workspace status after creating a deck, keyboard Escape, native file selection and phone preview. Desktop light and 390px dark settings inspected; dialog width 358px with no horizontal page overflow. Browser version, physical touch and macOS/Safari remain unverified. Browser failure/download-initiation failure/cancelled reads are covered automatically, not reproduced by altering real browser storage.
-
-Backup-status workflow review: [PR #69](https://github.com/RuneBrix/magic-the-deckbuilder/pull/69), stacked on #68.
+Use synthetic success/failure, compatibility, collection keep/replace and same-origin reload checks for changes here. Record actual platform/browser evidence in the implementing PR under [the verification workflow](DEVELOPMENT.md#verification-and-data), not as a permanent test-count claim in this contract.

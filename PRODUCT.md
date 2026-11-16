@@ -1,18 +1,20 @@
 # Arcana
 <!-- impeccable:product-schema 1 -->
+
 ## Platform
+
 web
+
 ## Stack
-Native browser modules, CSS and a Node.js 22+ standard-library server. No runtime install dependencies, authentication or cloud synchronization. Optional automated browser checks use a pinned Playwright development dependency. Windows local development; README.md records automated cross-platform coverage and manual verification limits.
+
+A local web app for Magic players building decks and exploring cards. Native browser modules, CSS and a Node.js standard-library server; no runtime install dependencies, account or cloud synchronization. The optional browser test dependency is development-only. `package.json` owns supported Node versions and commands.
+
 ## Users and purpose
-Magic players building decks and exploring cards who currently move between Scryfall, Tagger and Archidekt. Bring discovery, deck editing, statistics and bounded format feedback into one local workspace.
-## Capabilities and constraints
-My decks is startup/reload home and opens a dedicated editor. Top-navigation Explore cards starts with a blank search and no tracked deck. Find cards to add retains the session search and tracks the open deck. Guided filters and function discovery share one editable Scryfall query; unsupported expressions remain intact. Taxonomy and Commander Game Changer data are dated snapshots with documented update limits.
 
-Main deck, Sideboard, Command zone and Maybeboard persist in browser storage. Maybeboard holds ideas outside playing totals, statistics, construction checks and bracket calculations. Personal functions are ordered private labels, initialized from supported offline Scryfall memberships on addition and then editable by the player. Complete JSON preserves printings, zones, functions and bracket assignments; text interchange preserves the selected names/quantities/zones contract. Imports and edits preserve existing data on validation failure.
+Bring card discovery, deck editing, statistics and bounded construction feedback into one workspace. Preserve the player's decks, collection, chosen printings and private functions. Maybeboard ideas stay outside playing statistics, construction checks and bracket calculations. Complete JSON is the recovery/interchange format; text exports have narrower scope.
 
-Modern construction checks are the selected supported family. Commander, companions and unusual rules remain partial. Commander brackets are player-assigned, with discussion guidance rather than automatic power ratings. Reversible broadening is available; candidate shortlists/pair comparison were removed by user decision (#47). Automatic similarity, upgrades and synergy rankings are absent.
+## Confirmed direction
 
-See [FEATURES.md](docs/FEATURES.md) for capabilities and [DESIGN.md](DESIGN.md) for interface intent. [DEVELOPMENT.md](docs/DEVELOPMENT.md) defines feedback, GitHub PRs, local inspection and developer-approved merging. Checked-out source/tests define behavior; package version 0.1.0 is a development identifier, not a published release or proof of review.
-## Open decisions
-Portable local files are the selected transfer/recovery direction; cloud accounts/sync are deferred. Easier startup uses source launchers; native packaging is deferred. Local collection ownership and EUR ownership/budget estimates are implemented (PR #86); see docs/COLLECTION_WORKFLOW.md for the current contract. TXT/CSV uploads support explicit additive totals and confirmed inventory replacement; pricing coverage and further refinements remain issue work. Live taxonomy sync and fuller Commander/companion coverage remain future work. [ROADMAP.md](docs/ROADMAP.md) links topics to GitHub criteria. Keep unspecified decisions open for feedback.
+Keep a focused collector's-index interface with light/dark appearance and accessible keyboard/touch paths. Portable local files are the selected transfer/recovery direction; cloud sync and native packaging are deferred. Automatic similarity, upgrades and synergy rankings are absent. The candidate comparison workflow was removed by user decision (#47).
+
+Inspect source/tests through [CODE_MAP.md](docs/CODE_MAP.md) for current behavior. [DESIGN.md](DESIGN.md) owns interface intent, [DEVELOPMENT.md](docs/DEVELOPMENT.md) owns delivery, and selected GitHub issues own requested changes. Use [FEATURES.md](docs/FEATURES.md) or [ROADMAP.md](docs/ROADMAP.md) only for capability or direction questions. Keep unspecified product decisions open.

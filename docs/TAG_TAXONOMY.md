@@ -20,7 +20,7 @@ The generated file contains source URL, upstream timestamp and stable upstream U
 - Related opens a dialog with broader function links, a narrower function selector, Back and Forward, the direct count, aliases and the original Tagger page. The dialog shows up to eight paper-card search matches in two rows, using the first result page and the normal popularity sort. Navigation leaves the query alone. Add filter or Remove filter applies the current function using the existing all/any setting. Escape returns focus to the Related trigger.
 - The dialog waits briefly before requesting one search page per visit and discards responses for closed or superseded views. The existing proxy paces requests and caches successful responses for five minutes. Unavailable examples can be retried without changing the query. Catalog navigation and counts remain available offline.
 - When the catalog has no match, Add as an unlisted function accepts up to 80 letters, numbers, spaces or single hyphens. It adds a lowercase, hyphenated `otag:` filter. Scryfall may reject an unlisted tag or return no cards. Matching aliases use their canonical slugs. Workspace Help shows the snapshot date.
-- Matching all (AND) sends space-separated `otag:` terms; Matching any (OR) joins them with `OR`. The existing View Scryfall query disclosure shows the exact composed query. Other filters are retained.
+- Matching all (AND) sends space-separated `otag:` terms; Matching any (OR) joins them with `OR`. The primary editable Scryfall query shows the effective expression; supported clauses project into guided controls as described in [UNIFIED_SEARCH.md](UNIFIED_SEARCH.md). Other filters are retained.
 
 ## Automatic primary functions (#46)
 

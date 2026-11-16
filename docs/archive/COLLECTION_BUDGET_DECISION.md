@@ -1,6 +1,8 @@
 # Combined collection and budget workflow (D07)
 
-On 1 November 2026 the user chose **collection ownership and budget planning together** for [#7](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7). This document records the original scope/defaults. Merged [PR #86](https://github.com/RuneBrix/magic-the-deckbuilder/pull/86) implements local inventory, budgets and missing-copy estimates; [COLLECTION_WORKFLOW.md](COLLECTION_WORKFLOW.md) owns current interaction/upload behavior. Read historical proposals below against that implementation rather than treating them as unimplemented prerequisites.
+> Historical evidence, archived 16 November 2026 from `docs/COLLECTION_BUDGETS.md`. Original measurements, proposals and review statements describe their dated baseline; they are not current requirements. Use [the source map](../CODE_MAP.md) and selected criteria for current work.
+
+On 1 November 2026 the user chose **collection ownership and budget planning together** for [#7](https://github.com/RuneBrix/magic-the-deckbuilder/issues/7). This document records the original scope/defaults. Merged [PR #86](https://github.com/RuneBrix/magic-the-deckbuilder/pull/86) implements local inventory, budgets and missing-copy estimates; [COLLECTION_WORKFLOW.md](../COLLECTION_WORKFLOW.md) owns current interaction/upload behavior. Read historical proposals below against that implementation rather than treating them as unimplemented prerequisites.
 
 ## Selected workflow and working defaults
 
@@ -18,7 +20,7 @@ A player edits owned lots, opens a deck and sees deck demand, owned/missing copi
 | Unknown prices | Null/absent/malformed values are unknown, not zero. Show the priced subtotal and number of unpriced copies. A known subtotal above budget is a confirmed overage; a lower incomplete subtotal cannot establish under-budget status. |
 | Freshness | Label saved/undated estimates. Record successful retrieval time for new quotes; disclose that it is not the market observation time. Application policy: request daily updates at most, retain last-good data on failure and mark it as saved. No promise of live market prices. |
 
-The [source evidence](PRICE_DATA.md) distinguishes current verified Scryfall facts from application policy and documentation that could not be fetched. Price refresh must use stored printing ids, obey the existing bounded/serialized proxy, and update only prices/freshness. It cannot alter holdings, deck quantities or chosen printings. Opening and editing stored holdings/estimates remains usable offline once the app runs.
+The [source evidence](PRICE_DATA_RESEARCH.md) distinguishes current verified Scryfall facts from application policy and documentation that could not be fetched. Price refresh must use stored printing ids, obey the existing bounded/serialized proxy, and update only prices/freshness. It cannot alter holdings, deck quantities or chosen printings. Opening and editing stored holdings/estimates remains usable offline once the app runs.
 
 ## Concrete accounting examples
 
