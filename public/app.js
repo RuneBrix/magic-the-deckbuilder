@@ -412,9 +412,15 @@ function openDeck(id) {
 
 }
 
-const collectionOptions={view:'visual',group:'none',sort:'added',filter:''};
+const collectionOptions={view:'visual',group:'none',sort:'added',filter:'',page:1};
 try{const saved=JSON.parse(localStorage.getItem('arcana.collection-view.v1'));for(const key of ['view','group','sort'])if(collectionChoices[key].some(([value])=>value===saved?.[key]))collectionOptions[key]=saved[key];if(['list','visual-vertical'].includes(saved?.view))collectionOptions.view=saved.view==='list'?'text':'visual';if(typeof saved?.filter==='string')collectionOptions.filter=saved.filter.slice(0,300);}catch{}
-function saveCollectionOptions(){try{localStorage.setItem('arcana.collection-view.v1',JSON.stringify(collectionOptions));}catch{toast('Collection view kept for this session.');}}
+function saveCollectionOptions(){const {page,...preferences}=collectionOptions;try{localStorage.setItem('arcana.collection-view.v1',JSON.stringify(preferences));}catch{toast('Collection view kept for this session.');}}
+function changeCollectionPage(page,step){
+  collectionOptions.page=page;render();
+  const nav=$('.collection-pagination');
+  (nav?.querySelector(`[data-collection-page-step="${step}"]:not(:disabled)`)||nav?.querySelector('select'))?.focus({preventScroll:true});
+  $('#collection-results')?.scrollIntoView({block:'start'});
+}
 function collectionLotDialog(card=null,index=null,back=null){
   if(index!==null){card=collection[index]?.card;if(!card){toast('This owned card is no longer available.');return;}}
   if(!card){
@@ -1327,8 +1333,9 @@ function bindTrackerResize() {
 }
 function bind() {
   if(view==='deck' && deckTab==='cards' && current())bindQuickAdd(current());
-  for(const key of ['view','group','sort'])$('#collection-'+key)?.addEventListener('change',e=>{collectionOptions[key]=e.target.value;saveCollectionOptions();render();});
-  $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage(collection,collectionOptions);$('#collection-results').innerHTML=container.querySelector('#collection-results').innerHTML;});
+  if(view==='collection' && $('#collection-results')?.dataset.page)collectionOptions.page=Number($('#collection-results').dataset.page);
+  for(const key of ['view','group','sort'])$('#collection-'+key)?.addEventListener('change',e=>{collectionOptions[key]=e.target.value;if(key!=='view')collectionOptions.page=1;saveCollectionOptions();render();});
+  $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;collectionOptions.page=1;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage(collection,collectionOptions);$('#collection-results').outerHTML=container.querySelector('#collection-results').outerHTML;});
   $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
   bindTrackerResize();
   $('#deck-companion')?.addEventListener('change',e=>{try{changeDeck(deck=>setCompanion(deck,e.target.value||null));$('#deck-companion')?.focus();}catch(error){toast(error.message);}});
@@ -1395,6 +1402,7 @@ for(const event of ['pointerout','focusout'])$('#app').addEventListener(event,e=
   if(container && !container.contains(e.relatedTarget))showCardFace(container,false);
 });
 $('#app').addEventListener('change',e=>{
+  if(e.target.dataset?.collectionPageSelect){changeCollectionPage(Number(e.target.value));return;}
   if(e.target.id==='tag-page'){
     tagPage=Number(e.target.value);refreshTagOptions();$('#tag-page').focus({preventScroll:true});
     return;
@@ -1430,7 +1438,8 @@ $('#app').addEventListener('click',async e=>{
     filters[key].push(empty());
     render();$(`#guided-form [name="${family}-${filters[key].length-1}"]`)?.focus();return;
   }
-  if(button.dataset.collectionSort){const key=button.dataset.collectionSort,current=collectionOptions.sort.replace(/-(asc|desc)$/,'');collectionOptions.sort=current!==key?key:collectionOptions.sort===key?key+(['added','updated','quantity'].includes(key)?'-asc':'-desc'):key;saveCollectionOptions();render();return;}
+  if(button.dataset.collectionPageStep){changeCollectionPage(collectionOptions.page+(button.dataset.collectionPageStep==='next'?1:-1),button.dataset.collectionPageStep);return;}
+  if(button.dataset.collectionSort){const key=button.dataset.collectionSort,current=collectionOptions.sort.replace(/-(asc|desc)$/,'');collectionOptions.sort=current!==key?key:collectionOptions.sort===key?key+(['added','updated','quantity'].includes(key)?'-asc':'-desc'):key;collectionOptions.page=1;saveCollectionOptions();render();return;}
   if(button.dataset.view){
     e.preventDefault?.();
     view=button.dataset.view;

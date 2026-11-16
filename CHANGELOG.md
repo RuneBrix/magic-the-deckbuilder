@@ -1,5 +1,10 @@
 # Changelog
 
+## Collection pagination and totals
+
+- Render up to 48 owned lots at a time in Visual cards and Text, with Previous/Next, direct page selection and lot ranges. Apply filters, sorting and grouping to the whole inventory before paging; keep pages valid after edits and removals (#164).
+- Put concise copy totals below the Collection controls, distinguish filtered totals from the whole inventory and keep lot counts in page navigation. Remove allocation-policy boilerplate from the browsing page (#198).
+
 ## Collection captions and editing
 
 - Put Collection quantity/options controls on the artwork, move Edit/Remove into the options menu and remove repeated visible card names. Keep Language, Finish and abbreviated Condition in a single compact caption line (#183).
