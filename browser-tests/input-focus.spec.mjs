@@ -109,46 +109,16 @@ test('Search button keeps keyboard position through loading, success, no-match, 
   await expect(input).toBeFocused();
 });
 
-test('Budget keeps invalid drafts and stable Tab progression while preserving the saved amount', async ({ page }, testInfo) => {
+test('ownership matching retains keyboard progression without legacy budget controls', async ({ page }) => {
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
-  await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
-  const input = page.getByLabel('Budget in EUR');
-  await input.fill('100.00');
-  await input.press('Tab');
-  await expect(page.getByLabel('Compare budget against')).toBeFocused();
-  const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].budgetCents);
-  expect(await saved()).toBe(10000);
-  for (const value of ['12.345', '-1', 'not a number']) {
-    await input.fill(value);
-    await input.press('Shift+Tab');
-    await expect(page.getByLabel('Maybeboard', { exact: true })).toBeFocused();
-    await expect(input).toHaveValue(value);
-    await expect(input).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.locator('#deck-budget-error')).toContainText('two decimals');
-    await expect(input).toHaveAttribute('aria-describedby', 'deck-budget-error');
-    expect(await saved()).toBe(10000);
-    await input.focus();await input.press('Tab');
-    await expect(page.getByLabel('Compare budget against')).toBeFocused();
-    // An unrelated planning render must retain the editable draft too.
-    await page.getByLabel('Compare budget against').selectOption('full');
-    await expect(input).toHaveValue(value);
-    await expect(input).toHaveAttribute('aria-invalid', 'true');
-  }
-  await input.fill('12.345');await input.press('Tab');
-  await page.screenshot({ path: testInfo.outputPath('budget-invalid.png') });
+  await page.getByRole('tab', { name: 'Ownership & costs', exact: true }).click();
+  await expect(page.locator('#deck-budget, #budget-basis')).toHaveCount(0);
+  const matching=page.getByLabel('Ownership matching');
+  await matching.focus();await matching.press('Tab');
+  await expect(page.getByText('About cost estimates',{exact:true})).toBeFocused();
+  await matching.focus();await matching.selectOption('printing');await expect(matching).toBeFocused();
   await page.reload();
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
-  await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
-  await expect(input).toHaveValue('100.00');
-  for (const [value, cents] of [['25.50', 2550], ['0', 0], ['', undefined]]) {
-    await input.fill(value);await input.press('Tab');
-    await expect(page.getByLabel('Compare budget against')).toBeFocused();
-    await expect(input).toHaveAttribute('aria-invalid', 'false');
-    await expect(page.locator('#deck-budget-error')).toBeEmpty();
-    expect(await saved()).toBe(cents);
-  }
-  await page.reload();
-  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
-  await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
-  await expect(input).toHaveValue('');
+  await page.getByRole('tab', { name: 'Ownership & costs', exact: true }).click();
+  await expect(matching).toHaveValue('printing');
 });

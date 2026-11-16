@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import * as core from '../public/core.js';
+import { budgetPanel } from '../public/budget-view.js';
 import { collectionPage } from '../public/collection-view.js';
 import { workspace, editorCard, editorDeck, formValues, chooseWorkspaceFile, startCardDrag, dropCard } from '../test-support/workspace.mjs';
 
@@ -14,14 +15,10 @@ test('version 2 browser storage renders collection and independent deck ownershi
   assert.match(w.node('#app').innerHTML,/1 copy total/);assert.doesNotMatch(w.node('#app').innerHTML,/evaluated independently/);
   vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
   const html=w.node('#app').innerHTML;
-  assert.match(html,/Ownership & budget/);assert.match(html,/Covered by collection<\/dt>\s*<dd>1/);assert.match(html,/Copies to buy<\/dt>\s*<dd>2/);assert.match(html,/Unknown/);
-  const budget=w.node('#deck-budget');
-  budget.value='12.34';budget.change({target:budget});
-  const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.version,2);assert.equal(saved.decks[0].budgetCents,1234);assert.deepEqual(saved.collection,[owned]);
-  assert.match(w.node('.budget-comparison').textContent,/left after known costs/);
-  assert.match(w.node('#app').innerHTML,/1 unpriced copy/);
-  budget.value='1.00';budget.change({target:budget});
-  assert.match(w.node('.budget-comparison').textContent,/over budget from known costs alone/);
+  assert.match(html,/Ownership & costs/);assert.match(html,/Covered by collection<\/th><td>1/);assert.match(html,/Still needed<\/th><td>2/);assert.match(html,/Unknown/);
+  assert.match(html,/1 unpriced copy/);
+  assert.doesNotMatch(html,/deck-budget|budget-basis|over budget|Stored total/);
+
 });
 
 test('collection defaults and saved controls preserve stable added dates and sorting',()=>{
@@ -65,26 +62,44 @@ test('collection totals distinguish copies and lots, including duplicate printin
   assert.equal([...empty.matchAll(/data-collection-page-step="[^"]+" disabled/g)].length,2);
 });
 
-test('budget draft validation preserves saved cents and reports failed writes without replacing controls',()=>{
-  const d=editorDeck();d.budgetCents=10000;
-  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[]))});
-  vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
-  const input=w.node('#deck-budget'),before=w.node('#app').innerHTML;
-  for(const value of ['12.345','-1','invalid']){
-    input.value=value;input.input({target:input});input.change({target:input});
-    assert.equal(vm.runInContext('current().budgetCents',w.context),10000);
-    assert.equal(w.writes.length,0);
-    assert.match(w.node('#deck-budget-error').textContent,/nonnegative EUR amount/);
-    assert.equal(w.node('#app').innerHTML,before);
+test('legacy budget fields survive ownership edits and complete workspace round trips without controls',()=>{
+  const d=editorDeck();d.budgetCents=10000;d.budgetBasis='full';
+  for(const version of [1,2]){
+    const w=workspace({savedWorkspace:JSON.stringify(version===1?core.workspaceFile([d]):core.workspaceFile([d],[]))});
+    vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
+    assert.doesNotMatch(w.node('#app').innerHTML,/id="deck-budget"|id="budget-basis"|budget-comparison/);
+    w.node('#budget-zone-maybeboard').change({target:{checked:true}});
+    const saved=core.readWorkspaceFile(JSON.parse(w.writes.at(-1)[1]));
+    assert.equal(saved.decks[0].budgetCents,10000);assert.equal(saved.decks[0].budgetBasis,'full');
+    assert.deepEqual(saved.decks[0].cards,d.cards);
+    const roundTrip=core.readWorkspaceFile(core.workspaceFile(saved.decks,saved.collection));
+    assert.deepEqual(roundTrip,saved);
   }
-  vm.runInContext('render()',w.context);
-  assert.match(w.node('#app').innerHTML,/id="deck-budget"[^>]*value="invalid"/);
-  w.context.localStorage.setItem=()=>{throw Error('Quota exceeded');};
-  input.value='25.00';input.change({target:input});
-  assert.equal(vm.runInContext('current().budgetCents',w.context),2500);
-  assert.equal(w.writes.length,0);
-  assert.match(w.node('#deck-budget-error').textContent,/Export a JSON backup/);
-  assert.equal(w.node('.local-status').textContent,'Unsaved changes');
+});
+
+test('ownership cost columns sort numeric quotes and counts, names and zones stably with unknown prices last',()=>{
+  const d=editorDeck();
+  d.cards=[
+    {card:{...editorCard('Card 10'),prices:{eur:'10.00'}},qty:12,tags:[],zone:'main'},
+    {card:{...editorCard('Card 2'),prices:{eur:'2.00'}},qty:2,tags:[],zone:'sideboard'},
+    {card:{...editorCard('Unknown'),prices:{}},qty:1,tags:[],zone:'command'},
+    {card:{...editorCard('Equal'),prices:{eur:'2.00'}},qty:2,tags:[],zone:'main'},
+  ];
+  d.cards.forEach((entry,i)=>entry.card.oracle_id=`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
+  const quotes=new Map(d.cards.slice(0,2).map((e,i)=>[e.card.oracle_id,{cents:i?25:100,card:{set:'tst'}}]));
+  const names=(key,direction)=>[...budgetPanel(d,[],null,{quotes},{key,direction}).matchAll(/<th scope="row">([^<]+)/g)].map(m=>m[1]);
+  // Summary row headings precede the five-column detail table.
+  const order=(key,direction)=>names(key,direction).slice(-4);
+  assert.deepEqual(order('price','asc'),['Equal','Card 2','Card 10','Unknown']);
+  assert.deepEqual(order('price','desc'),['Card 10','Equal','Card 2','Unknown']);
+  assert.deepEqual(order('copies','desc'),['Card 10','Equal','Card 2','Unknown']);
+  assert.deepEqual(order('card','asc'),['Card 2','Card 10','Equal','Unknown']);
+  assert.deepEqual(order('zone','asc'),['Unknown','Card 10','Equal','Card 2']);
+  assert.deepEqual(order('cheapest','asc'),['Card 2','Card 10','Equal','Unknown']);
+  assert.deepEqual(order('cheapest','desc'),['Card 10','Card 2','Equal','Unknown']);
+  const html=budgetPanel(d,[],null,{quotes,checkedAt:'2026-11-16T12:00:00Z'},{key:'price',direction:'desc'});
+  assert.match(html,/aria-sort="descending"/);assert.doesNotMatch(html,/Stored each|Stored total|<th scope="col">Covered|Cheapest printings checked/);
+  assert.match(html,/TST · Regular/);
 });
 
 test('owned search opens an anchored combobox after one literal character with no placeholder result',async()=>{

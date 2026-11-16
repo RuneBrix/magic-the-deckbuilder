@@ -18,7 +18,7 @@ Confirmation adds the entered quantity. Matching printing and finish copies in t
 
 Choose **Change in-deck card details** in an entry’s options menu. The form identifies the deck, zone, card and quantity. **Save printing and finish** applies to those copies and preserves quantity, zone, personal functions and the latest stored legality. If the same printing and finish already has a separate entry in that zone, choose a different version or use the deck’s quantity controls to combine copies deliberately.
 
-Both forms show the stored per-copy USD quote for the selected printing and finish. Nonfoil, foil and etched use their corresponding Scryfall fields. Missing quotes remain unavailable. The separate [Ownership & budget estimate](COLLECTION_WORKFLOW.md#ownership-and-budget) uses regular or foil EUR quotes for each stored entry.
+Both forms show the stored per-copy USD quote for the selected printing and finish. Nonfoil, foil and etched use their corresponding Scryfall fields. Missing quotes remain unavailable. The separate [Ownership & costs estimate](COLLECTION_WORKFLOW.md#ownership-and-budget) uses regular or foil EUR quotes for each stored entry.
 
 ## Preservation and lookup
 

@@ -29,7 +29,7 @@ async function noOverflow(page) {
 
 test('deck tabs provide one Tab stop, named panels and automatic arrow activation', async ({ page, isMobile }, testInfo) => {
   await openDeck(page);
-  const labels = ['Cards', 'Statistics', 'Ownership & budget', 'Checks'];
+  const labels = ['Cards', 'Statistics', 'Ownership & costs', 'Checks'];
   const tab = name => page.getByRole('tab', { name, exact: true });
   const snapshots = [];
   const check = async name => {

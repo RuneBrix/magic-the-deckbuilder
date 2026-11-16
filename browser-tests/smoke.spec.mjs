@@ -131,7 +131,7 @@ test('deck library uses available width and commander suggestions are optional u
   await noPageOverflow(page);
 });
 
-test('deck navigation, sticky header, statistics and budget fit the viewport', async ({ page }) => {
+test('deck navigation, sticky header, statistics and ownership fit the viewport', async ({ page }) => {
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Smoke Garden', exact: true })).toBeVisible();
   await page.locator('#editor-layout').selectOption('text-vertical');
@@ -142,8 +142,8 @@ test('deck navigation, sticky header, statistics and budget fit the viewport', a
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Mana curve', exact: true })).toBeVisible();
   await noPageOverflow(page);
-  await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Ownership & budget', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Ownership & costs', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Ownership & costs', exact: true })).toBeVisible();
   await noPageOverflow(page);
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'About bracket data' })).toBeVisible();
@@ -292,7 +292,7 @@ test('deck groups show copy counts and prices, and visual stacks reveal card met
   await noPageOverflow(page);
 });
 
-test('budget zones keep every card visible and compare known costs across scope and basis changes', async ({ page }) => {
+test('ownership zones keep every card visible and retain missing costs across scope changes', async ({ page }) => {
   await page.evaluate(() => {
     const key = 'arcana.workspace.v2';
     const data = JSON.parse(localStorage.getItem(key));
@@ -306,33 +306,33 @@ test('budget zones keep every card visible and compare known costs across scope 
   await page.reload();
   const openBudget = async () => {
     await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
-    await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
+    await page.getByRole('tab', { name: 'Ownership & costs', exact: true }).click();
   };
   await openBudget();
   const maybe = page.getByRole('checkbox', { name: 'Maybeboard' });
   const maybeRow = page.getByRole('row').filter({ hasText: 'Smoke Card 3' });
-  const comparison = page.locator('.budget-comparison');
+  const comparison = page.getByRole('table',{name:'Cost estimates',exact:true});
   await expect(maybe).not.toBeChecked();
   await expect(maybeRow).toContainText('Outside estimate');
-  await expect(comparison).toContainText('left after known costs');
-  await page.getByLabel('Compare budget against').selectOption('full');
-  await expect(comparison).toContainText('over budget from known costs alone');
-  await page.getByLabel('Compare budget against').selectOption('missing');
+  await expect(comparison).toContainText('Cost of missing copies');
+  await expect(comparison).toContainText('1 unpriced copy');
+  await expect(page.locator('#deck-budget, #budget-basis')).toHaveCount(0);
   await maybe.focus();
   await page.keyboard.press('Space');
   await expect(maybe).toBeChecked();
   await expect(maybe).toBeFocused();
   await expect(maybeRow).not.toContainText('Outside estimate');
-  await expect(comparison).toContainText('over budget from known costs alone');
+  await expect(comparison).toContainText('1 unpriced copy');
   await noPageOverflow(page);
   await page.reload();
   await openBudget();
   await expect(maybe).toBeChecked();
-  await expect(page.getByRole('table').getByRole('row')).toHaveCount(4);
-  await expect(comparison).toContainText('over budget from known costs alone');
+  await expect(page.locator('.planning-table tbody tr')).toHaveCount(3);
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].budgetCents)).toBe(100);
+  await expect(comparison).toContainText('1 unpriced copy');
 });
 
-test('budget compares selected and cheapest printings without changing deck cards', async ({ page }, testInfo) => {
+test('ownership compares selected and cheapest printings without changing deck cards', async ({ page }, testInfo) => {
   await page.evaluate(() => {
     const key = 'arcana.workspace.v2';
     const data = JSON.parse(localStorage.getItem(key));
@@ -359,7 +359,7 @@ test('budget compares selected and cheapest printings without changing deck card
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
   await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
-  await page.getByRole('tab', { name: 'Ownership & budget', exact: true }).click();
+  await page.getByRole('tab', { name: 'Ownership & costs', exact: true }).click();
   const before = await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
   const check = page.getByRole('button', { name: 'Check cheapest printings', exact: true });
   const cancel = page.getByRole('button', { name: 'Cancel price check', exact: true });
@@ -371,14 +371,13 @@ test('budget compares selected and cheapest printings without changing deck card
   release();
   await expect(page.getByText('Cheapest-printing check cancelled.')).toBeVisible();
   await check.press('Enter');
-  await expect(page.getByText(/Cheapest printings checked/)).toBeVisible();
+  await expect(cancel).toHaveCount(0);
   await expect(check).toBeFocused();
   const row = page.getByRole('row').filter({ hasText: 'Smoke Card 2' });
-  await expect(row.getByRole('cell').nth(4)).toContainText(/2[.,]25/);
-  await expect(row.getByRole('cell').nth(5)).toContainText(/4[.,]50/);
-  await expect(row.getByRole('cell').nth(6)).toContainText(/0[.,]33.*Cheaper set/);
+  await expect(row.getByRole('cell').nth(1)).toContainText(/2[.,]25/);
+  await expect(row.getByRole('cell').nth(3)).toContainText(/0[.,]33.*TST/);
   await expect(page.getByRole('link', { name: 'Cardmarket' })).toHaveAttribute('href', /idProduct=41&isFoil=Y$/);
-  const cheapestTotal = page.locator('.planning-totals > div').filter({ hasText: 'Cheapest printings estimate' });
+  const cheapestTotal = page.locator('.planning-summary tr').filter({ hasText: 'Cheapest printings estimate' });
   await expect(cheapestTotal).toContainText(/1[.,]16/);
   expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(before);
   await page.getByRole('checkbox', { name: 'Maybeboard' }).check();
