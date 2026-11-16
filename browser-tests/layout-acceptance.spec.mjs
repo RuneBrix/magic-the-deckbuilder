@@ -79,7 +79,8 @@ test('optional zones transition in every layout and tracker without changing oth
     }
   }
   expect(await savedCards(page)).toEqual(original);
-  await page.getByRole('button',{name:'Find cards to add',exact:true}).click();
+  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('smoke-deck');
   const tracker=page.locator('#deck-tracker');
   for(const zone of ['Sideboard','Maybeboard']){
     const heading=tracker.getByRole('heading',{name:new RegExp(`^${zone} ·`)});
@@ -148,7 +149,8 @@ test('sticky navigation keeps long surfaces, focus, overlays and trackers reacha
   await expect(discussion).toBeFocused();
   expect(await discussion.evaluate(el=>el.getBoundingClientRect().top>=document.querySelector('.workspace-nav').getBoundingClientRect().bottom)).toBe(true);
   await page.getByRole('tab',{name:'Cards',exact:true}).click();
-  await page.getByRole('button',{name:'Find cards to add',exact:true}).click();
+  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('smoke-deck');
   await page.route('**/api/search?**',route=>route.fulfill({json:{data:cards,total_cards:cards.length,has_more:false}}));
   await page.locator('#raw').fill('Smoke');
   await page.locator('#search-form').getByRole('button',{name:'Search',exact:true}).click();

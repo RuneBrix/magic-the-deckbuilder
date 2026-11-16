@@ -229,10 +229,11 @@ test('tracker visibility and selection preserve the search, editor destination a
   assert.doesNotMatch(w.node('#app').innerHTML,/<aside|data-action="jump-deck"/);
   await click({deck:'second'});
   assert.equal(vm.runInContext('current().id',w.context),'second');
-  await click({action:'find-cards'});
+  await click({view:'explore'});
+  w.node('#tracked-deck').change({target:{value:vm.runInContext('active',w.context)}});
   assert.equal(vm.runInContext('tracker.id',w.context),'second');
-  assert.equal(vm.runInContext('filters.query',w.context),'otag:ramp f:modern');
-  assert.equal(vm.runInContext('results[0].name',w.context),'Result');
+  assert.equal(vm.runInContext('filters.query',w.context),'');
+  assert.equal(vm.runInContext('results.length',w.context),0);
   assert.ok(w.writes.every(([key])=>key==='arcana.explorer.v1'));
   const saved=w.writes.at(-1)[1];
   const reloaded=workspace({savedDecks:JSON.stringify([a,b]),savedTracker:saved});
@@ -350,7 +351,8 @@ test('top-navigation Explore starts fresh and invalidates a pending result page'
   const click=dataset=>w.node('#app').click({preventDefault(){},target:{closest:()=>({dataset})}});
   const storedDecks=vm.runInContext('JSON.stringify(decks)',w.context);
   await click({deck:'editor'});
-  await click({action:'find-cards'});
+  await click({view:'explore'});
+  w.node('#tracked-deck').change({target:{value:vm.runInContext('active',w.context)}});
   assert.equal(vm.runInContext('tracker.id',w.context),'editor');
   assert.equal(vm.runInContext('filters.query',w.context),'');
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Found')],total_cards:100,has_more:true})});
@@ -360,7 +362,7 @@ test('top-navigation Explore starts fresh and invalidates a pending result page'
   w.context.fetch=()=>new Promise(resolve=>complete=resolve);
   const pending=vm.runInContext('search(true)',w.context);
   await click({view:'decks'});
-  assert.match(w.node('#app').innerHTML,/id="library-title"/);
+  assert.match(w.node('#app').innerHTML,/id="deck-title"/);
   await click({view:'explore'});
   complete({ok:true,json:async()=>({data:[editorCard('Obsolete')],total_cards:100,has_more:false})});
   await pending;

@@ -205,7 +205,7 @@ test('Quick add dismisses suggestions with Escape and rejects stale searches and
   await expect(page.locator('#quick-add-matches')).toBeHidden();
   await input.fill('None');await expect(page.locator('#quick-add-status')).toHaveText('No cards match that name.');
   await input.fill('Old');
-  await page.getByRole('button',{name:'My decks',exact:true}).click();
+  await page.getByRole('button',{name:'Back to library',exact:true}).click();
   await expect(page.getByRole('heading',{name:'My decks',exact:true})).toBeVisible();
   await expect(page.getByRole('dialog')).toBeHidden();
 });
