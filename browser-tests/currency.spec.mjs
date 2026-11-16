@@ -55,7 +55,7 @@ test('deck currency and basic-land exclusions stay consistent across costs, Card
     await expect(page.locator('.deck-zone-price').nth(1)).toContainText('$750.00 · 1 copy unpriced');
     await page.locator('#editor-order').selectOption('price-desc');
     if(!isMobile){
-      const target=layout.startsWith('visual')?page.locator('.deck-entry').filter({hasText:'A long card name'}):page.locator('.deck-card-name').filter({hasText:'A long card name'});
+      const target=layout.startsWith('visual')?page.getByRole('article',{name:/^A long card name/}):page.locator('.deck-card-name').filter({hasText:'A long card name'});
       await target.first().focus();
       await expect(page.locator('#deck-card-preview')).toContainText('$1.50');
     }

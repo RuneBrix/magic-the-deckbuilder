@@ -127,7 +127,7 @@ test('deck library uses available width and commander suggestions are optional u
   await create.click();
   await expect(page.getByRole('heading', { name: 'Commander draft' })).toBeVisible();
   const commandZone = page.getByRole('heading', { name: /Command zone/ }).locator('..');
-  await expect(commandZone).toContainText('Smoke Card 1');
+  await expect(commandZone.getByRole('button',{name:'Inspect Smoke Card 1 in Command zone',exact:true})).toBeVisible();
   await noPageOverflow(page);
 });
 
