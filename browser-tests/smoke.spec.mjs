@@ -263,8 +263,8 @@ test('deck groups show copy counts and prices, and visual stacks reveal card met
   for (const view of ['visual-horizontal', 'text-horizontal', 'text-vertical', 'visual-vertical']) {
     await layout.selectOption(view);
     await expect(group.getByRole('heading')).toHaveText('Creature · 3 cards');
-    await expect(group.locator('.deck-group-price')).toHaveText('3.00 USD known · 1 copy unpriced');
-    await expect(main.locator('.deck-zone-price')).toContainText('3.00 USD known · 1 copy unpriced');
+    await expect(group.locator('.deck-group-price')).toHaveText('3.00 USD · 1 copy unpriced');
+    await expect(main.locator('.deck-zone-price')).toContainText('3.00 USD · 1 copy unpriced');
     if (view.startsWith('text')) await expect(main.locator('.stack-card-meta')).toHaveCount(0);
     await noPageOverflow(page);
   }
@@ -275,8 +275,8 @@ test('deck groups show copy counts and prices, and visual stacks reveal card met
     await first.locator('.card-art').hover({ position: { x: 25, y: 25 } });
     await expect(caption).toBeVisible();
     await expect(caption).toContainText('TST · 1.50 USD');
-    await expect(preview).toContainText('Function: Draw');
-    await expect(preview).toContainText('1.50 USD per copy · regular');
+    await expect(preview.locator('figcaption span').nth(0)).toHaveText('Draw');
+    await expect(preview.locator('figcaption span').nth(1)).toHaveText('1.50 USD');
     const bottom = (await caption.boundingBox()).y + (await caption.boundingBox()).height;
     expect((await main.locator('.card-art').nth(1).boundingBox()).y).toBeGreaterThan(bottom);
   }
