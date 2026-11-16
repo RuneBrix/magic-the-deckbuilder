@@ -19,10 +19,14 @@ These principles guide scoped work; they do not claim all existing behavior alre
 
 Retain the collector's index established by #9: warm paper, forest-green ink, crisp rules and restrained controls. Newsreader gives headings and the wordmark an editorial character; Public Sans carries controls and dense data. Heading tracking stays no tighter than -0.025em. Font licenses and mana-symbol provenance live in `public/fonts/`. Reuse the authored card/diamond mark and familiar functional icons with accessible names.
 
-Card imagery stays complete and undistorted in discovery, details and previews. Library covers may use art-focused landscape crops. Keep card art as the subject. Use existing CSS variables and semantic states across light/dark/device appearance; mana colors retain their game meaning. `public/style.css` owns implemented tokens, spacing, dimensions and breakpoints. Generated design snapshots do not override it.
+Card imagery stays complete and undistorted in discovery, details and previews. Library covers may use art-focused landscape crops. Keep card art as the subject. Use existing CSS variables and semantic states across Light/Dark appearance; mana colors retain their game meaning. `public/style.css` owns implemented tokens, spacing, dimensions and breakpoints. Generated design snapshots do not override it.
 
 ## Interaction and verification
 
 Writable fields keep permanent labels; distinguish examples from entered values. Native dialogs, disclosures and popovers retain visible focus, predictable dismissal and focus return. Support reduced motion. Preserve concise loading, empty, error and storage-warning states, and touch/keyboard alternatives to pointer inspection.
 
 Feature contracts own non-obvious preservation and interaction boundaries; read only affected sections through [the source map](docs/CODE_MAP.md). Inspect changed geometry and states in the browser. Historical screenshots and past test counts do not validate a new revision; record current evidence and platform gaps in its PR.
+
+## Appearance preferences (#178)
+
+Settings offers Light or Dark, with Forest, Blue, Monochrome, Amber, Rose, Teal and Sepia palettes for each. Each appearance remembers its own choice in `arcana.palettes.v2`; legacy `arcana.palette.v1` initializes only the dark choice, and valid newer choices take precedence. Existing device-following preferences continue until an explicit Light/Dark selection. Preference failures apply for the session with a warning and do not write deck/collection data. Palettes remap semantic roles across surfaces, charts and states; preserve mana colors and visible focus.

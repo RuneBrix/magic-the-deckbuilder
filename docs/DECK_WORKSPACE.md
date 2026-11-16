@@ -44,7 +44,7 @@ Pointer-based dragging with capture is an optional desktop shortcut. The drag st
 
 ## Navigation and adding cards
 
-The header offers My decks, Explore cards and Settings at every viewport, with local-save status and Help. Startup/reload and the logo open My decks; in-session navigation preserves search (#37). Deck switching and creation belong in My decks rather than a duplicate navigation list.
+The header offers My decks, Explore cards, Collection and Settings at every viewport, with local-save status and Help. Startup/reload and the logo open My decks; in-session navigation preserves search (#37). Deck switching and creation belong in My decks rather than a duplicate navigation list. Settings is a normal app page with a named Back action. Returning restores the prior surface and scroll position, including the open deck/tab, editor options, search/results and tracked deck; entering Settings does not reset them (#177). Reload still opens My decks. Workspace-file review remains a deliberate dialog on the Settings page.
 
 Clicking library artwork or a title, and successful deck creation/import, enter the dedicated editor. It contains Cards, Statistics, Ownership & costs and Checks, plus import/export and management actions. Find cards to add explicitly tracks the editor's deck and opens discovery without clearing its search. The compact tracker names that deck and Main deck destination, with Open full deck to return. Exploration can instead track another deck or none; hiding the tracker retains the named quick-add destination. Add to… selects a different destination without changing tracking. See [Exploration](EXPLORATION.md) for #19/#20 behavior, persistence and resize controls.
 

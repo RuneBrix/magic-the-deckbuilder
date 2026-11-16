@@ -1,5 +1,11 @@
 # Changelog
 
+## Settings, palettes and welcome guide — 2026-11-16
+
+- Move Settings into a normal page with a named Back action that preserves the prior deck/search/collection workflow (#177).
+- Offer seven palettes for each Light/Dark appearance, remember them separately and retain older preferences; preserve semantic states and mana colors (#178).
+- Replace the technical introduction with a short welcome and practical route through decks, card discovery, collection and workspace copies; reference details remain beside their tools (#199).
+
 ## Complete cheapest scans and printing application
 
 - Scan each nonbasic card independently through its final page, remove the 200-card/four-page batch limits, show progress and per-card errors, and retain completed/last-good results through cancellation and retry (#167).
