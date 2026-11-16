@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck summaries and stack headers
+
+- Combine all four zone counts with the editor's playing-deck summary; keep Maybeboard outside playing totals (#165).
+- Simplify deck totals and large-preview price/function labels while keeping unpriced counts and special finishes visible (#188).
+- Align neighboring vertical stacks below variable-length headers and place horizontal group costs beside names/counts, with wrapping for narrow widths and enlarged text (#193).
+
 ## Collection pagination and totals
 
 - Render up to 48 owned lots at a time in Visual cards and Text, with Previous/Next, direct page selection and lot ranges. Apply filters, sorting and grouping to the whole inventory before paging; keep pages valid after edits and removals (#164).

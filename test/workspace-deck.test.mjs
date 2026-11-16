@@ -293,8 +293,8 @@ test('deck prices and preview follow visible quantities, primary functions and s
   const w = workspace({ savedDecks: JSON.stringify([d]) });
   vm.runInContext("openDeck('editor')", w.context);
   const html = () => w.node('#app').innerHTML;
-  assert.match(html(), /Sorcery <span>· 5 cards<\/span><\/h4><p[^>]+>2\.20 USD known · 3 copies unpriced/);
-  assert.match(html(), /Main deck · 5<span[^>]+> · 2\.20 USD known · 3 copies unpriced/);
+  assert.match(html(), /Sorcery <span>· 5 cards<\/span><\/h4><p[^>]+>2\.20 USD · 3 copies unpriced/);
+  assert.match(html(), /Main deck · 5<span[^>]+> · 2\.20 USD · 3 copies unpriced/);
   assert.match(html(), /Ramp spell<\/span><span>ONE · 1\.10 USD/);
   assert.match(html(), /Other spell<\/span><span>Set unknown · Price unavailable/);
 
@@ -302,7 +302,7 @@ test('deck prices and preview follow visible quantities, primary functions and s
   assert.match(w.node('#editor-card-area').outerHTML, /Main deck · 5 · 2 shown<span[^>]+> · 2\.20 USD for shown cards/);
   assert.match(w.node('#editor-card-area').outerHTML, /Sorcery <span>· 2 shown/);
   w.node('#app').focusin({ target: { closest: () => ({ dataset: { previewEntry: key } }) } });
-  assert.match(w.node('#deck-card-preview').innerHTML, /Function: Removal<\/span><span>1\.10 USD per copy · regular/);
+  assert.match(w.node('#deck-card-preview').innerHTML, /Removal<\/span><span>1\.10 USD<\/span>/);
   await w.node('#app').click({ target: { closest: () => ({ dataset: { zonePlus: key } }) } });
   assert.match(html(), /3\.30 USD for shown cards/);
 
@@ -310,7 +310,7 @@ test('deck prices and preview follow visible quantities, primary functions and s
   vm.runInContext(`setEntryPrinting(current(), ${JSON.stringify(key)}, replacement);render()`, w.context);
   assert.match(html(), /2\.25 USD for shown cards/);
   assert.match(html(), /TWO · 0\.75 USD/);
-  assert.match(html(), /0\.75 USD per copy · foil/);
+  assert.match(html(), /0\.75 USD · foil/);
   assert.deepEqual(core.deckPrintingPrice({ finishes: ['etched'], prices: { usd_etched: '0.00' } }), { finish: 'etched', cents: 0 });
   assert.equal(core.deckPrintingPrice({ finishes: ['foil'], prices: { usd: '5.00' } }).cents, null);
   assert.equal(core.deckPrintingPrice({ finishes: ['foil', 'etched'], prices: { usd_foil: '5.00' } }).cents, null);

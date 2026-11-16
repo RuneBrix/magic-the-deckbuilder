@@ -871,11 +871,11 @@ dialog:has(.function-discovery){width:690px}
 
 /* Shared deck entries across visual stacks and text views (#41 / #43). */
 .deck-group-list,.deck-group-items{min-width:0}
-.deck-workspace .deck-group h4{margin:8px 0 2px;color:var(--ink);font-size:16px;font-weight:650;overflow-wrap:anywhere}
-.deck-group h4 span,.deck-group-price,.deck-zone-price,.deck-price-note{font-size:12px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
-.deck-group-price{margin:0 0 6px;overflow-wrap:anywhere}
-.deck-rows .zone-counts{margin-bottom:4px}
-.deck-price-note{margin:0 0 12px}
+.deck-group-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:8px 0 6px;min-width:0}
+.deck-workspace .deck-group h4{min-width:0;margin:0;color:var(--ink);font-size:16px;font-weight:650;overflow-wrap:anywhere}
+.deck-group h4 span,.deck-group-price,.deck-zone-price{font-size:12px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
+.deck-group h4 span{white-space:nowrap}
+.deck-group-price{min-width:0;margin:0;overflow-wrap:anywhere}
 .deck-group{min-width:0}
 .deck-zones .deck-group{margin:0}
 .deck-workspace .deck-zones{display:flex;flex-direction:column;gap:20px}
@@ -923,8 +923,9 @@ dialog:has(.function-discovery){width:690px}
 .visual-horizontal .card-slot:last-child{flex:0 0 190px}
 .deck-group-items:not(:has(>.card-slot :focus-visible))>.card-slot:hover>.visual-card,.card-slot:has(:focus-visible)>.visual-card{z-index:1}
 .visual-horizontal .deck-group-items:not(:has(>.card-slot :focus-visible))>.card-slot:hover~.card-slot,.visual-horizontal .card-slot:has(:focus-visible)~.card-slot{transform:translateX(var(--stack-open))}
-.visual-vertical .deck-group-list{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px 24px;padding:4px 4px 10px}
-.visual-vertical .deck-group{flex:0 0 190px}
+.visual-vertical .deck-group-list{display:grid;grid-template-columns:repeat(auto-fill,190px);align-items:start;gap:16px 24px;padding:4px 4px 10px}
+.visual-vertical .deck-group,.text-vertical .deck-group{display:grid;grid-template-rows:subgrid;grid-row:span 2;row-gap:0}
+.visual-vertical .deck-group-header,.text-vertical .deck-group-header{display:block}
 .visual-vertical .deck-group-items{--stack-step:48px;--stack-open:calc(190px * 680 / 488 - var(--stack-step) + var(--stack-caption-space) + 8px);display:flex;flex-direction:column}
 .visual-vertical .card-slot:not(:last-child){height:var(--stack-step)}
 .visual-vertical .deck-group-items:not(:has(>.card-slot :focus-visible))>.card-slot:hover~.card-slot,.visual-vertical .card-slot:has(:focus-visible)~.card-slot{transform:translateY(var(--stack-open))}

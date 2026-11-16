@@ -32,6 +32,7 @@ API requests receive deterministic fixture responses, and external requests rece
 
 - Quick add three-character gating, bounded suggestions, keyboard/touch selection, stale-response rejection, Escape dismissal, shared confirmation, offline function assignment and reload preservation.
 - Deck navigation, scrolling/sticky navigation, Statistics and Ownership & budget rendering, and horizontal overflow.
+- Compact editor zone counts through quantity edits, moves and reload, including Commander/constructed totals and empty decks. Aligned vertical group headers and inline horizontal costs across long functions, large totals, partial prices and enlarged text.
 - Optional Sideboard/Maybeboard hidden → populated → hidden transitions in all four deck layouts and the tracker; populated zero-filter-match sections, retained destinations and unchanged unrelated entries.
 - Long library/editor/Explore pages, scrollable Settings, wrapped-header measurement, keyboard/touch menus, focused controls above fixed overlays, desktop preview/tracker offsets and final phone tracker-control hit testing. The acceptance tests attach exact browser/version, viewport, origin and appearance.
 - Ownership & budget zone selection with keyboard focus and reload preservation, all-zone rows, and comparisons with missing EUR quotes.
