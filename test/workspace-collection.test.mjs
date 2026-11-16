@@ -11,7 +11,7 @@ test('version 2 browser storage renders collection and independent deck ownershi
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[owned])),initialView:null});
   assert.equal(vm.runInContext('collection[0].qty',w.context),1);
   vm.runInContext("view='collection';render()",w.context);
-  assert.match(w.node('#app').innerHTML,/1 owned copies/);assert.match(w.node('#app').innerHTML,/matched by rules identity|evaluated independently/i);
+  assert.match(w.node('#app').innerHTML,/1 copy total/);assert.doesNotMatch(w.node('#app').innerHTML,/evaluated independently/);
   vm.runInContext("openDeck('editor');deckTab='planning';render()",w.context);
   const html=w.node('#app').innerHTML;
   assert.match(html,/Ownership & budget/);assert.match(html,/Covered by collection<\/dt>\s*<dd>1/);assert.match(html,/Copies to buy<\/dt>\s*<dd>2/);assert.match(html,/Unknown/);
@@ -30,6 +30,39 @@ test('collection defaults and saved controls preserve stable added dates and sor
   w.node('#collection-group').change({target:{value:'color'}});w.node('#collection-sort').change({target:{value:'updated'}});
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.equal(saved.group,'color');assert.equal(saved.sort,'updated');
   assert.equal(w.writes.at(-1)[0],'arcana.collection-view.v1');
+});
+
+test('collection pages bound both views and retain original lot indices across sorting, filtering and grouping',()=>{
+  const lots=Array.from({length:1100},(_,i)=>({card:{...editorCard(`Card ${String(i).padStart(4,'0')}`),set_name:i%2?'Odd':'Even'},qty:2,finish:'regular'}));
+  const indices=html=>[...html.matchAll(/data-owned-row="(\d+)"/g)].map(match=>Number(match[1]));
+  for(const view of ['visual','text']){
+    const options={view,group:'none',sort:'name',filter:'',page:1},seen=[];
+    for(let page=1;page<=23;page++){
+      const html=collectionPage(lots,{...options,page}),visible=indices(html);seen.push(...visible);
+      assert.equal(visible.length,page===23?44:48);
+      assert.equal([...html.matchAll(/<img /g)].length,view==='visual'?visible.length:0);
+    }
+    assert.deepEqual(seen,Array.from({length:1100},(_,i)=>i));
+    assert.deepEqual(indices(collectionPage(lots,{...options,sort:'name-desc',page:2})),Array.from({length:48},(_,i)=>1051-i));
+    const grouped=collectionPage(lots,{...options,group:'set',page:12});
+    assert.deepEqual(indices(grouped),[...Array.from({length:22},(_,i)=>(528+i)*2),...Array.from({length:26},(_,i)=>i*2+1)]);
+    assert.match(grouped,/>Even · 1100 copies/);assert.match(grouped,/>Odd · 1100 copies/);
+    const filtered=collectionPage(lots,{...options,filter:'Card 109',page:99});
+    assert.deepEqual(indices(filtered),[109,...Array.from({length:10},(_,i)=>1090+i)]);
+    assert.match(filtered,/data-page="1"/);assert.match(filtered,/22 copies match · 2200 copies total/);assert.match(filtered,/Lots 1–11 of 11/);
+    assert.match(collectionPage(lots,{...options,page:999}),/data-page="23"/);
+    assert.match(collectionPage(lots,{...options,page:-1}),/data-page="1"/);
+    assert.match(collectionPage(lots,{...options,filter:'missing',page:23}),/0 copies match · 2200 copies total/);
+  }
+});
+
+test('collection totals distinguish copies and lots, including duplicate printings and empty inventory',()=>{
+  const card=editorCard('Same printing'),options={view:'text',group:'none',sort:'name',filter:''};
+  const html=collectionPage([{card,qty:1,finish:'regular'},{card,qty:12,finish:'foil'}],options);
+  assert.match(html,/13 copies total/);assert.match(html,/Lots 1–2 of 2/);
+  assert.doesNotMatch(html,/owned copies across|Each deck is evaluated independently/);
+  const empty=collectionPage([],options);assert.match(empty,/0 copies total/);assert.match(empty,/0 lots/);assert.match(empty,/No owned cards yet/);
+  assert.equal([...empty.matchAll(/data-collection-page-step="[^"]+" disabled/g)].length,2);
 });
 
 test('budget draft validation preserves saved cents and reports failed writes without replacing controls',()=>{
