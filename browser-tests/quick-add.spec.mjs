@@ -181,6 +181,7 @@ test('legacy and double-faced text entries keep honest metadata and stable contr
     await long.evaluate(el=>el.scrollIntoView({block:'center'}));
     await expect(long).toBeFocused();
     await expect(long).toBeInViewport();
+    expect((await long.boundingBox()).width).toBeGreaterThan(160);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.screenshot({path:testInfo.outputPath('enlarged-printing-caption.png')});
   }
