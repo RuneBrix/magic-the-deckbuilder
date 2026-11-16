@@ -30,7 +30,7 @@ API requests receive deterministic fixture responses, and external requests rece
 
 - Collection upload Add/Replace quantities, repeat warnings, explicit replacement confirmation/cancellation, keyboard application and preserved decks; companion selection, focus, reload and clearing in Checks. Native tests separately exercise failed writes, stale operations and rule predicates.
 
-- Quick add three-character gating, bounded suggestions, keyboard/touch selection, stale-response rejection, Escape dismissal, shared confirmation, offline function assignment and reload preservation.
+- Quick add three-character gating, bounded suggestions, immediate keyboard/touch nonfoil addition, stale-response rejection, Escape dismissal, atomic save-failure/retry and explicit foil-only fallback to the detailed form. Offline function assignment, deliberate suggestions/Unassigned for older entries, import/Explore default consistency, printing captions and reload preservation.
 - Deck navigation, scrolling/sticky navigation, Statistics and Ownership & budget rendering, and horizontal overflow.
 - Compact editor zone counts through quantity edits, moves and reload, including Commander/constructed totals and empty decks. Aligned vertical group headers and inline horizontal costs across long functions, large totals, partial prices and enlarged text.
 - Optional Sideboard/Maybeboard hidden → populated → hidden transitions in all four deck layouts and the tracker; populated zero-filter-match sections, retained destinations and unchanged unrelated entries.

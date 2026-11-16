@@ -15,7 +15,7 @@ function quickAdd() {
 }
 const response=data=>({ok:true,json:async()=>({data})});
 
-test('Quick add waits for three characters, bounds suggestions and opens the shared named-deck form without adding',async()=>{
+test('Quick add waits for three characters, bounds suggestions and immediately adds one nonfoil copy',async()=>{
   const w=quickAdd(),calls=[];
   w.context.fetch=async url=>{calls.push(url);return response(Array.from({length:12},(_,i)=>({...editorDeck().cards[1].card,id:'choice-'+i,name:'Sol '+i})));};
   w.type('So');
@@ -29,9 +29,12 @@ test('Quick add waits for three characters, bounds suggestions and opens the sha
   assert.equal((w.node('#quick-add-matches').innerHTML.match(/role="option"/g)||[]).length,8);
   assert.equal(w.node('#quick-add-matches').hidden,false);
   w.node('#quick-add-matches').onclick({target:{closest:()=>({dataset:{quickAddOption:'0'}})}});
-  assert.match(w.node('#dialog').innerHTML,/<h2>Add card to deck<\/h2>/);
-  assert.match(w.node('#dialog').innerHTML,/value="editor" selected/);
-  assert.equal(w.writes.length,0);
+  assert.doesNotMatch(w.node('#dialog').innerHTML,/<h2>Add card to deck<\/h2>/);
+  assert.equal(w.writes.length,1);
+  const saved=JSON.parse(w.writes[0][1]).decks[0].cards.find(e=>e.card.id==='choice-0');
+  assert.equal(saved.qty,1);
+  assert.equal(saved.zone,'main');
+  assert.equal(saved.finish,'regular');
 });
 
 test('Quick add cancels superseded work, escapes literal names and ignores responses after navigation',async()=>{
@@ -68,5 +71,42 @@ test('Quick add separates no-match, failure and Escape dismissal; Enter alone ne
   assert.match(w.node('#quick-add-status').textContent,/dismissed/);
   w.input.onkeydown({key:'Enter',preventDefault(){prevented++;}});
   assert.equal(prevented,2);
+  assert.equal(w.writes.length,0);
+});
+
+test('Quick add preserves chosen variants, increments a matching entry once, and rolls back a failed save',async()=>{
+  const w=quickAdd();
+  const card={...editorDeck().cards[1].card,finishes:['nonfoil','foil']};
+  w.context.fetch=async()=>response([card]);
+  const choose=()=>w.node('#quick-add-matches').onclick({target:{closest:()=>({dataset:{quickAddOption:'0'}})}});
+  const persist=w.context.localStorage.setItem;
+  const before=vm.runInContext('JSON.stringify(decks)',w.context);
+  w.context.localStorage.setItem=()=>{throw Error('Quota');};
+  w.type('Ramp');await w.run();choose();
+  assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+  assert.match(w.node('#quick-add-status').textContent,/not added.*storage.*try again/);
+  assert.equal(w.writes.length,0);
+  w.context.localStorage.setItem=persist;
+  w.type('Ramp');await w.run();choose();choose();
+  let saved=JSON.parse(w.writes.at(-1)[1]);
+  assert.equal(saved.decks[0].cards[1].qty,3);
+  assert.deepEqual(saved.decks[0].cards[1].tags,['Removal','Ramp']);
+  assert.equal(w.writes.length,1);
+  vm.runInContext("decks[0].cards[1].finish='foil'",w.context);
+  w.type('Ramp');await w.run();choose();
+  saved=JSON.parse(w.writes.at(-1)[1]);
+  assert.equal(saved.decks[0].cards[1].qty,3);
+  assert.equal(saved.decks[0].cards[1].finish,'foil');
+  assert.equal(saved.decks[0].cards.at(-1).finish,'regular');
+  assert.equal(saved.decks[0].cards.at(-1).qty,1);
+});
+
+test('Quick add explains foil-only printings in the detailed form without adding',async()=>{
+  const w=quickAdd();
+  w.context.fetch=async()=>response([{...editorDeck().cards[1].card,finishes:['foil']}]);
+  w.type('Foil');await w.run();
+  w.node('#quick-add-matches').onclick({target:{closest:()=>({dataset:{quickAddOption:'0'}})}});
+  assert.match(w.node('#dialog').innerHTML,/<h2>Add card to deck<\/h2>/);
+  assert.match(w.node('#deck-card-error').textContent,/no nonfoil version.*Choose a printing and finish/);
   assert.equal(w.writes.length,0);
 });

@@ -65,6 +65,20 @@ test('catalog conversion keeps all memberships, stable sorted indexes and reject
 });
 
 const beast={id:'beast-printing',oracle_id:'7735eeba-693b-47e2-bd51-414379cf1016',name:'Beast Within',type_line:'Instant',cmc:3,color_identity:['G'],colors:['G']};
+test('ordinary lands default to Land while double-faced cards retain tag-based functions', () => {
+  assert.deepEqual(suggestedFunctions({type_line:'Basic Land — Forest',layout:'normal'}),['Land']);
+  assert.deepEqual(suggestedFunctions({type_line:'Artifact Land'}),['Land']);
+  assert.deepEqual(suggestedFunctions({...beast,type_line:'Land // Instant',layout:'modal_dfc',card_faces:[{type_line:'Land'},{type_line:'Instant'}]}),['Removal']);
+  assert.deepEqual(suggestedFunctions({type_line:'Land // Land',layout:'modal_dfc'}),[]);
+  const deck={id:'lands',name:'Lands',format:'commander',cards:[]};
+  const land={...beast,id:'forest',oracle_id:'forest',type_line:'Basic Land — Forest',finishes:['nonfoil','foil']};
+  const entry=addDeckCopies(deck,land,1,'main');
+  assert.equal(primaryRole(entry),'Land');
+  assert.equal(entry.finish,'regular');
+  assignEntryFunction(deck,entryKey(entry),'');
+  addDeckCopies(deck,land,1,'main');
+  assert.equal(primaryRole(entry),'Unassigned');
+});
 test('Beast Within receives Removal from actual memberships, independently of search context', () => {
   assert.ok(functionMemberships(beast).some(t=>t.id==='removal-permanent'));
   assert.equal(suggestedFunctions(beast)[0],'Removal');

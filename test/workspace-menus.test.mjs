@@ -64,7 +64,7 @@ test('card action menu scopes moves and details to the chosen entry and supports
   assert.match(w.node('#app').innerHTML,/Maybeboard · 2/);
 });
 
-test('function submenu lists only the named deck labels, assigns a primary without losing functions, and creates through a dialog',async()=>{
+test('function submenu lists the named deck labels, assigns a primary without losing functions, and creates through a dialog',async()=>{
   const d=editorDeck(),other={...editorDeck(),id:'other',name:'Other'};other.cards[1].tags=['Other deck only'];
   const w=workspace({savedDecks:JSON.stringify([d,other])});vm.runInContext("openDeck('editor')",w.context);
   w.context.key=core.entryKey(d.cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};

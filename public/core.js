@@ -30,6 +30,7 @@ export function functionMemberships(card) {
   return (TAG_CATALOG.memberships?.[card.oracle_id?.toLowerCase()] ?? []).map(index => TAG_CATALOG.tags[index]);
 }
 export function suggestedFunctions(card) {
+  if ((!card.layout || card.layout==='normal') && !card.card_faces?.length && !card.type_line?.includes('//') && isLand(card)) return ['Land'];
   const supported = new Set(), pending = functionMemberships(card).map(tag => tag.id);
   while (pending.length) {
     const id = pending.pop();
@@ -116,6 +117,7 @@ export function copyEntryToDeck(source, key, target, qty, zone, selection) {
 export function addDeckCopies(deck, card, qty, zone, finish, primary='', inheritedTags=[]) {
   if(!Number.isInteger(qty) || qty<1 || qty>500)throw Error('Choose 1–500 copies.');
   if(typeof zone!=='string' || !Object.hasOwn(ZONES,zone))throw Error('Choose a destination zone.');
+  finish ??= Array.isArray(card.finishes) && card.finishes.length ? deckFinishOptions(card)[0] : undefined;
   if(finish!==undefined && !deckFinishOptions(card).includes(finish))throw Error('Choose a finish available for this printing.');
   if(typeof primary!=='string' || primary.trim().length>80 || primary.includes(','))throw Error('Use one function name of up to 80 characters, without commas.');
   if(deckCardCopies(deck,card,zone)+qty>500)throw Error('Maximum 500 copies per card and zone. Nothing added.');

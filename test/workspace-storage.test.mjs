@@ -4,6 +4,24 @@ import vm from 'node:vm';
 import * as core from '../public/core.js';
 import { workspace, editorCard, editorDeck, formValues, chooseWorkspaceFile, startCardDrag, dropCard } from '../test-support/workspace.mjs';
 
+test('text deck imports initialize tag-derived and Land defaults with resolved printing metadata',async()=>{
+  const beast={...editorCard('beast','Instant'),oracle_id:'7735eeba-693b-47e2-bd51-414379cf1016',name:'Beast Within',set:'tst',collector_number:'1',finishes:['nonfoil','foil']};
+  const land={...editorCard('forest','Basic Land — Forest'),name:'Forest',set:'tst',collector_number:'2',finishes:['nonfoil']};
+  const w=workspace();
+  formValues(w,{name:'Resolved imports',format:'commander',list:'1 Beast Within\n2 Forest'});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[beast,land]})});
+  vm.runInContext('importDialog(null)',w.context);
+  const form=w.node('#import-form');
+  await form.onsubmit({preventDefault(){},target:form});
+  assert.equal(w.writes.length,0);
+  await form.onsubmit({preventDefault(){},target:form});
+  const saved=JSON.parse(w.writes.find(([key])=>key==='arcana.workspace.v2')[1]);
+  assert.deepEqual(saved.decks[0].cards.map(e=>[e.card.name,e.qty,e.tags[0],e.finish,e.card.set]),[
+    ['Beast Within',1,'Removal','regular','tst'],['Forest',2,'Land','regular','tst'],
+  ]);
+  assert.deepEqual(core.readWorkspaceFile(saved).decks[0].cards,saved.decks[0].cards);
+});
+
 test('library imports create a deck only after successful resolution, and cancelled forms cannot mutate decks',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});formValues(w,{name:'Imported',format:'modern',list:'2 Ramp spell'});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[],not_found:[{name:'Ramp spell'}]})});

@@ -1,5 +1,11 @@
 # Changelog
 
+## Card addition defaults
+
+- Default ordinary single-faced lands to Land alongside existing tag-derived functions. Offer an explicit suggested function for existing entries and an Unassigned choice without rewriting saved manual functions (#163).
+- Add one default nonfoil copy immediately from Quick add, preserve other printing/finish variants, and retain saved/live copies on a failed save. Explain printings without nonfoil in the detailed form (#166).
+- Store known default finishes for ordinary add paths and show resolved set/collector metadata in text rows regardless of entry origin, with honest unknowns for incomplete older records (#195).
+
 ## Explore filter readability
 
 - Give guided filters wider columns, more space between selected chips and repeated values, and balanced empty panel headings (#182).

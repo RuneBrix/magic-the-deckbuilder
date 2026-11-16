@@ -7,6 +7,37 @@ import { editorDeck, workspace } from '../test-support/workspace.mjs';
 const tick = () => new Promise(resolve=>setImmediate(resolve));
 const finishCard = card=>({...card,finishes:['nonfoil','foil'],prices:{usd:'1.25',usd_foil:'5.00'}});
 
+test('text rows show stored edition metadata without requiring an explicit finish, including legacy and double-faced cards',()=>{
+  const deck=editorDeck(),entry=deck.cards[1];
+  entry.card={...finishCard(entry.card),set:'tst',set_name:'Test release',collector_number:'42'};
+  const w=workspace({savedDecks:JSON.stringify([deck])});
+  vm.runInContext("openDeck('editor');editorOptions.layout='text-horizontal'",w.context);
+  let html=vm.runInContext('deckEntry(decks[0].cards[1],false)',w.context);
+  assert.match(html,/class="deck-card-variant">TST · #42<\/small>/);
+  assert.match(html,/Test release.*Nonfoil/);
+  assert.doesNotMatch(html,/>[^<]*regular[^<]*</);
+  vm.runInContext("decks[0].cards[1].card.card_faces=[{type_line:'Creature',mana_cost:'{G}'},{type_line:'Land'}];decks[0].cards[1].finish='foil'",w.context);
+  html=vm.runInContext('deckEntry(decks[0].cards[1],false)',w.context);
+  assert.match(html,/TST · #42 · Foil/);
+  vm.runInContext('delete decks[0].cards[1].finish;delete decks[0].cards[1].card.finishes;delete decks[0].cards[1].card.set;delete decks[0].cards[1].card.set_name;delete decks[0].cards[1].card.collector_number',w.context);
+  html=vm.runInContext('deckEntry(decks[0].cards[1],false)',w.context);
+  assert.match(html,/Set unknown · Finish unknown/);
+  assert.doesNotMatch(html,/TST|#42|Nonfoil/);
+});
+
+test('ordinary additions retain the resolved printing and default finish through JSON without rewriting old entries',()=>{
+  for(const [finishes,finish] of [[['nonfoil','foil'],'regular'],[['foil'],'foil'],[['foil','etched'],'foil']]){
+    const deck=editorDeck(),before=JSON.stringify(deck.cards);
+    const card={...finishCard(deck.cards[1].card),id:'new-printing',oracle_id:'new-identity',finishes};
+    const added=addDeckCopies(deck,card,1,'main');
+    assert.equal(added.finish,finish);
+    assert.equal(added.card.id,'new-printing');
+    assert.equal(JSON.stringify(deck.cards.slice(0,2)),before);
+    const restored=readWorkspaceFile(JSON.parse(JSON.stringify(workspaceFile([deck],[]))));
+    assert.deepEqual(restored.decks[0].cards.at(-1),added);
+  }
+});
+
 test('details open the exact row printing, expose stored legality and owned copies, and browse without mutating decks',async()=>{
   const d=editorDeck(), base=d.cards[1];
   base.card={...finishCard(base.card),set_name:'Stored release',lang:'ja',legalityUpdatedAt:'2026-11-10T08:00:00.000Z'};
