@@ -21,9 +21,12 @@ test('compact deck summary retains every zone through quantity edits, moves and 
   await page.locator('#editor-layout').selectOption('text-horizontal');
   await page.getByRole('button', { name: 'Add one Smoke Card 2 to Main deck', exact: true }).click();
   await expect(summary).toHaveText('51 in playing deck (1 command + 50 main) · 1 sideboard · 1 maybeboard');
-  await page.getByRole('button', { name: /Card actions for Smoke Card 2 in Main deck/ }).click();
+  // A stationary pointer can overlap another flyout trigger when the menu opens.
+  // Keep this keyboard move independent of pointer hover and platform geometry.
+  await page.mouse.move(0, 0);
+  await page.getByRole('button', { name: /Card actions for Smoke Card 2 in Main deck/ }).press('Enter');
   await page.getByRole('menuitem', { name: 'Move to…', exact: true }).press('ArrowRight');
-  await page.getByRole('menuitem', { name: 'Maybeboard', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Maybeboard', exact: true }).press('Enter');
   await expect(summary).toHaveText('1 in playing deck (1 command + 0 main) · 1 sideboard · 51 maybeboard');
   await page.reload();
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
