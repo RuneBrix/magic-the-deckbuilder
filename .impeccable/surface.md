@@ -1,4 +1,7 @@
 # Deck workspace
+
+Apply [the interface principles](../DESIGN.md#interface-principles) and [UI acceptance](../docs/DEVELOPMENT.md#ui-acceptance) within the selected scope. Preserve the established visual world. Existing stack-reveal descriptions record the baseline; #186/#188/#193 request stable browsing, concise metadata and aligned headers. Update the affected behavior, contracts and assertions together when implementing those issues; this guidance does not claim their completion.
+
 Mode: Operate. Issues #16–#18 extend the visual identity established by #9 into a shared header, dedicated deck editor and deck library; #21–#23 unify the discovery query, guided semantics and function interactions within that retained world.
 
 THESIS: Give deck building its own workspace, with a clear route into discovery and back, while keeping secondary tools within their relevant surface.

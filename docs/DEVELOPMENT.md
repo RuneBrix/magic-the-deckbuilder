@@ -35,7 +35,7 @@ npm run test:agent -- --test-name-pattern="optional viewing zones" test/workspac
 | Change | Development checks | Before PR handoff |
 | --- | --- | --- |
 | Documentation/instructions only | Links, paths, preserved rules and diff hygiene | Same checks; no app suite or browser sweep |
-| Labels, CSS or local UI behavior | Relevant rendering/interaction tests if behavior changes; inspect affected workflow | One full suite plus affected desktop/narrow-screen, keyboard and appearance checks |
+| Labels, CSS or local UI behavior | Relevant rendering/interaction tests if behavior changes; inspect affected workflow | One full suite plus affected desktop/narrow-screen, keyboard and appearance checks under [UI acceptance](#ui-acceptance) |
 | Query, statistics, deck or collection logic | Focused valid/invalid/edge-case regressions | One full suite plus affected user flow |
 | Storage, backup/import, shared navigation/theme or server | Focused failure/data-preservation checks | One full suite; broader checks across affected surfaces/appearances and request/storage boundaries |
 | Revision after a checked PR | Recheck changed behavior | Repeat affected checks; rerun full suite when shared logic, new failures or integration risk warrants it |
@@ -43,6 +43,18 @@ npm run test:agent -- --test-name-pattern="optional viewing zones" test/workspac
 Add tests for meaningful changed behavior/risk; wording-only edits need no new implementation-mirroring assertions. Pure CSS geometry requires browser inspection; markup tests alone cannot establish it. Run the relevant automated browser smoke flows when touching their modules or shared layout, then inspect changed visual details that the assertions do not cover. Share browser checks across related issues. Record actual automated/manual results and untested platforms separately. The final full suite remains required for code PRs. Use `git diff --check` on the intended changes.
 
 Loopback EACCES is an environment restriction, not a passing test or evidence of an app regression. Resolve permitted loopback access once before repeating server/launcher checks; report a remaining block accurately. Keep live-network tests opt-in. Use synthetic fixtures/disposable browser data. Preserve the player's origin/storage/server; localhost, 127.0.0.1 and different ports have separate storage. Never clear personal data to test.
+
+## UI acceptance
+
+For UI changes, apply [the interface principles](../DESIGN.md#interface-principles) within the affected workflow. Before implementation, identify the player's task, an existing pattern to reuse, variable-content/interaction risks and conflicts with selected newer criteria. Resolve routine reversible choices as agent work; material undecided product scope remains explicit.
+
+Before handoff, inspect affected desktop/narrow states and the keyboard, appearance and touch-relevant paths required by the verification table. Exercise long names/labels, large counts, empty/partial data and relevant loading/error states. During hover/focus, inspect neighboring targets and following sections before, during and after the interaction; confirm the next action stays reachable. Check first/middle/last cards and Command zone above Main deck when stack behavior changes. For repeated cards/tables/headers, compare corresponding fields and actions through relevant filtering/sorting transitions. Verify enlarged text, visible focus and access to complete values where summaries truncate.
+
+Review added visible copy against the current task: what decision, outcome or recovery does each sentence support? Improve labels and controls first; optional reference detail belongs in relevant help. Retain destination/scope, destructive consequences, actionable errors and material missing-data warnings where needed. Inspect zero/one/many selections when conditional summaries change.
+
+Fix observed violations before handoff. Add focused browser regressions for recurring geometry/interaction risks using [isolated fixtures](BROWSER_TESTING.md); target position/reachability rather than only markup or visibility. Inspect relevant transition states as well as resting screenshots: transforms can move hit targets without changing document flow. Saved screenshots and passing older assertions do not establish acceptance of revised behavior. Reuse existing checks within the batch; record actual affected-state evidence and specific unperformed checks in the PR. The existing full-suite and explicit developer merge-approval gates remain in force.
+
+When feedback establishes a reusable principle or replaces a prior decision, update its authoritative guidance and affected assertions within the selected scope; keep one-off requests in their issue/contract. For the next three comparable UI batches, use PR discussions to distinguish corrections against existing criteria from changed requirements, noting review rounds and developer review time when available. Use that evidence to improve the rule or check; no separate tracking system is required.
 
 ## Documentation ownership
 
