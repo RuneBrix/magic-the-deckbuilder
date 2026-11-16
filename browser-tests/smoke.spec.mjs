@@ -946,7 +946,7 @@ test('Explore panels submit independently and add unlisted functions inline', as
   await page.locator('#function-tags > summary').press('Enter');
   const lookup = page.getByRole('searchbox', { name: 'Find a function' });
   const matches = page.locator('#tag-match-count');
-  await expect(matches).toContainText('starting points');
+  await expect(matches).toBeHidden();
   await lookup.fill('blink');
   await expect(matches).toHaveText(/^[1-9][\d,.]* matching tags?$/);
   await expect(page.getByRole('button', { name: 'Add flicker filter', exact: true })).toBeVisible();
@@ -1130,7 +1130,7 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
   const expected='(mv>=1 OR mv>=2 OR mv>=6) (o:"Whenever ~ attacks" OR fo:"flying")';
   await expect(page.locator('#raw')).toHaveValue(expected);
   await expect.poll(()=>queries.at(-1)).toBe(expected);
-  expect(await mv.locator('.filter-rows').evaluate(el=>el.clientHeight<=244&&el.scrollHeight>el.clientHeight)).toBe(true);
+  expect(await mv.locator('.filter-rows').evaluate(el=>el.clientHeight<=280&&el.scrollHeight>el.clientHeight)).toBe(true);
   await noPageOverflow(page);
   await page.screenshot({path:testInfo.outputPath('repeatable-filters.png'),fullPage:true});
   await page.locator('#raw').fill(expected+' usd<5');
@@ -1162,12 +1162,16 @@ test('additional mana and Oracle rows can be removed by keyboard without changin
       const boxes=rows.map(row=>row.getBoundingClientRect());
       return Math.abs((boxes[1].top-boxes[0].bottom)-(boxes[2].top-boxes[1].bottom))<1 && rows.every(row=>{
         const controls=[...row.children].map(el=>el.getBoundingClientRect());
-        return controls.every(box=>Math.abs(box.top-controls[0].top)<1)&&Math.abs(controls[2].width-controls[2].height)<1;
+        const stacked=row.querySelector('.filter-row-label')?.checkVisibility();
+        const aligned=stacked ? controls[0].bottom<=controls[1].top && Math.abs(controls[1].bottom-controls[2].bottom)<1
+          : controls.every(box=>Math.abs(box.top-controls[0].top)<1);
+        return aligned&&Math.abs(controls[2].width-controls[2].height)<1;
       });
     })).toBe(true);
   }
-  await expect(oracle.getByText('Text source',{exact:true})).toHaveCount(1);
-  await expect(oracle.getByText('Rules-text phrase',{exact:true})).toHaveCount(1);
+  const stacked=await oracle.locator('.filter-column-head:visible').count()===0;
+  await expect(oracle.locator('.oracle-source>.filter-row-label:visible')).toHaveCount(stacked?3:0);
+  await expect(oracle.locator('.guided-entry .filter-row-label:visible')).toHaveCount(stacked?3:0);
   await mv.getByRole('button',{name:'Remove mana value filter 2',exact:true}).focus();
   await page.keyboard.press('Enter');
   await expect(mv.locator('input')).toHaveCount(2);
