@@ -193,20 +193,25 @@ test('owned versions load all pages automatically and never request beyond the f
   assert.deepEqual(pages,[1,2]);await w.node('#owned-load').onclick();assert.deepEqual(pages,[1,2]);assert.match(w.node('#owned-version').innerHTML,/print-2/);
 });
 
+async function checkAndFinishUpload(w,submit=w.node('#collection-import').onsubmit){
+  await submit({preventDefault(){}});
+  if(w.node('#collection-upload-submit').textContent==='Finish import')await submit({preventDefault(){}});
+}
+
 test('collection TXT reports zones and uploads valid cards after skip confirmation',async()=>{
   const w=workspace();formValues(w,{list:'Mainboard\n2 Forest\nSideboard\n1 Forest'});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
-  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),0);
+  await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection.length',w.context),0);
   assert.match(w.node('#collection-notices').innerHTML,/Could not process the following cards/);w.node('#collection-accept-ignored').checked=true;
-  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),3);
+  await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection[0].qty',w.context),3);
 });
 
 test('collection CSV upload merges matching finish and condition without a second review',async()=>{
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition\n1,Forest,Normal,NM\n2,Forest,Normal,NM\n1,Forest,Foil,LP'});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
-  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection.length',w.context),2);
+  await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection.length',w.context),2);
   assert.equal(vm.runInContext('collection[0].qty',w.context),3);assert.equal(vm.runInContext('collection[1].finish',w.context),'foil');assert.equal(vm.runInContext('collection[1].condition',w.context),'lightly_played');
 });
 
@@ -215,14 +220,14 @@ test('CSV ignored columns require confirmation and syntax validation itself send
   w.context.fetch=async()=>{calls++;return {ok:true,json:async()=>({data:[editorCard('Forest')]})};};
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');form.oninput();
   assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Not counted: Purchase Price, Tags/);assert.equal(w.node('#collection-upload-submit').disabled,true);
-  await form.onsubmit({preventDefault(){}});assert.equal(calls,0);
-  w.node('#collection-accept-ignored').checked=true;await form.onsubmit({preventDefault(){}});assert.equal(calls,1);assert.equal(vm.runInContext('collection.length',w.context),1);
+  await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,0);
+  w.node('#collection-accept-ignored').checked=true;await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,1);assert.equal(vm.runInContext('collection.length',w.context),1);
 });
 
 test('compatible stored collection printings eliminate upload network lookups',async()=>{
   const lot={card:{...editorCard('Forest'),finishes:['nonfoil']},qty:2,finish:'regular'};
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([],[lot]))});formValues(w,{list:'3 Forest'});
-  w.context.fetch=async()=>{throw Error('Network should not be needed');};vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  w.context.fetch=async()=>{throw Error('Network should not be needed');};vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);
   assert.equal(vm.runInContext('collection[0].qty',w.context),5);assert.equal(w.node('#collection-import-error').textContent||'','');
 });
 
@@ -231,15 +236,15 @@ test('separate successful uploads intentionally add again but a completed operat
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([editorDeck()],[lot]))});formValues(w,{list:'3 Forest'});
   vm.runInContext('collectionImport()',w.context);const first=w.node('#collection-import').onsubmit;
   w.node('#collection-import').oninput();assert.match(w.node('#collection-impact').textContent,/2 → 5/);assert.match(w.node('#collection-impact').textContent,/Re-uploading/);
-  await first({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),5);
-  await first({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),5);
-  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),8);
+  await checkAndFinishUpload(w,first);assert.equal(vm.runInContext('collection[0].qty',w.context),5);
+  await checkAndFinishUpload(w,first);assert.equal(vm.runInContext('collection[0].qty',w.context),5);
+  vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);assert.equal(vm.runInContext('collection[0].qty',w.context),8);
 });
 
 test('uploads never overwrite an unreadable saved workspace before explicit recovery',async()=>{
   const w=workspace({savedWorkspace:'unreadable saved data'});formValues(w,{list:'2 New'});let lookups=0;
   w.context.fetch=async()=>{lookups++;throw Error('Unexpected lookup');};
-  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);
   assert.equal(lookups,0);assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/storage warning/);
 });
 
@@ -249,11 +254,11 @@ test('replacement needs confirmation, merges duplicate rows and persists before 
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');w.node('#collection-import-mode').value='replace';form.oninput({target:{id:'collection-import-mode'}});
   assert.match(w.node('#collection-impact').textContent,/Replace 20 current copies in 1 lots with 3/);
   assert.match(w.node('#dialog').innerHTML,/Save current workspace copy/);
-  await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
+  await checkAndFinishUpload(w,form.onsubmit);assert.equal(w.writes.length,0);
   w.node('#collection-confirm-replace').checked=true;
   const persist=w.context.localStorage.setItem;w.context.localStorage.setItem=()=>{assert.equal(vm.runInContext('collection[0].qty',w.context),20);throw Object.assign(Error('Quota'),{name:'QuotaExceededError'});};
-  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),20);assert.match(w.node('#collection-import-error').textContent,/Browser storage is full/);
-  w.context.localStorage.setItem=persist;await form.onsubmit({preventDefault(){}});
+  await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection[0].qty',w.context),20);assert.match(w.node('#collection-import-error').textContent,/Browser storage is full/);
+  w.context.localStorage.setItem=persist;await checkAndFinishUpload(w,form.onsubmit);
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.deepEqual(saved.decks,[d]);assert.equal(saved.collection.length,1);assert.equal(saved.collection[0].qty,3);assert.equal(saved.collection[0].condition,'near_mint');assert.equal(saved.collection[0].finish,'regular');
 });
 
@@ -276,15 +281,15 @@ test('unresolved/malformed replacement and failed additive writes retain the ori
   for(const mode of ['replace','add']){
     const lot={card:editorCard('Owned'),qty:7,finish:'regular'},w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([],[lot]))});formValues(w,{list:'0 Bad'});
     vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');w.node('#collection-import-mode').value=mode;w.node('#collection-confirm-replace').checked=true;
-    await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
+    await checkAndFinishUpload(w,form.onsubmit);assert.equal(w.writes.length,0);
     if(mode==='replace'){
       formValues(w,{list:'0 Bad\n2 New'});form.oninput();w.node('#collection-accept-ignored').checked=true;
-      await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/every row/);
+      await checkAndFinishUpload(w,form.onsubmit);assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/every row/);
     }
     formValues(w,{list:'2 New'});form.oninput();w.context.fetch=async()=>({ok:true,json:async()=>({data:[],has_more:false})});
-    await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
+    await checkAndFinishUpload(w,form.onsubmit);assert.equal(w.writes.length,0);
     w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('New')]})});vm.runInContext('collectionImport()',w.context);w.node('#collection-import-mode').value=mode;w.node('#collection-confirm-replace').checked=true;
-    w.context.localStorage.setItem=()=>{throw Error('Quota');};await w.node('#collection-import').onsubmit({preventDefault(){}});
+    w.context.localStorage.setItem=()=>{throw Error('Quota');};await checkAndFinishUpload(w);
     assert.equal(vm.runInContext('collection[0].qty',w.context),7);assert.equal(vm.runInContext('collection.length',w.context),1);
   }
 });
@@ -325,20 +330,20 @@ test('Archidekt Normal rows accept Scryfall nonfoil finish for the reported thre
   const names=['Aang, Air Nomad',"Aang, Swift Savior // Aang and La, Ocean's Fury",'Abandoned Air Temple'];
   const csv='Quantity,Name,Finish,Condition\n1,"Aang, Air Nomad",Normal,NM\n1,"Aang, Swift Savior // Aang and La, Ocean\'s Fury",Normal,NM\n1,Abandoned Air Temple,Normal,NM';
   const w=workspace();formValues(w,{list:csv});w.context.fetch=async()=>({ok:true,json:async()=>({data:names.map(name=>({...editorCard(name),finishes:['nonfoil','foil']})),not_found:[]})});
-  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await form.onsubmit({preventDefault(){}});
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await checkAndFinishUpload(w,form.onsubmit);
   assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),3);assert.equal(vm.runInContext("collection.every(l=>l.finish==='regular'&&l.condition==='near_mint')",w.context),true);
 });
 
 test('CSV falls back from a foil-only default and a missing double-faced lookup to compatible printings',async()=>{
   const w=workspace(),name='Aang, Air Nomad',double="Aang, Swift Savior // Aang and La, Ocean's Fury";formValues(w,{list:'Quantity,Name,Finish,Condition\n1,"'+name+'",Normal,NM\n1,"'+double+'",Normal,NM'});
   w.context.fetch=async url=>({ok:true,json:async()=>url==='/api/collection'?{data:[{...editorCard(name),finishes:['foil']}],not_found:[{name:double}]}:{data:[{...editorCard(url.includes('Swift')?double:name),id:url.includes('Swift')?'double-nonfoil':'air-nonfoil',finishes:['nonfoil']}],has_more:false}});
-  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),2);
+  vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),2);
 });
 
 test('live localhost upload resolves the reported Archidekt three-card CSV in a disposable VM', {skip:process.env.ARCANA_LIVE_CSV!=='1'},async()=>{
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition\n1,"Aang, Air Nomad",Normal,NM\n1,"Aang, Swift Savior // Aang and La, Ocean\'s Fury",Normal,NM\n1,Abandoned Air Temple,Normal,NM'});
   w.context.fetch=(url,options)=>fetch('http://localhost:3000'+url,options);
-  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);
   assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),3);
 });
 
@@ -350,7 +355,7 @@ test('a missing edition catalog endpoint explains the server restart before look
     return {ok:false,status:404,json:async()=>({error:'Endpoint not found.'})};
   };
   vm.runInContext('collectionImport()',w.context);
-  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  await checkAndFinishUpload(w);
   assert.match(w.node('#collection-import-error').textContent,/CSV row 2 · Aang, Air Nomad .* Restart the Arcana CMD server/);
   assert.equal(w.node('#collection-import-preview').textContent,'');
   assert.equal(w.writes.length,0);
@@ -362,6 +367,7 @@ test('CSV set and language constraints reject mismatches and can recover from a 
   const right={...wrong,lang:'ja',set_name:'Example Set',set:'exm'};
   let fail=true, catalogRequests=0;
   w.context.fetch=async url=>{
+    if(url==='/api/collection')return {ok:true,json:async()=>({data:[right]})};
     if(url==='/api/collection-sets'){
       catalogRequests++;
       return {ok:true,json:async()=>[{code:'exm',name:'Example Set'}]};
@@ -369,13 +375,13 @@ test('CSV set and language constraints reject mismatches and can recover from a 
     assert.match(new URL(url,'http://localhost').searchParams.get('q'),/set:exm lang:ja/);
     return {ok:!fail,status:fail?404:200,json:async()=>fail?{error:'Raw upstream no match'}:{data:[right]}};
   };
-  vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
+  vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);
   assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.writes.length,0);
-  assert.match(w.node('#collection-import-error').textContent,/CSV row 2 · Forest · Example Set.*No compatible printing found/);
+  assert.match(w.node('#collection-upload-review').innerHTML,/Language · 1/);
   assert.equal(w.node('#collection-import-preview').textContent,'');
   fail=false;
   formValues(w,{list:'Count,Card,Language,Edition Name\n1,Forest,Japanese,EXAMPLE   SET'});
-  const form=w.node('#collection-import');form.oninput();await form.onsubmit({preventDefault(){}});
+  const form=w.node('#collection-import');form.oninput();await checkAndFinishUpload(w,form.onsubmit);
   assert.equal(catalogRequests,1);
   assert.equal(vm.runInContext('collection[0].card.lang',w.context),'ja');
 });
@@ -391,8 +397,53 @@ test('edition rows pick the lowest compatible collector number unless the CSV sp
     : {data:printings}});
   formValues(w,{list:'Quantity,Name,Edition Name,Collector Number\n1,"'+name+'",tla,\n1,"'+name+'",tla,0298'});
   vm.runInContext('collectionImport()',w.context);
-  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  await checkAndFinishUpload(w);
   assert.equal(vm.runInContext("collection.map(lot=>lot.card.collector_number).join(',')",w.context),'204,298');
+});
+
+test('upload scans past mismatches, recovers omitted finishes, and stages deliberate printing choices',async()=>{
+  const w=workspace(),foil={...editorCard('Cultivate'),id:'foil',oracle_id:'cultivate',set:'pw23',collector_number:'6',finishes:['foil']};
+  const regular={...foil,id:'regular',set:'m21',collector_number:'177',finishes:['nonfoil']};
+  formValues(w,{list:'Quantity,Name,Edition Name,Finish\n1,Cultivate,pw23,\n2,Cultivate,pw23,Normal\n1,Missing,pw23,\n3,Cultivate,m21,Normal'});
+  w.context.fetch=async url=>({ok:true,json:async()=>{
+    if(url==='/api/collection-sets')return [{code:'pw23',name:'Wizards Play Network 2023'},{code:'m21',name:'Core Set 2021'}];
+    if(url==='/api/collection')return {data:[regular]};
+    if(url.startsWith('/api/printings?'))return {data:[foil,regular],has_more:false};
+    return {data:[foil,regular],has_more:false};
+  }});
+  vm.runInContext('collectionImport()',w.context);
+  const submit=w.node('#collection-import').onsubmit,event={preventDefault(){}};
+  await submit(event);
+  const summary=w.node('#collection-upload-review');
+  assert.match(summary.innerHTML,/Finish · 1/);
+  assert.match(summary.innerHTML,/Card name · 1/);
+  assert.doesNotMatch(summary.innerHTML,/Cultivate|Missing/);
+  assert.equal(w.writes.length,0);
+  await submit(event);
+  assert.match(summary.innerHTML,/CSV row 3 · Cultivate/);
+  w.node('#collection-resolved-printing').value='0';
+  w.node('#collection-use-printing').onclick();
+  assert.match(summary.innerHTML,/CSV row 4 · Missing/);
+  w.node('#collection-skip-row').onclick();
+  assert.match(summary.innerHTML,/1 row explicitly skipped/);
+  assert.equal(w.writes.length,0);
+  await submit(event);
+  const saved=JSON.parse(w.writes.at(-1)[1]);
+  assert.deepEqual(saved.collection.map(lot=>[lot.card.id,lot.finish,lot.qty]),[['foil','foil',3],['regular','regular',3]]);
+});
+
+test('upload caps manual work per category after checking the whole file',async()=>{
+  const w=workspace(),missing=Array.from({length:21},(_,i)=>'1,Missing '+i);
+  formValues(w,{list:'Quantity,Name\n'+[...missing,'1,Found'].join('\n')});
+  w.context.fetch=async url=>url==='/api/collection'
+    ? {ok:true,json:async()=>({data:[editorCard('Found')]})}
+    : {ok:false,status:404,json:async()=>({error:'No match'})};
+  vm.runInContext('collectionImport()',w.context);
+  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.match(w.node('#collection-upload-review').innerHTML,/Card name · 21/);
+  assert.match(w.node('#collection-upload-review').innerHTML,/1 copy ready/);
+  assert.equal(w.node('#collection-upload-submit').disabled,true);
+  assert.equal(w.writes.length,0);
 });
 
 test('1183 edition rows use bounded batches and keep set constraints across pages',async()=>{
@@ -415,7 +466,7 @@ test('1183 edition rows use bounded batches and keep set constraints across page
     return {ok:true,json:async()=>({data,has_more:false})};
   };
   vm.runInContext('collectionImport()',w.context);
-  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  await checkAndFinishUpload(w);
   assert.equal(w.node('#collection-import-error').textContent,'');
   assert.equal(vm.runInContext('collection.length',w.context),1183);
   assert.equal(vm.runInContext("collection.every((lot,i)=>lot.card.set===(i%2?'tst':'alt'))",w.context),true);
@@ -427,10 +478,10 @@ test('large collection review resumes after cooldown without repeating completed
   const w=workspace(),names=Array.from({length:80},(_,i)=>'Card '+i);formValues(w,{list:'Quantity,Name\n'+names.map(n=>'1,'+n).join('\n')});let calls=0,time=Date.now();
   w.context.Date=class extends Date{static now(){return time;}};
   w.context.fetch=async(_url,options)=>{calls++;if(calls===2)return {ok:false,status:429,json:async()=>({error:'Paused',retryAfter:60})};return {ok:true,json:async()=>({data:JSON.parse(options.body).names.map(n=>editorCard(n)),not_found:[]})};};
-  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await form.onsubmit({preventDefault(){}});
+  vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');await checkAndFinishUpload(w,form.onsubmit);
   assert.equal(calls,2);assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.node('#collection-upload-submit').disabled,true);
-  await form.onsubmit({preventDefault(){}});assert.equal(calls,2);
-  time+=61_000;await form.onsubmit({preventDefault(){}});assert.equal(calls,3);assert.equal(vm.runInContext('collection.length',w.context),80);
+  await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,2);
+  time+=61_000;await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,3);assert.equal(vm.runInContext('collection.length',w.context),80);
 });
 
 test('EUR refresh keeps the last good finish quote and updates only exact stored printings',async()=>{

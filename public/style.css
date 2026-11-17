@@ -1145,3 +1145,9 @@ dialog:has(.owned-editor){width:900px;max-width:calc(100vw - 32px);padding:28px}
 #collection-import-preview:not(:empty),#collection-import-error:not(:empty){margin-bottom:8px}
 #collection-upload-submit{width:100%}
 #collection-mapping select{min-width:0}
+
+#collection-upload-inputs:not([hidden]),#collection-resolution-options{display:flex;flex-direction:column;gap:12px}
+#collection-upload-review{overflow-wrap:anywhere}
+#collection-upload-review ul{padding-inline-start:24px}
+
+#collection-resolution-art img{display:block;width:110px;max-width:100%;border-radius:5px;margin-block:8px}

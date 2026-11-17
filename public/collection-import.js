@@ -22,7 +22,7 @@ export function prepareCollectionUpload(text,mapping=null,editMapping=false) {
   const first=source.split(/\r?\n/,1)[0],csv=first.includes(',')&&!/^\d+x?\s+/.test(first);
   if(!csv){
     const rows=[],skipped=[];const lines=source.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);if(lines.length>5100)throw Error('Maximum 5000 card rows.');
-    for(const line of lines){try{if(/^(Main deck|Mainboard|Sideboard|Command zone|Commander|Maybeboard):?$/i.test(line))throw Error('Zone heading');rows.push(...parseCollectionImport(line));}catch{skipped.push(line);}}
+    for(const line of lines){try{if(/^(Main deck|Mainboard|Sideboard|Command zone|Commander|Maybeboard):?$/i.test(line))throw Error('Zone heading');rows.push(...parseCollectionImport(line).map(row=>({...row,finishUnspecified:true})));}catch{skipped.push(line);}}
     if(!rows.length)throw Error('No valid card rows. Use a quantity followed by a card name.');
     if(rows.length>5000)throw Error('Maximum 5000 card rows.');return {rows,skipped,accepted:['Quantity','Name'],ignored:[]};
   }
@@ -40,7 +40,7 @@ export function prepareCollectionUpload(text,mapping=null,editMapping=false) {
   const actualHeaders=mapping?columns.map(value=>value||'Ignored'):headers;
   if(![0,1].every(group=>actualHeaders.some(h=>columnGroup(h)===group)))throw Error('Assign one Quantity column and one Name column before checking syntax.');
   const data=mapping&&!mapping.header?records:records.slice(1);
-  const rows=parseCollectionRecords(actualHeaders,data,mapping?.header===false?1:2);
+  const rows=parseCollectionRecords(actualHeaders,data,mapping?.header===false?1:2,true);
   const accepted=actualHeaders.filter(h=>columnGroup(h)>=0);
   const ignored=actualHeaders.flatMap((h,i)=>columnGroup(h)>=0?[]:[mapping?(mapping.header?headers[i]:'Column '+(i+1)):h]);
   return {rows,skipped:[],accepted,ignored,csv:true,firstRow:mapping?.header===false?1:2};
@@ -53,7 +53,7 @@ export function parseCollectionImport(text) {
   const [headers,...rows]=readCollectionCsv(source);
   return parseCollectionRecords(headers||[],rows,2);
 }
-function parseCollectionRecords(headers,rows,firstRow) {
+function parseCollectionRecords(headers,rows,firstRow,upload=false) {
   if(!rows.length||rows.length>5000)throw Error('Import 1–5000 CSV rows.');
   const groups=headers.map(columnGroup);
   const [qty,name,finish,condition,language,set,collectorNumber]=collectionColumnGroups.map((_,i)=>groups.indexOf(i));
@@ -72,6 +72,6 @@ function parseCollectionRecords(headers,rows,firstRow) {
     const rawLanguage=get('language').toLowerCase(),language=languages[rawLanguage]||rawLanguage;if(language&&!['en','de','fr','it','es','pt','ja','ko','ru','zhs','zht','he','la','grc','ar','sa','ph'].includes(language))throw Error(label+'unknown language '+get('language'));
     const number=get('collectorNumber');
     if(number&&!get('set'))throw Error(label+'include a set with the collector number.');
-    return {name,qty,finish,...(number?{collectorNumber:number}:{}),...(condition?{condition}:{}),...(language?{language}:{}),...(get('set')?{set:get('set')}:{})};
+    return {name,qty,finish,...(upload&&!get('finish')?{finishUnspecified:true}:{}),...(number?{collectorNumber:number}:{}),...(condition?{condition}:{}),...(language?{language}:{}),...(get('set')?{set:get('set')}:{})};
   });
 }

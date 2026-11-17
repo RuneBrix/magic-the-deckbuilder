@@ -48,6 +48,7 @@ test('collection upload recovers from quota failure and persists 1183 rows in Ch
   await expect(submit).toBeDisabled();
   await page.locator('#collection-accept-ignored').check();
   await submit.press('Enter');
+  await page.getByRole('button',{name:'Finish import'}).click();
   await expect(page.locator('#collection-import-error')).toContainText('Browser storage is full');
   await expect(page.locator('#collection-import-preview')).toBeEmpty();
   expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(storage);
@@ -96,8 +97,10 @@ test('collection upload shows a correctable row error after an edition lookup', 
   await expect(page.locator('#collection-import-preview')).toContainText('Resolving 1 of 1');
   releaseLookup();
   await expect(page.locator('#collection-import-preview')).toBeEmpty();
-  await expect(page.locator('#collection-import-error')).toContainText('CSV row 2 · Unlisted Legendary Creature, With a Very Long Name · Smoke Test');
-  await expect(page.getByRole('button',{name:'Retry upload'})).toBeEnabled();
+  await expect(page.locator('#collection-upload-review')).toContainText('Card name · 1');
+  await page.getByRole('button',{name:'Resolve errors'}).click();
+  await expect(page.locator('#collection-upload-review')).toContainText('CSV row 2 · Unlisted Legendary Creature, With a Very Long Name · Smoke Test');
+  await expect(page.getByRole('button',{name:'Skip row'})).toBeEnabled();
   await dialogFits(page);
   await noPageOverflow(page);
   await page.screenshot({path:testInfo.outputPath('collection-upload-no-match.png')});

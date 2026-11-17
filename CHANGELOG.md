@@ -4,6 +4,7 @@
 
 - Recover CSV mappings with suggested columns, normalize edition names and codes, and show row-specific lookup errors with a correction path (#181). For set-only rows, select a compatible printing when the rules identity is clear, and accept Collector Number to select an exact variant. Batch edition-constrained lookups to reduce large CSV upload times.
 - Separate upload guidance, validation, progress, cooldown and errors. Large workspaces can retry quota-limited writes with lossless compact storage while keeping complete JSON backups compatible (#179, #180).
+- Review collection uploads before saving. Use supported finishes when the CSV omits finish, group unresolved rows by issue, and allow deliberate printing selection or row skipping before the final confirmation.
 
 ## Search clearing and activated abilities — 2026-11-17
 
