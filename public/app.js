@@ -615,7 +615,10 @@ function collectionImport(){
               const quote=value=>'"'+value.replace(/["\\]/g,'\\$&')+'"';
               let set=row.set && normalizeEdition(row.set);
               if(set){
-                const sets=await lookup('/api/collection-sets');
+                const sets=await lookup('/api/collection-sets').catch(error=>{
+                  if(error.status===404)throw Error('The running Arcana server could not load the edition catalog. Restart the Arcana CMD server, refresh this page and upload the CSV again.');
+                  throw error;
+                });
                 const exact=sets.find(entry=>entry.code===set);
                 const matches=exact?[exact]:sets.filter(entry=>normalizeEdition(entry.name)===set);
                 if(matches.length!==1)throw Error(matches.length?'Set name is ambiguous. Use the set code in the CSV.':'Set is unrecognized. Check the edition name or use its set code.');

@@ -342,6 +342,20 @@ test('live localhost upload resolves the reported Archidekt three-card CSV in a 
   assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),3);
 });
 
+test('a missing edition catalog endpoint explains the server restart before looking up printings',async()=>{
+  const w=workspace();
+  formValues(w,{list:'Quantity,Name,Edition Name\n1,"Aang, Air Nomad",Avatar: The Last Airbender Eternal'});
+  w.context.fetch=async url=>{
+    assert.equal(url,'/api/collection-sets');
+    return {ok:false,status:404,json:async()=>({error:'Endpoint not found.'})};
+  };
+  vm.runInContext('collectionImport()',w.context);
+  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.match(w.node('#collection-import-error').textContent,/CSV row 2 · Aang, Air Nomad .* Restart the Arcana CMD server/);
+  assert.equal(w.node('#collection-import-preview').textContent,'');
+  assert.equal(w.writes.length,0);
+});
+
 test('CSV set and language constraints reject mismatches and can recover from a corrected set name',async()=>{
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition,Language,Edition Name\n1,Forest,Normal,NM,Japanese,Example Set'});
   const wrong={...editorCard('Forest'),lang:'en',set_name:'Other Set',set:'oth'};
