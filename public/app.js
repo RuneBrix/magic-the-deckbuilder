@@ -180,7 +180,7 @@ function chipPicker(name) {
     return `<button type="button" class="tag-option selected" data-remove-chip="${esc(value)}" aria-label="Remove ${esc(display)} from ${esc(label)}">${esc(display)} ${icon('close',12)}</button>`;
   }).join('');
   const input = `<label>${label}<input type="text" name="${name}" data-chip-input autocomplete="off" maxlength="80" placeholder="${placeholder}" aria-controls="${name}-suggestions"></label>`;
-  return `<div class="chip-picker" data-chip-picker="${name}">${clearable(name,label,input)}<div class="chip-suggestions" id="${name}-suggestions" role="group" aria-label="${label} suggestions" hidden></div>${selected?`<div class="filter-chips">${selected}</div>`:''}</div>`;
+  return `<div class="chip-picker" data-chip-picker="${name}">${clearable(name,label+' search text',input)}<div class="chip-suggestions" id="${name}-suggestions" role="group" aria-label="${label} suggestions" hidden></div>${selected?`<div class="filter-chips">${selected}</div><button type="button" class="text-button" data-clear-chips="${name}">Clear selected ${label.toLowerCase()}</button>`:''}</div>`;
 }
 function guidedControls() {
   const selected=(value,current)=>value===current?'selected':'';
@@ -188,7 +188,7 @@ function guidedControls() {
   const match=(name,current)=>mode(name,current,[['all','Matching all (AND)'],['any','Matching any (OR)']]);
   const field=(family,title,content,{panel=family,before=''}={})=>{
     const locked=filters.locked.includes(family),summaryId=`filter-heading-${panel}`;
-    return `<details class="guided-family" data-guided-family="${panel}" ${openFilterFamilies.has(panel)?'open':''}><summary id="${summaryId}">${title}${locked?' <span>Query only</span>':''}</summary>${before}<fieldset data-family="${family}" aria-labelledby="${summaryId}" ${locked?'disabled':''}>${locked?'<p class="hint">Edit this condition in the query above.</p>':''}${content}</fieldset></details>`;
+    return `<details class="guided-family" data-guided-family="${panel}" ${openFilterFamilies.has(panel)?'open':''}><summary id="${summaryId}">${title}${locked?' <span>Query only</span>':''}</summary>${before}<fieldset data-family="${family}" aria-labelledby="${summaryId}" ${locked?'disabled':''}>${locked?'<p class="hint">Edit this condition in the query above.</p>':''}${content}<button type="button" class="text-button clear-filter-category" data-clear-category="${panel}">${family==='legal'?'Clear format filter':'Clear '+title.toLowerCase()}</button></fieldset></details>`;
   };
   const removeRow=(family,i,total)=>`<button type="button" class="remove-filter-row" data-remove-filter="${family}" data-filter-index="${i}" aria-label="Remove ${repeatableFilters[family].label} filter ${i+1}" title="Remove ${repeatableFilters[family].label} filter ${i+1}" ${total===1?'disabled':''}>${icon('close',16)}</button>`;
   const values=filters.values.length?filters.values:[repeatableFilters.mv.empty()],phrases=filters.oracle.length?filters.oracle:[repeatableFilters.oracle.empty()];
@@ -211,13 +211,14 @@ function guidedControls() {
       ${removeRow('cost',i,costs.length)}
     </div>`).join('')}</div>`;
   const formats=uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('');
-  return `<form id="guided-form"><div class="guided-grid">
+  return `<form id="guided-form"><button type="button" class="text-button" data-clear-category="guided" ${filters.error?'disabled':''}>Clear all guided filters</button><div class="guided-grid">
     ${field('name','Card name',clearable('name','name phrase',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`))}
     ${field('type','Types and subtypes',`${chipPicker('types')}<label>Combine types by${match('type-match',filters.typeMatch)}</label>${chipPicker('excludedTypes')}`)}
     ${field('keyword','Keywords',`${chipPicker('keywords')}<label>Combine keywords by${match('keyword-match',filters.keywordMatch)}</label>`)}
     ${field('mv','Mana value',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}
     ${colorPanel}
     ${field('oracle','Oracle text',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}
+    ${field('activation','Activated abilities',`<label>Activation cost includes${mode('activation-kind',filters.activation.kind,[['','Any'],['tap','Tap'],['mana','Mana payment'],['both','Tap and mana payment']])}</label><label>Mana symbols in cost (optional)<input name="activation-mana" value="${esc(filters.activation.mana)}" maxlength="40" placeholder="e.g. 3U or GG" ${['mana','both'].includes(filters.activation.kind)?'':'disabled'} aria-describedby="activation-help"></label><details class="query-help"><summary>About ability cost search</summary><p id="activation-help">Leave mana symbols blank for any mana payment. 3U matches {3}{U} within a cost; additional costs may apply. Searches symbols before the first colon in an Oracle paragraph. Keyword costs without a colon, reminder text and granted abilities in quotes are outside this aid.</p></details>`)}
     ${field('cost','Mana cost',`${costRows}<button type="button" class="text-button" data-add-filter="cost">Add mana cost</button><label>Combine mana cost filter by${match('cost-match',filters.costMatch)}</label>
       <p class="hint"><span class="generic-mana" aria-hidden="true">X</span> Generic counts the printed number. ${mana('{C}',true)} Colorless counts {C} symbols. Choose {X} for a variable cost. Hybrid and Phyrexian symbols count separately.</p>`)}
     ${field('legal','Format legality',`${clearable('legal','format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${formats}</select></label>`)}<p class="hint">Chosen independently of the tracked deck.</p>`)}
@@ -226,7 +227,7 @@ function guidedControls() {
 function uniqueFormats(){return [...new Set([...FORMATS,...(filters.legal?[filters.legal]:[])])];}
 function selectedFunctions() {
   if (!filters.tags.length) return '';
-  return `<section class="selected-functions" aria-label="Selected function filters"><div class="selected-functions-heading"><h3>Selected functions</h3><label>Combine functions by<select id="tag-match"><option value="all" ${filters.match==='all'?'selected':''}>Matching all (AND)</option><option value="any" ${filters.match==='any'?'selected':''}>Matching any (OR)</option></select></label></div><div class="active-tags">${filters.tags.map(t=>`<button class="tag-option selected" data-tag="${esc(t)}" aria-label="Remove ${esc(t)} filter">${esc(t.replaceAll('-',' '))} ${icon('close',12)}</button>`).join('')}</div></section>`;
+  return `<section class="selected-functions" aria-label="Selected function filters"><div class="selected-functions-heading"><h3>Selected functions</h3><label>Combine functions by<select id="tag-match"><option value="all" ${filters.match==='all'?'selected':''}>Matching all (AND)</option><option value="any" ${filters.match==='any'?'selected':''}>Matching any (OR)</option></select></label></div><div class="active-tags">${filters.tags.map(t=>`<button class="tag-option selected" data-tag="${esc(t)}" aria-label="Remove ${esc(t)} filter">${esc(t.replaceAll('-',' '))} ${icon('close',12)}</button>`).join('')}</div><button type="button" class="text-button" data-clear-category="tags">Clear function filters</button></section>`;
 }
 function searchPanels() {
   const matches=tagMatches();
@@ -1247,6 +1248,7 @@ function setCondition(family,model,run=true,keepForm=false){
 }
 function applyGuided(family,run=true,keepForm=false){
   const data=new FormData($('#guided-form')),model=structuredClone(filters);
+  if(family==='activation')model.activation={kind:String(data.get('activation-kind')||''),mana:String(data.get('activation-mana')||'')};
   if(['name','legal'].includes(family))model[family]=String(data.get(family)||'');
   if(family==='oracle'){model.oracle=Array.from({length:Math.max(1,filters.oracle.length)},(_,i)=>({mode:String(data.get('oracle-mode-'+i)),text:String(data.get('oracle-'+i)||'')}));model.oracleMatch=String(data.get('oracle-match'));}
   if(family==='type')model.typeMatch=String(data.get('type-match'));
@@ -1264,6 +1266,18 @@ function applyGuided(family,run=true,keepForm=false){
     model.costMatch=String(data.get('cost-match'));
   }
   return setCondition(family,model,run,keepForm);
+}
+function clearFilterCategory(category) {
+  const families=category==='guided'?SEARCH_FAMILIES.filter(key=>key!=='tags'):category==='colors'?['color','identity']:[category];
+  if(filters.error)return;
+  for(const family of families){
+    if(!filters.locked.includes(family))filters=replaceCondition(filters,family,'');
+  }
+  colorTarget='';
+  renderSearchState();
+  runGuidedSearch(true);
+  const selector=category==='tags'?'#tag-search':category==='guided'?'[data-clear-category="guided"]':'#filter-heading-'+category;
+  $(selector)?.focus({preventScroll:true});
 }
 function showChipSuggestions(input) {
   const list = document.getElementById(input.getAttribute('aria-controls'));
@@ -1331,10 +1345,14 @@ function bindGuided(){
     if(family)applyGuided(family,true,color||family==='cost'||e.target.tagName==='INPUT');
   });
   $('#guided-form')?.addEventListener('click',e=>{
-    const button=e.target.closest('button[data-clear-filter],button[data-add-chip],button[data-remove-chip]');
+    const button=e.target.closest('button[data-clear-filter],button[data-clear-chips],button[data-add-chip],button[data-remove-chip]');
     if(!button)return;
     const picker=button.closest('[data-chip-picker]');
     if(!picker){clearGuidedField(e.currentTarget,button,button.closest('[data-family]').dataset.family);return;}
+    if(button.dataset.clearFilter){
+      const input=picker.querySelector('[data-chip-input]');
+      input.value='';picker.querySelector('.chip-suggestions').hidden=true;input.focus();return;
+    }
     const selected=filters[picker.dataset.chipPicker];
     const values=button.dataset.addChip?[...selected,button.dataset.addChip]:button.dataset.removeChip?selected.filter(value=>value!==button.dataset.removeChip):[];
     editChips(picker,values);
@@ -1488,6 +1506,7 @@ $('#app').addEventListener('click',async e=>{
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
+  if(button.dataset.clearCategory){clearFilterCategory(button.dataset.clearCategory);return;}
   if(button.dataset.removeFilter){
     const family=button.dataset.removeFilter,key=repeatableFilters[family].key,index=Number(button.dataset.filterIndex);
     if(filters.locked.includes(family)||!Number.isInteger(index)||index<0||filters[key].length<2||index>=filters[key].length)return;

@@ -1,5 +1,10 @@
 # Changelog
 
+## Search clearing and activated abilities — 2026-11-17
+
+- Make chip-input X controls clear lookup text while preserving selections; add explicit selected-chip, category, all-guided and function-only clearing, retaining unrelated/query-only clauses and useful focus (#189).
+- Add an Activated abilities aid for tap, mana payment or both in the same printed cost, with optional compact mana symbols such as 3U and an editable Scryfall query. Document its bounded text-matching scope (#191).
+
 ## Stable card visuals and ownership — 2026-11-16
 
 - Use the developer-selected fixed full-card layouts and permanent price-only captions; hover/focus no longer moves card targets or following sections (#186).

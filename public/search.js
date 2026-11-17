@@ -1,15 +1,38 @@
 // A bounded Scryfall projection, not a replacement for Scryfall's search language.
 // Unknown expressions retain their source text; mixed Boolean groups lock affected controls.
-export const SEARCH_FAMILIES = ['name','oracle','type','keyword','mv','color','identity','cost','legal','tags'];
+export const SEARCH_FAMILIES = ['name','oracle','activation','type','keyword','mv','color','identity','cost','legal','tags'];
 export const COST_SYMBOLS = ['generic', ...'WUBRGCSXYZ', 'W/U','W/B','B/R','B/G','U/B','U/R','R/G','R/W','G/W','G/U','G/U/P','G/W/P',
   ...[...'WUBRG'].flatMap(color=>['C/'+color,'2/'+color,color+'/P']), 'C/P'];
 export const MAX_COST_AMOUNT = 20;
 const emptyColor = () => ({ mode: 'all', values: [] });
-const defaults = () => ({ name:'', oracle:[], oracleMatch:'all', types:[], excludedTypes:[], typeMatch:'all', keywords:[], keywordMatch:'all', values:[], valueMatch:'all', color:emptyColor(), identity:emptyColor(), cost:[], costMatch:'all', legal:'', tags:[], match:'all' });
+const defaults = () => ({ name:'', oracle:[], oracleMatch:'all', activation:{kind:'',mana:''}, types:[], excludedTypes:[], typeMatch:'all', keywords:[], keywordMatch:'all', values:[], valueMatch:'all', color:emptyColor(), identity:emptyColor(), cost:[], costMatch:'all', legal:'', tags:[], match:'all' });
 const unwrap = node => node?.kind === 'group' ? unwrap(node.child) : node;
 const unique = values => [...new Set(values)];
 const quote = value => JSON.stringify(value);
 const chipValue = value => /^[\p{L}\p{N}][\p{L}\p{N} '!’.\-]*$/u.test(value);
+
+// A bounded text search for costs before a paragraph's first colon, not an ability parser.
+const costText = '[^:.\\n"]*';
+function activationClause({kind,mana}) {
+  if(!['','tap','mana','both'].includes(kind))throw Error('Choose an activated ability cost.');
+  if(!kind)return '';
+  const payment=mana.trim().toUpperCase();
+  const symbols=payment.match(/\d+|[WUBRGCSXYZ]/g)||[];
+  if(payment&&symbols.join('')!==payment)throw Error('Enter mana as 3U or GG, using numbers and W, U, B, R, G, C, S, X, Y, Z.');
+  const tap=kind==='tap'||kind==='both',paid=kind==='mana'||kind==='both';
+  const manaPattern=payment?symbols.map(symbol=>'\\{'+symbol+'\\}').join(''):'\\sm';
+  const contains=pattern=>'(?='+costText+pattern+costText+':)';
+  return 'o:/^'+(tap?contains('\\{T\\}'):'')+(paid?contains(manaPattern):'')+costText+':/';
+}
+function activationCondition(text) {
+  if(!text.startsWith('o:/^'))return null;
+  const mana=(text.match(/\\\{(\d+|[WUBRGCSXYZ])\\\}/g)||[]).join('').replace(/[\\{}]/g,'');
+  for(const kind of ['tap','mana','both']){
+    const value={kind,mana};
+    if(activationClause(value)===text)return {family:'activation',mode:'all',values:[value]};
+  }
+  return null;
+}
 
 function tokenize(source) {
   const tokens=[];
@@ -62,6 +85,7 @@ function costThreshold(text) {
 }
 function term(text){
   let m;
+  const activation=activationCondition(text);if(activation)return activation;
   if((m=text.match(/^(name|n|o|oracle|fo|fulloracle|-?t|-?type|kw|keyword|otag|f|format):(.+)$/i))){
     const value=textValue(m[2]);if(value===null||!value.trim())return null;
     const operator=m[1].toLowerCase();
@@ -96,7 +120,7 @@ function classify(node){
   const parts=node.children.map(classify);if(parts.some(p=>!p)||parts.some(p=>p.family!==parts[0].family))return null;
   const family=parts[0].family,mode=node.kind==='or'?'any':'all';
   if(family==='type')return combineTypes(parts,mode);
-  if(['name','legal'].includes(family))return null;
+  if(['name','legal','activation'].includes(family))return null;
   if(family==='cost'&&mode==='all'&&parts.length===2&&parts.every(part=>part.values.length===1)){
     const [lower,upper]=parts.map(part=>part.values[0]);
     if(lower.op==='>='&&upper.op==='<='&&lower.symbol===upper.symbol&&lower.amount===upper.amount){
@@ -178,6 +202,7 @@ function costClause({symbol,op,amount}) {
   return op==='='&&count>0?`(${minimum(count)} ${ceiling})`:ceiling;
 }
 export function conditionQuery(state,family){
+  if(family==='activation')return activationClause(state.activation);
   if(family==='type'&&[...state.types,...state.excludedTypes].some(t=>!chipValue(t)))throw Error('Use type or subtype names.');
   if(family==='keyword'&&state.keywords.some(t=>!chipValue(t)))throw Error('Use keyword ability names.');
   if(family==='mv'&&state.values.some(v=>v.value!==''&&(!Number.isFinite(Number(v.value))||Number(v.value)<0||!['<','>','<=','>=','=','!='].includes(v.op))))throw Error('Use a nonnegative mana value and a supported comparison.');
@@ -201,5 +226,5 @@ export function conditionQuery(state,family){
   return '';
 }
 export function searchOptions(state){
-  return SEARCH_FAMILIES.filter(key=>!state.locked.includes(key)&&state.parts.some(p=>p.condition?.family===key)).map(key=>({key,label:({name:'Card name',oracle:'Oracle phrase',type:'Types',keyword:'Keywords',mv:'Mana values',color:'Card colors',identity:'Color identity',cost:'Mana cost',legal:'Format legality',tags:'Function tags'})[key]}));
+  return SEARCH_FAMILIES.filter(key=>!state.locked.includes(key)&&state.parts.some(p=>p.condition?.family===key)).map(key=>({key,label:({name:'Card name',oracle:'Oracle phrase',activation:'Activated abilities',type:'Types',keyword:'Keywords',mv:'Mana values',color:'Card colors',identity:'Color identity',cost:'Mana cost',legal:'Format legality',tags:'Function tags'})[key]}));
 }

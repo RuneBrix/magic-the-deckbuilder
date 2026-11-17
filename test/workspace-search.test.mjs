@@ -4,6 +4,43 @@ import vm from 'node:vm';
 import * as core from '../public/core.js';
 import { workspace, editorCard, editorDeck, formValues, chooseWorkspaceFile, startCardDrag, dropCard } from '../test-support/workspace.mjs';
 
+test('clearing chip lookup text preserves selected types and the query', () => {
+  const w=workspace();
+  vm.runInContext("filters=parseQuery('t:elf otag:ramp usd<5'); render()",w.context);
+  const input={value:'crea',focus(){}};
+  const picker={dataset:{chipPicker:'types'},closest:()=>({dataset:{family:'type'}}),querySelector:()=>input};
+  const button={dataset:{clearFilter:'types'},closest:()=>picker};
+  w.node('#guided-form').elements={namedItem:()=>input};
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
+  w.node('#guided-form').click({target:{closest:()=>button}});
+  assert.equal(input.value,'');
+  assert.equal(vm.runInContext('filters.query',w.context),'t:elf otag:ramp usd<5');
+  assert.equal(w.writes.length,0);
+});
+
+test('category, guided and function clearing preserve unrelated and query-only clauses', async () => {
+  const w=workspace();
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
+  const query='t:elf -t:artifact keyword:flying mv>=2 mv<=5 c>=G id<=GU o:"draw" f:modern otag:ramp usd<5 o:/add/';
+  vm.runInContext('filters=parseQuery('+JSON.stringify(query)+'); render()',w.context);
+  await w.node('#app').click({target:{closest:()=>({dataset:{clearCategory:'mv'}})}});
+  let state=vm.runInContext('filters',w.context);
+  assert.equal(state.values.length,0);assert.deepEqual([...state.types],['elf']);
+  assert.ok(state.query.includes('o:"draw"'));assert.ok(state.query.includes('o:/add/'));
+  await w.node('#app').click({target:{closest:()=>({dataset:{clearCategory:'colors'}})}});
+  state=vm.runInContext('filters',w.context);
+  assert.equal(state.color.values.length,0);assert.equal(state.identity.values.length,0);
+  await w.node('#app').click({target:{closest:()=>({dataset:{clearCategory:'guided'}})}});
+  assert.equal(vm.runInContext('filters.query',w.context),'o:"draw" otag:ramp usd<5 o:/add/');
+  await w.node('#app').click({target:{closest:()=>({dataset:{clearCategory:'tags'}})}});
+  assert.equal(vm.runInContext('filters.query',w.context),'o:"draw" usd<5 o:/add/');
+  vm.runInContext("filters=parseQuery('(t:elf OR otag:ramp) mv=2 usd<5'); clearFilterCategory('guided')",w.context);
+  assert.equal(vm.runInContext('filters.query',w.context),'(t:elf OR otag:ramp) usd<5');
+  vm.runInContext("filters=parseQuery('(t:elf'); clearFilterCategory('guided')",w.context);
+  assert.equal(vm.runInContext('filters.query',w.context),'(t:elf');
+  assert.equal(w.writes.length,0);
+});
+
 test('search disclosures start closed and preserve the opened state and selected filters across renders', () => {
   const w = workspace();
   assert.doesNotMatch(w.node('#app').innerHTML, /id="search-filters"[^>]*\bopen\b/);
