@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {workspaceFile,readWorkspaceFile,validateCollection,parseEuroCents,collectionReport} from '../public/core.js';
+import {workspaceFile,readWorkspaceFile,compactStoredWorkspace,readStoredWorkspace,validateCollection,parseEuroCents,collectionReport} from '../public/core.js';
 
 const deck={id:'d',name:'Portable',format:'commander',updated:'2026-11-01T12:00:00.000Z',bracket:3,cards:[{qty:2,tags:['Draw','Ramp'],zone:'maybeboard',card:{id:'print',oracle_id:'rules',name:'Example',type_line:'Creature',cmc:2,color_identity:['G'],card_faces:[{name:'Front',oracle_text:'Draw a card.',image_uris:{normal:'https://cards.scryfall.io/normal/front.jpg'}}],set:'tst',collector_number:'4'}}]};
 test('versioned and legacy workspace files retain every stored field without mutation',()=>{
@@ -13,6 +13,19 @@ test('unsupported, malformed and partially invalid workspace files reject the en
   for(const value of [null,{}, {...file,format:'other'}, {...file,version:3},{...file,version:'1'},{...file,exportedAt:null},{...file,decks:[deck,{...deck,id:'bad',cards:[{...deck.cards[0],qty:0}]}]}])assert.throws(()=>readWorkspaceFile(value));
   assert.throws(()=>readWorkspaceFile({...file,decks:[deck,deck]}));
   assert.deepEqual(readWorkspaceFile(workspaceFile([])),{decks:[],collection:null});
+});
+
+test('packed local storage preserves complete UTF-16 workspace data and reads old packing',()=>{
+  const text='Æther 🐉 \n \t \u0000 \\ " '+String.fromCharCode(0xd800);
+  const collection=Array.from({length:64},(_,i)=>({
+    card:{...deck.cards[0].card,id:'lot-'+i,oracle_text:text.repeat(80)+i},qty:2,finish:'foil',
+  }));
+  const file=workspaceFile([deck],collection),plain=JSON.stringify(file),packed=compactStoredWorkspace(plain);
+  assert.ok(packed.length<plain.length/2);
+  assert.deepEqual(readStoredWorkspace(packed),readWorkspaceFile(file));
+  const old='arcana-packed-v1\t'+JSON.stringify(['"arcana-workspace"'])+'\n'+plain.replace('"arcana-workspace"','\t0\t');
+  assert.deepEqual(readStoredWorkspace(old),readWorkspaceFile(file));
+  assert.throws(()=>readStoredWorkspace('arcana-packed-v2\t\u0000\u0001\u0005'),/Invalid compressed workspace/);
 });
 
 test('version 2 files preserve validated owned-card lots while older files leave collection unchanged',()=>{

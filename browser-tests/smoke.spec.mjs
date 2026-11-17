@@ -18,7 +18,7 @@ test('collection upload recovers from quota failure and persists 1183 rows in Ch
   const length = 1183;
   const incoming = Array.from({length}, (_, index) => ({
     ...cards[1], id:'upload-'+index, oracle_id:'upload-'+index, name:'Import Card '+index,
-    oracle_text:'Synthetic repeated card text for the quota test. '.repeat(105),
+    oracle_text:'Synthetic shared card information for the quota test. '.repeat(100)+'Variant '+index,
   }));
   const byName = new Map(incoming.map(card => [card.name, card]));
   await page.route('**/api/collection', route => {
@@ -60,7 +60,7 @@ test('collection upload recovers from quota failure and persists 1183 rows in Ch
   await expect(page.getByRole('dialog')).not.toBeVisible();
   const [plain, compact] = await page.evaluate(() => window.workspaceWrites.slice(-2));
   expect(plain).toBeGreaterThan(5 * 1024 * 1024);
-  expect(compact).toBeLessThan(plain);
+  expect(compact).toBeLessThan(plain / 2);
   testInfo.annotations.push({type:'storage measurement',description:plain+' ordinary → '+compact+' packed code units'});
   await expect(page.locator('.collection-total')).toContainText('1197 copies total');
   await page.reload();
