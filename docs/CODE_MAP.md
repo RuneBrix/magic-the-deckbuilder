@@ -18,4 +18,6 @@ Choose a boundary, locate symbols with `rg -n`, and inspect affected source/test
 
 Workspace tests are grouped into `workspace-appearance`, `workspace-collection`, `workspace-deck`, `workspace-details`, `workspace-drag`, `workspace-legality`, `workspace-menus`, `workspace-search` and `workspace-storage`, each ending in `.test.mjs`. Run only the affected file while developing. Locate names with `rg -n '^test\(' test --glob 'workspace-*.test.mjs'`; optional `--test-name-pattern` narrows further. `test-support/workspace.mjs` owns the shared VM harness and synthetic deck helpers. These tests exercise state/markup; browser smoke covers real rendering/navigation/dialog geometry.
 
+For lookup or import changes, select edge cases from [card lookup and import verification](DEVELOPMENT.md#card-lookup-and-import-verification) after locating the affected entry point and its tests.
+
 `public/view-utils.js` owns shared side-effect-free formatting. View modules take explicit inputs and return markup; app.js retains browser state, event binding and persistence. Core re-exports the import parsers for existing callers. Generated `public/tag-catalog.js` is data; use catalog helpers/tests or bounded queries instead of dumping it into context.

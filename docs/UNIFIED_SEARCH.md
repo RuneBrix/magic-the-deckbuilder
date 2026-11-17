@@ -74,6 +74,8 @@ Selected functions, their divider and their all/any choice appear inside Browse 
 
 ## Verification
 
+When a search change affects actions on a result, verify the handoff from discovery to card identity and printing selection with the [card lookup and import verification cases](DEVELOPMENT.md#card-lookup-and-import-verification).
+
 Native Node regression checks cover Boolean projection, exact source preservation, unknown/negated expressions, repeated edits, all seven color/mana examples, literal symbol counts, typed-tag removal, partial syntax, cursor/input preservation, pending-response cancellation, independent format filtering and existing broadening/deck/appearance/server behavior.
 
 On 2026-10-28, all seven required color/minimum-symbol query examples returned successful live responses through the existing Scryfall proxy. The returned batches (up to 175 cards per query, all 28 for `{C}`) matched the expected property on the card or at least one face; this is sampling, not whole-dataset certification. Windows desktop and 390px light/dark browser checks cover query/control synchronization, numeric editing, cursor insertion, tag removal/matching, relationship browsing and responsive layouts. The Impeccable engine/detector is unavailable; no detector pass is claimed. macOS/Safari remain untested.
