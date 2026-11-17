@@ -34,6 +34,7 @@ export function budgetPanel(d, collection, state, comparison, sort = { key: 'car
     <header class="planning-heading">
       <h2>Ownership & costs</h2>
       <div class="planning-actions">
+        <button class="secondary" data-action="match-owned" ${!report.demand || !collection.length ? 'disabled' : ''}>Match owned printings…</button>
         <button class="secondary" data-action="refresh-prices" ${refreshing || !report.demand ? 'disabled' : ''}>${refreshing ? 'Refreshing…' : 'Refresh '+currencySymbol(currency)+' prices'}</button>
         <button class="secondary" data-action="cheapest-prices" ${!checking && !canCompare ? 'disabled' : ''}>${checking ? 'Cancel price check' : comparison?.status==='cancelled' ? 'Resume price check' : comparison?.status==='failed' ? 'Retry incomplete scans' : 'Check cheapest printings'}</button>
         <button class="secondary" data-action="apply-cheapest" ${checking || !report.demand || !comparison?.quotes?.size ? 'disabled' : ''}>Apply cheapest printings…</button>
