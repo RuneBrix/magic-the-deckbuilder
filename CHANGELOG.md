@@ -1,5 +1,10 @@
 # Changelog
 
+## Collection upload recovery — 2026-11-17
+
+- Recover CSV mappings with suggested columns, normalize edition names and codes, and show row-specific lookup errors with a correction path (#181).
+- Separate upload guidance, validation, progress, cooldown and errors. Large workspaces can retry quota-limited writes with lossless compact storage while keeping complete JSON backups compatible (#179, #180).
+
 ## Search clearing and activated abilities — 2026-11-17
 
 - Make chip-input X controls clear lookup text while preserving selections; add explicit selected-chip, category, all-guided and function-only clearing, retaining unrelated/query-only clauses and useful focus (#189).

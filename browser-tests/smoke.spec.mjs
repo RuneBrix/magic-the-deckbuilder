@@ -14,6 +14,95 @@ async function dialogFits(page) {
 }
 test.beforeEach(async ({ page }) => prepareApp(page));
 
+test('collection upload recovers from quota failure and persists 1183 rows in Chromium', async ({page},testInfo) => {
+  const length = 1183;
+  const incoming = Array.from({length}, (_, index) => ({
+    ...cards[1], id:'upload-'+index, oracle_id:'upload-'+index, name:'Import Card '+index,
+    oracle_text:'Synthetic repeated card text for the quota test. '.repeat(105),
+  }));
+  const byName = new Map(incoming.map(card => [card.name, card]));
+  await page.route('**/api/collection', route => {
+    const {names} = route.request().postDataJSON();
+    return route.fulfill({json:{data:names.map(name => byName.get(name)),not_found:[]}});
+  });
+  const storage = await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    window.allowWorkspaceWrite = false;
+    window.workspaceWrites = [];
+    Storage.prototype.setItem = function(key, value) {
+      if (key === 'arcana.workspace.v2') {
+        window.workspaceWrites.push(value.length);
+        if (!window.allowWorkspaceWrite) throw new DOMException('Test quota', 'QuotaExceededError');
+      }
+      return original.call(this, key, value);
+    };
+    return localStorage.getItem('arcana.workspace.v2');
+  });
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  await page.getByRole('button',{name:'Upload card list'}).click();
+  await page.getByRole('textbox',{name:'Card list or CSV'}).fill(
+    'Count,Card,Notes\n'+incoming.map(({name},i) => (i<11?2:1)+','+name+',Ignore').join('\n')
+  );
+  const submit = page.locator('#collection-upload-submit');
+  await expect(page.locator('#collection-syntax')).toContainText('1183 card rows · 1194 copies');
+  await expect(submit).toBeDisabled();
+  await page.locator('#collection-accept-ignored').check();
+  await submit.press('Enter');
+  await expect(page.locator('#collection-import-error')).toContainText('Browser storage is full');
+  await expect(page.locator('#collection-import-preview')).toBeEmpty();
+  expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(storage);
+  await dialogFits(page);
+  await noPageOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('collection-upload-quota.png')});
+  await page.evaluate(() => { window.allowWorkspaceWrite = true; });
+  await submit.click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  const [plain, compact] = await page.evaluate(() => window.workspaceWrites.slice(-2));
+  expect(plain).toBeGreaterThan(5 * 1024 * 1024);
+  expect(compact).toBeLessThan(plain);
+  testInfo.annotations.push({type:'storage measurement',description:plain+' ordinary → '+compact+' packed code units'});
+  await expect(page.locator('.collection-total')).toContainText('1197 copies total');
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Smoke Garden',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  await expect(page.locator('.collection-total')).toContainText('1197 copies total');
+  const portable = await page.evaluate(async () => {
+    const {readStoredWorkspace,workspaceFile,readWorkspaceFile} = await import('/core.js');
+    const state = readStoredWorkspace(localStorage.getItem('arcana.workspace.v2'));
+    const file = workspaceFile(state.decks,state.collection);
+    const restored = readWorkspaceFile(JSON.parse(JSON.stringify(file)));
+    return {version:file.version,lotCount:restored.collection.length,card:restored.collection[1].card};
+  });
+  expect(portable).toEqual({version:2,lotCount:1184,card:incoming[0]});
+});
+
+test('collection upload shows a correctable row error after an edition lookup', async ({page},testInfo) => {
+  await page.route('**/api/collection-sets',route=>route.fulfill({json:[{code:'tst',name:'Smoke Test'}]}));
+  let releaseLookup;
+  await page.route('**/api/search?**',async route=>{
+    await new Promise(resolve=>{releaseLookup=resolve;});
+    await route.fulfill({status:404,json:{error:'Raw upstream no match'}});
+  });
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  await page.getByRole('button',{name:'Upload card list'}).click();
+  await page.getByRole('textbox',{name:'Card list or CSV'}).fill('Qty,Item,Edition_Name\n1,"Unlisted Legendary Creature, With a Very Long Name",Smoke Test');
+  await expect(page.locator('#collection-syntax')).toContainText('Waiting for column mappings');
+  await expect(page.locator('[data-csv-column="0"]')).toHaveValue('Quantity');
+  await expect(page.locator('[data-csv-column="2"]')).toHaveValue('Edition Name');
+  await page.locator('[data-csv-column="1"]').selectOption('Name');
+  await page.getByRole('button',{name:'Check syntax'}).press('Enter');
+  await page.locator('#collection-upload-submit').click();
+  await expect.poll(()=>Boolean(releaseLookup)).toBe(true);
+  await expect(page.locator('#collection-import-preview')).toContainText('Resolving 1 of 1');
+  releaseLookup();
+  await expect(page.locator('#collection-import-preview')).toBeEmpty();
+  await expect(page.locator('#collection-import-error')).toContainText('CSV row 2 · Unlisted Legendary Creature, With a Very Long Name · Smoke Test');
+  await expect(page.getByRole('button',{name:'Retry upload'})).toBeEnabled();
+  await dialogFits(page);
+  await noPageOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('collection-upload-no-match.png')});
+});
+
 test('primary function editing and temporary reverse faces preserve stored card data', async ({page,isMobile},testInfo)=>{
   await page.evaluate(()=>{
     const key='arcana.workspace.v2', data=JSON.parse(localStorage.getItem(key));

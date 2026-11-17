@@ -1,5 +1,5 @@
 export { parseImport } from './deck-import.js';
-export { readCollectionCsv, COLLECTION_COLUMNS, prepareCollectionUpload, parseCollectionImport } from './collection-import.js';
+export { readCollectionCsv, COLLECTION_COLUMNS, prepareCollectionUpload, parseCollectionImport, normalizeEdition } from './collection-import.js';
 import { COMMANDER_BRACKETS } from './commander-brackets.js';
 export { COMMANDER_BRACKETS };
 import { TAG_CATALOG } from './tag-catalog.js';
@@ -610,6 +610,36 @@ export function workspaceFile(decks, collection=null) {
   const file={format:'arcana-workspace',version:collection===null?1:2,exportedAt:new Date().toISOString(),decks:validateBackup(decks)};
   if(collection!==null)file.collection=validateCollection(collection);
   return file;
+}
+
+// Only local storage uses this representation. Portable files always use workspaceFile().
+export function compactStoredWorkspace(json) {
+  const token = /"(?:[^"\\]|\\.)*"/g;
+  const counts = new Map();
+  for (const value of json.matchAll(token)) {
+    if (value[0].length >= 8) counts.set(value[0], (counts.get(value[0]) || 0) + 1);
+  }
+  const table = [...counts].filter(([, count]) => count >= 8).map(([value]) => value);
+  const indexes = new Map(table.map((value, index) => [value, index.toString(36)]));
+  // Literal newlines and tabs cannot occur inside the JSON string tokens.
+  const packed = 'arcana-packed-v1\t' + JSON.stringify(table) + '\n' + json.replace(token, value =>
+    indexes.has(value) ? '\t' + indexes.get(value) + '\t' : value
+  );
+  return packed.length < json.length ? packed : json;
+}
+
+export function readStoredWorkspace(value) {
+  const prefix = 'arcana-packed-v1\t';
+  if (value.startsWith(prefix)) {
+    const split = value.indexOf('\n');
+    const table = JSON.parse(value.slice(prefix.length, split));
+    value = value.slice(split + 1).replace(/\t([0-9a-z]+)\t/g, (_, index) => {
+      const token = table[parseInt(index, 36)];
+      if (typeof token !== 'string') throw Error('Invalid compressed workspace.');
+      return token;
+    });
+  }
+  return readWorkspaceFile(JSON.parse(value));
 }
 export function readWorkspaceFile(data) {
   if (Array.isArray(data)) return {decks:validateBackup(data),collection:null};

@@ -12,8 +12,11 @@ export function readCollectionCsv(text) {
   return rows;
 }
 export const COLLECTION_COLUMNS=['Quantity','Name','Finish','Condition','Language','Edition Name'];
-const collectionColumnGroups=[['quantity','qty'],['name','card name'],['finish','foil'],['condition'],['language','lang'],['edition name','set name','edition code','set code','edition','set']];
-export function prepareCollectionUpload(text,mapping=null) {
+const collectionColumnGroups=[['quantity','qty','count','quantity owned'],['name','card name','card'],['finish','foil'],['condition'],['language','lang'],['edition name','set name','edition code','set code','edition','set','expansion']];
+const normalizeColumn = value => value.trim().toLowerCase().replace(/[_\s-]+/g, ' ');
+const columnGroup = value => collectionColumnGroups.findIndex(group => group.includes(normalizeColumn(value)));
+export const normalizeEdition = value => value.normalize('NFKC').replace(/[’‘]/g, "'").trim().replace(/\s+/g, ' ').toLowerCase();
+export function prepareCollectionUpload(text,mapping=null,editMapping=false) {
   if(typeof text!=='string'||text.length>15_000_000)throw Error('Upload a text or CSV file up to 15 MB.');
   const source=text.replace(/^\uFEFF/,'').trim();if(!source)throw Error('Choose a file or paste card data.');
   const first=source.split(/\r?\n/,1)[0],csv=first.includes(',')&&!/^\d+x?\s+/.test(first);
@@ -24,38 +27,45 @@ export function prepareCollectionUpload(text,mapping=null) {
     if(rows.length>5000)throw Error('Maximum 5000 card rows.');return {rows,skipped,accepted:['Quantity','Name'],ignored:[]};
   }
   const records=readCollectionCsv(source);if(records.length>5001)throw Error('Maximum 5000 card rows.');
-  const normalize=value=>value.trim().toLowerCase().replace(/[_-]/g,' ');
-  const headers=records[0]||[],hasHeaders=collectionColumnGroups.slice(0,2).every(group=>headers.some(h=>group.includes(normalize(h))));
-  if(!hasHeaders&&!mapping)return {needsMapping:true,preview:records.slice(0,3),width:headers.length,suggestHeaders:!/^\d+$/.test(headers[0]||'')};
+  const headers=records[0]||[];
+  const hasHeaders=[0,1].every(group=>headers.some(h=>columnGroup(h)===group));
+  const suggestHeaders=headers.some(h=>columnGroup(h)>=0)||!headers.some(h=>/^\d+$/.test(h.trim()));
+  const mappingOptions={
+    preview:records.slice(0,3),width:headers.length,suggestHeaders,
+    suggestedColumns:headers.map(h=>suggestHeaders?(COLLECTION_COLUMNS[columnGroup(h)]||''):(/^\d+$/.test(h.trim())?'Quantity':'')),
+  };
+  if(editMapping||!hasHeaders&&!mapping)return {needsMapping:true,...mappingOptions};
   const columns=mapping?mapping.columns:headers;
   if(!Array.isArray(columns)||columns.length!==headers.length)throw Error('Map every CSV column.');
   const actualHeaders=mapping?columns.map(value=>value||'Ignored'):headers;
-  if(!collectionColumnGroups.slice(0,2).every(group=>actualHeaders.some(h=>group.includes(normalize(h)))))throw Error('Assign one Quantity column and one Name column before checking syntax.');
+  if(![0,1].every(group=>actualHeaders.some(h=>columnGroup(h)===group)))throw Error('Assign one Quantity column and one Name column before checking syntax.');
   const data=mapping&&!mapping.header?records:records.slice(1);
-  const encode=values=>values.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',');
-  const rows=parseCollectionImport([encode(actualHeaders),...data.map(encode)].join('\n'));
-  const accepted=actualHeaders.filter(h=>collectionColumnGroups.some(group=>group.includes(normalize(h))));
-  const ignored=actualHeaders.flatMap((h,i)=>collectionColumnGroups.some(group=>group.includes(normalize(h)))?[]:[mapping?(mapping.header?headers[i]:'Column '+(i+1)):h]);
-  return {rows,skipped:[],accepted,ignored};
+  const rows=parseCollectionRecords(actualHeaders,data,mapping?.header===false?1:2);
+  const accepted=actualHeaders.filter(h=>columnGroup(h)>=0);
+  const ignored=actualHeaders.flatMap((h,i)=>columnGroup(h)>=0?[]:[mapping?(mapping.header?headers[i]:'Column '+(i+1)):h]);
+  return {rows,skipped:[],accepted,ignored,csv:true,firstRow:mapping?.header===false?1:2};
 }
 export function parseCollectionImport(text) {
   if(typeof text!=='string'||text.length>15_000_000)throw Error('Collection import exceeds 15 MB.');
   const source=text.replace(/^\uFEFF/,'');
-  const header=source.split(/\r?\n/,1)[0];
-  if(!/(?:^|,)\s*"?(?:quantity|qty)"?\s*(?:,|$)/i.test(header)||!/(?:^|,)\s*"?(?:name|card name)"?\s*(?:,|$)/i.test(header))return parseImport(source).map(row=>({...row,finish:'regular'}));
-  const rows=readCollectionCsv(source);
-  const headers=rows.shift()?.map(value=>value.trim().toLowerCase().replace(/[_-]/g,' '));
-  if(!headers||!rows.length||rows.length>5000)throw Error('Import 1–5000 CSV rows.');
-  const column=(...names)=>headers.findIndex(h=>names.includes(h));
-  const cols={qty:column('quantity','qty'),name:column('name','card name'),finish:column('finish','foil'),condition:column('condition'),language:column('language','lang'),set:column('edition name','set name','edition code','set code','edition','set')};
+  const first=source.trimStart().split(/\r?\n/,1)[0];
+  if(!first.includes(',')||/^\d+x?\s+/.test(first))return parseImport(source).map(row=>({...row,finish:'regular'}));
+  const [headers,...rows]=readCollectionCsv(source);
+  return parseCollectionRecords(headers||[],rows,2);
+}
+function parseCollectionRecords(headers,rows,firstRow) {
+  if(!rows.length||rows.length>5000)throw Error('Import 1–5000 CSV rows.');
+  const groups=headers.map(columnGroup);
+  const [qty,name,finish,condition,language,set]=collectionColumnGroups.map((_,i)=>groups.indexOf(i));
+  const cols={qty,name,finish,condition,language,set};
   if(cols.qty<0||cols.name<0)throw Error('CSV needs Quantity and Name columns.');
-  for(const names of [['quantity','qty'],['name','card name'],['finish','foil'],['condition'],['language','lang'],['edition name','set name','edition code','set code','edition','set']])if(headers.filter(h=>names.includes(h)).length>1)throw Error('Duplicate or conflicting CSV columns: '+names.join(' / '));
+  for(const [index,names] of collectionColumnGroups.entries())if(groups.indexOf(index)!==groups.lastIndexOf(index))throw Error('Duplicate or conflicting CSV columns: '+names.join(' / '));
   const finishes={normal:'regular',regular:'regular',nonfoil:'regular','non-foil':'regular',false:'regular',no:'regular','0':'regular',foil:'foil',true:'foil',yes:'foil','1':'foil',etched:'etched','etched foil':'etched','foil etched':'etched'};
   const conditions={nm:'near_mint',mint:'near_mint','near mint':'near_mint',lp:'lightly_played','lightly played':'lightly_played',mp:'moderately_played','moderately played':'moderately_played',hp:'heavily_played','heavily played':'heavily_played',damaged:'damaged',dmg:'damaged',d:'damaged'};
   const languages={english:'en',german:'de',french:'fr',italian:'it',spanish:'es',portuguese:'pt',japanese:'ja',korean:'ko',russian:'ru','simplified chinese':'zhs','traditional chinese':'zht',hebrew:'he',latin:'la',greek:'grc',arabic:'ar',sanskrit:'sa',phyrexian:'ph'};
   return rows.map((values,index)=>{
-    const get=key=>cols[key]<0?'':(values[cols[key]]||'').trim(),label='CSV row '+(index+2)+': ';
-    if(values.length!==headers.length)throw Error(label+'column count differs from header.');
+    const get=key=>cols[key]<0?'':(values[cols[key]]||'').trim(),label='CSV row '+(index+firstRow)+': ';
+    if(values.length!==headers.length)throw Error(label+'expected '+headers.length+' columns, found '+values.length+'. Check for missing fields or quote values that contain commas.');
     const qty=Number(get('qty')),name=get('name');if(!/^\d+$/.test(get('qty'))||!Number.isInteger(qty)||qty<1||qty>9999||!name)throw Error(label+'invalid quantity or name.');
     const finish=finishes[get('finish').toLowerCase()||'normal'];if(!finish)throw Error(label+'unknown finish '+get('finish'));
     const rawCondition=get('condition').toLowerCase().replace(/_/g,' '),condition=rawCondition?conditions[rawCondition]:undefined;if(rawCondition&&!condition)throw Error(label+'unknown condition '+get('condition'));

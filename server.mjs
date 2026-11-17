@@ -28,6 +28,9 @@ export const server = createServer(async (req, res) => {
         const page = Number(url.searchParams.get('page') || 1);
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(oracle || '') || !Number.isInteger(page) || page < 1 || page > 1000) throw Object.assign(new Error('Invalid printing parameters.'), { status: 400 });
         data = await scryfall('/cards/search?' + new URLSearchParams({ q: 'oracleid:' + oracle + ' game:paper', page, unique: 'prints', order: 'released', dir: 'desc' }));
+      } else if (url.pathname === '/api/collection-sets' && req.method === 'GET') {
+        const sets = await scryfall('/sets');
+        data = sets.data.map(({code,name})=>({code,name}));
       } else if (url.pathname === '/api/collection' && req.method === 'POST') {
         let raw = '';
         for await (const chunk of req) { raw += chunk; if (raw.length > 32_000) throw Object.assign(new Error('Import is too large.'), { status: 413 }); }

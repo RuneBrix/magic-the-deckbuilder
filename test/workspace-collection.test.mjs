@@ -251,8 +251,8 @@ test('replacement needs confirmation, merges duplicate rows and persists before 
   assert.match(w.node('#dialog').innerHTML,/Save current workspace copy/);
   await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
   w.node('#collection-confirm-replace').checked=true;
-  const persist=w.context.localStorage.setItem;w.context.localStorage.setItem=()=>{assert.equal(vm.runInContext('collection[0].qty',w.context),20);throw Error('Quota');};
-  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),20);assert.match(w.node('#collection-import-error').textContent,/Quota/);
+  const persist=w.context.localStorage.setItem;w.context.localStorage.setItem=()=>{assert.equal(vm.runInContext('collection[0].qty',w.context),20);throw Object.assign(Error('Quota'),{name:'QuotaExceededError'});};
+  await form.onsubmit({preventDefault(){}});assert.equal(vm.runInContext('collection[0].qty',w.context),20);assert.match(w.node('#collection-import-error').textContent,/Browser storage is full/);
   w.context.localStorage.setItem=persist;await form.onsubmit({preventDefault(){}});
   const saved=JSON.parse(w.writes.at(-1)[1]);assert.deepEqual(saved.decks,[d]);assert.equal(saved.collection.length,1);assert.equal(saved.collection[0].qty,3);assert.equal(saved.collection[0].condition,'near_mint');assert.equal(saved.collection[0].finish,'regular');
 });
@@ -279,7 +279,7 @@ test('unresolved/malformed replacement and failed additive writes retain the ori
     await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
     if(mode==='replace'){
       formValues(w,{list:'0 Bad\n2 New'});form.oninput();w.node('#collection-accept-ignored').checked=true;
-      await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);assert.match(w.node('#collection-syntax').textContent,/every row/);
+      await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/every row/);
     }
     formValues(w,{list:'2 New'});form.oninput();w.context.fetch=async()=>({ok:true,json:async()=>({data:[],has_more:false})});
     await form.onsubmit({preventDefault(){}});assert.equal(w.writes.length,0);
@@ -342,12 +342,28 @@ test('live localhost upload resolves the reported Archidekt three-card CSV in a 
   assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),3);
 });
 
-test('CSV set and language constraints reject mismatches before any collection write',async()=>{
+test('CSV set and language constraints reject mismatches and can recover from a corrected set name',async()=>{
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish,Condition,Language,Edition Name\n1,Forest,Normal,NM,Japanese,Example Set'});
   const wrong={...editorCard('Forest'),lang:'en',set_name:'Other Set',set:'oth'};
-  w.context.fetch=async()=>({ok:true,json:async()=>({data:[wrong],not_found:[],has_more:false})});
+  const right={...wrong,lang:'ja',set_name:'Example Set',set:'exm'};
+  let fail=true, catalogRequests=0;
+  w.context.fetch=async url=>{
+    if(url==='/api/collection-sets'){
+      catalogRequests++;
+      return {ok:true,json:async()=>[{code:'exm',name:'Example Set'}]};
+    }
+    assert.match(new URL(url,'http://localhost').searchParams.get('q'),/set:exm lang:ja/);
+    return {ok:!fail,status:fail?404:200,json:async()=>fail?{error:'Raw upstream no match'}:{data:[right]}};
+  };
   vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit({preventDefault(){}});
-  assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.writes.length,0);assert.match(w.node('#collection-import-error').textContent,/set\/language/);
+  assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.writes.length,0);
+  assert.match(w.node('#collection-import-error').textContent,/CSV row 2 · Forest · Example Set.*No compatible printing found/);
+  assert.equal(w.node('#collection-import-preview').textContent,'');
+  fail=false;
+  formValues(w,{list:'Count,Card,Language,Edition Name\n1,Forest,Japanese,EXAMPLE   SET'});
+  const form=w.node('#collection-import');form.oninput();await form.onsubmit({preventDefault(){}});
+  assert.equal(catalogRequests,1);
+  assert.equal(vm.runInContext('collection[0].card.lang',w.context),'ja');
 });
 
 test('large collection review resumes after cooldown without repeating completed 75-name batches',async()=>{
