@@ -604,6 +604,15 @@ function collectionImport(){
         cards.push(...data.data);for(const c of data.data){importCardPool.set(c.id,c);if(importCardPool.size>5000)importCardPool.delete(importCardPool.keys().next().value);}
       }
       const remoteIndex=indexCards(cards);
+      const printingResults=new Map();
+      let editions;
+      const setCode=row=>{
+        const edition=normalizeEdition(row.set);
+        const matches=editions.get(edition)||[];
+        if(matches.length!==1)throw Error(matches.length?'Set name is ambiguous. Use the set code in the CSV.':'Set is unrecognized. Check the edition name or use its set code.');
+        return matches[0];
+      };
+      const printingTerm=(row,set)=>'!"'+row.name.split(' // ')[0].replace(/["\\]/g,'\\$&')+'"'+(set?' set:'+set:'')+(row.language?' lang:'+row.language:'');
       for(const row of parsed){
         if(!form.isConnected||$('#dialog').open===false)return;
         if(version!==revision)throw Error('List changed; review it again.');
@@ -615,23 +624,49 @@ function collectionImport(){
           else if(row.set||row.language){
             const cacheKey=printingKey(row);
             if(cache.has(cacheKey))card=cache.get(cacheKey);else{
-              const quote=value=>'"'+value.replace(/["\\]/g,'\\$&')+'"';
-              let set=row.set && normalizeEdition(row.set);
-              if(set){
+              if(row.set&&!editions){
                 const sets=await lookup('/api/collection-sets').catch(error=>{
                   if(error.status===404)throw Error('The running Arcana server could not load the edition catalog. Restart the Arcana CMD server, refresh this page and upload the CSV again.');
                   throw error;
                 });
-                const exact=sets.find(entry=>entry.code===set);
-                const matches=exact?[exact]:sets.filter(entry=>normalizeEdition(entry.name)===set);
-                if(matches.length!==1)throw Error(matches.length?'Set name is ambiguous. Use the set code in the CSV.':'Set is unrecognized. Check the edition name or use its set code.');
-                set=matches[0].code;
+                editions=new Map();
+                for(const {code,name} of sets){
+                  const key=normalizeEdition(name);
+                  editions.set(key,[...(editions.get(key)||[]),code]);
+                }
+                for(const {code} of sets)editions.set(code,[code]);
               }
-              const q='game:paper !'+quote(row.name.split(' // ')[0])+(set?' set:'+set:'')+(row.language?' lang:'+row.language:'')+' unique:prints';
-              const result=await lookup('/api/search?'+new URLSearchParams({q,order:'name'}));
-              const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!set||c.set===set)&&sameNumber(c,row)&&(!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)));
-              if(!candidates.length)throw Error('No printing matches these CSV fields. Check the set, language, finish and collector number.');
-              if(result.has_more||new Set(candidates.map(c=>c.oracle_id||c.id)).size!==1)throw Error('The CSV fields match more than one possible card. Include the set and collector number to identify the printing.');
+              const set=row.set?setCode(row):'';
+              if(!printingResults.has(cacheKey)){
+                const batch=new Map();
+                let queryLength=32;
+                for(const next of parsed.slice(resolved.length,resolved.length+20)){
+                  const key=printingKey(next);
+                  if((!next.set&&!next.language)||local.has(key)||cache.has(key)||printingResults.has(key)||batch.has(key))continue;
+                  const codes=next.set?editions?.get(normalizeEdition(next.set)):[''];
+                  if(codes?.length!==1)continue;
+                  const term=printingTerm(next,codes[0]);
+                  if(batch.size&&queryLength+term.length+6>1450)break;
+                  batch.set(key,term);
+                  queryLength+=term.length+6;
+                }
+                const q='game:paper unique:prints ('+[...new Set(batch.values())].map(term=>'('+term+')').join(' OR ')+')';
+                const batchCards=[];
+                for(let page=1;;page++){
+                  if(version!==revision)throw Error('List changed; review it again.');
+                  const result=await lookup('/api/search?'+new URLSearchParams({q,order:'name',page})).catch(error=>{
+                    if(error.status===404&&page===1)return {data:[]};
+                    throw error;
+                  });
+                  batchCards.push(...result.data);
+                  if(!result.has_more)break;
+                }
+                const index=indexCards(batchCards);
+                for(const key of batch.keys())printingResults.set(key,index);
+              }
+              const candidates=(printingResults.get(cacheKey).get(row.name.toLowerCase())||[]).filter(c=>(!row.language||c.lang===row.language)&&(!set||c.set===set)&&sameNumber(c,row)&&(!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)));
+              if(!candidates.length)throw Error('No compatible printing found. Check the card name, set, language, finish and collector number.');
+              if(new Set(candidates.map(c=>c.oracle_id||c.id)).size!==1)throw Error('The CSV fields match more than one possible card. Include the set and collector number to identify the printing.');
               candidates.sort((a,b)=>String(a.collector_number||'').localeCompare(String(b.collector_number||''),undefined,{numeric:true})||a.id.localeCompare(b.id));
               card=candidates[0];cache.set(cacheKey,card);
             }

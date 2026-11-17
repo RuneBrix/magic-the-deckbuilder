@@ -395,6 +395,34 @@ test('edition rows pick the lowest compatible collector number unless the CSV sp
   assert.equal(vm.runInContext("collection.map(lot=>lot.card.collector_number).join(',')",w.context),'204,298');
 });
 
+test('1183 edition rows use bounded batches and keep set constraints across pages',async()=>{
+  const w=workspace(),names=Array.from({length:1183},(_,i)=>'Edition Card '+i);
+  formValues(w,{list:'Quantity,Name,Edition Name\n'+names.map((name,i)=>'1,'+name+','+(i%2?'tst':'alt')).join('\n')});
+  let searches=0,catalogs=0;
+  w.context.fetch=async url=>{
+    if(url==='/api/collection-sets'){
+      catalogs++;
+      return {ok:true,json:async()=>[{code:'tst',name:'Test'},{code:'alt',name:'Alternate'}]};
+    }
+    searches++;
+    const params=new URL(url,'http://localhost').searchParams,q=params.get('q');
+    const terms=[...q.matchAll(/!"(Edition Card \d+)" set:(tst|alt)/g)];
+    assert.ok(q.length<=1500);
+    assert.ok(terms.length>0&&terms.length<=20);
+    const data=terms.map(([,name,set])=>({...editorCard(name),set,collector_number:'1',finishes:['nonfoil']}));
+    if(searches===1)return {ok:true,json:async()=>({data:data.slice(0,1),has_more:true})};
+    if(params.get('page')==='2')return {ok:true,json:async()=>({data:data.slice(1),has_more:false})};
+    return {ok:true,json:async()=>({data,has_more:false})};
+  };
+  vm.runInContext('collectionImport()',w.context);
+  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(w.node('#collection-import-error').textContent,'');
+  assert.equal(vm.runInContext('collection.length',w.context),1183);
+  assert.equal(vm.runInContext("collection.every((lot,i)=>lot.card.set===(i%2?'tst':'alt'))",w.context),true);
+  assert.equal(catalogs,1);
+  assert.equal(searches,61);
+});
+
 test('large collection review resumes after cooldown without repeating completed 75-name batches',async()=>{
   const w=workspace(),names=Array.from({length:80},(_,i)=>'Card '+i);formValues(w,{list:'Quantity,Name\n'+names.map(n=>'1,'+n).join('\n')});let calls=0,time=Date.now();
   w.context.Date=class extends Date{static now(){return time;}};
