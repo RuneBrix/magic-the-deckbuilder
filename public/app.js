@@ -563,6 +563,7 @@ function collectionImport(){
       $('#collection-impact').textContent=mode()==='replace'?'Replace '+current+' current copies in '+collection.length+' lots with '+copies+' uploaded copies.':'Add '+copies+' copies: '+current+' → '+(current+copies)+' owned copies. Re-uploading this file adds them again.';
       $('#collection-syntax').textContent='Syntax valid · '+result.rows.length+' card rows · '+result.rows.reduce((n,r)=>n+r.qty,0)+' copies.';
       $('#collection-notices').innerHTML='<p>Processed columns: '+result.accepted.map(esc).join(', ')+'.</p>'+(result.ignored.length?'<p>Not counted: '+result.ignored.map(esc).join(', ')+'.</p>':'')+(result.skipped.length?'<h3>Could not process the following cards</h3><ul>'+result.skipped.map(line=>'<li>'+esc(line)+'</li>').join('')+'</ul><p>These lines will be skipped. Valid card rows can still be uploaded.</p>':'')+(result.ignored.length||result.skipped.length?'<label class="import-confirm"><input type="checkbox" id="collection-accept-ignored"> Continue with only the processed columns and valid card rows</label>':'');
+      if(result.rows.some(row=>row.set&&!row.collectorNumber))$('#collection-notices').innerHTML+='<p>With no collector number, Arcana uses a matching printing from the specified edition.</p>';
       const confirm=$('#collection-accept-ignored'),needsConfirm=result.ignored.length||result.skipped.length;
       if(needsConfirm)confirm.onchange=()=>{button.disabled=!confirm.checked||pending||Date.now()<cooldownUntil;};
       button.disabled=Boolean(needsConfirm)||pending||Date.now()<cooldownUntil;button.textContent='Upload';
@@ -584,13 +585,15 @@ function collectionImport(){
       const pool=[...importCardPool.values(),...collection.map(l=>l.card),...decks.flatMap(d=>d.cards.map(e=>e.card))];
       const indexCards=values=>{const index=new Map();for(const c of values)for(const name of new Set([c.name,...(c.card_faces||[]).map(f=>f.name)].filter(Boolean))){const key=name.toLowerCase();if(!index.has(key))index.set(key,[]);index.get(key).push(c);}return index;};
       const localIndex=indexCards(pool);
-      const matchesRow=(c,row)=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(v=>v&&normalizeEdition(v)===normalizeEdition(row.set)))&&c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish);
+      const printingKey=row=>JSON.stringify([row.name,row.set,row.language,row.finish,row.collectorNumber]);
+      const sameNumber=(card,row)=>!row.collectorNumber||String(card.collector_number||'').localeCompare(row.collectorNumber,undefined,{numeric:true,sensitivity:'base'})===0;
+      const matchesRow=(c,row)=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(v=>v&&normalizeEdition(v)===normalizeEdition(row.set)))&&sameNumber(c,row)&&c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish);
       const local=new Map();
       for(const row of parsed){
         const matches=new Map((localIndex.get(row.name.toLowerCase())||[]).filter(c=>matchesRow(c,row)).map(c=>[c.id,c]));
-        if(matches.size===1)local.set(JSON.stringify([row.name,row.set,row.language,row.finish]),matches.values().next().value);
+        if(matches.size===1)local.set(printingKey(row),matches.values().next().value);
       }
-      const names=[...new Set(parsed.filter(row=>!row.set&&!row.language&&!local.has(JSON.stringify([row.name,row.set,row.language,row.finish]))).map(p=>p.name.split(' // ')[0]))],cards=[],resolved=[];
+      const names=[...new Set(parsed.filter(row=>!row.set&&!row.language&&!local.has(printingKey(row))).map(p=>p.name.split(' // ')[0]))],cards=[],resolved=[];
       for(let i=0;i<names.length;i+=75){
         if(!form.isConnected||$('#dialog').open===false)return;if(version!==revision)throw Error('List changed; review it again.');
         progress('Looking up names '+(i+1)+'–'+Math.min(i+75,names.length)+' of '+names.length+'. Completed lookups are retained for retry.');
@@ -606,11 +609,11 @@ function collectionImport(){
         if(version!==revision)throw Error('List changed; review it again.');
         const label=(csv?'CSV row '+(firstRow+resolved.length)+' · ':'')+row.name+(row.set?' · '+row.set:'');
         progress('Resolving '+(resolved.length+1)+' of '+parsed.length+' card rows · '+row.name);
-        let card=local.get(JSON.stringify([row.name,row.set,row.language,row.finish]));
+        let card=local.get(printingKey(row));
         try {
           if(card){/* Reuse the already verified local printing. */}
           else if(row.set||row.language){
-            const cacheKey=JSON.stringify([row.name,row.set,row.language,row.finish]);
+            const cacheKey=printingKey(row);
             if(cache.has(cacheKey))card=cache.get(cacheKey);else{
               const quote=value=>'"'+value.replace(/["\\]/g,'\\$&')+'"';
               let set=row.set && normalizeEdition(row.set);
@@ -626,8 +629,10 @@ function collectionImport(){
               }
               const q='game:paper !'+quote(row.name.split(' // ')[0])+(set?' set:'+set:'')+(row.language?' lang:'+row.language:'')+' unique:prints';
               const result=await lookup('/api/search?'+new URLSearchParams({q,order:'name'}));
-              const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!set||c.set===set)&&(!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)));
-              if(result.has_more||candidates.length!==1)throw Error('The set/language and finish must identify one supported printing. Check the CSV fields or add the printing manually.');
+              const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!set||c.set===set)&&sameNumber(c,row)&&(!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)));
+              if(!candidates.length)throw Error('No printing matches these CSV fields. Check the set, language, finish and collector number.');
+              if(result.has_more||new Set(candidates.map(c=>c.oracle_id||c.id)).size!==1)throw Error('The CSV fields match more than one possible card. Include the set and collector number to identify the printing.');
+              candidates.sort((a,b)=>String(a.collector_number||'').localeCompare(String(b.collector_number||''),undefined,{numeric:true})||a.id.localeCompare(b.id));
               card=candidates[0];cache.set(cacheKey,card);
             }
           }else{

@@ -380,6 +380,21 @@ test('CSV set and language constraints reject mismatches and can recover from a 
   assert.equal(vm.runInContext('collection[0].card.lang',w.context),'ja');
 });
 
+test('edition rows pick the lowest compatible collector number unless the CSV specifies one',async()=>{
+  const w=workspace(),name="Aang, Swift Savior // Aang and La, Ocean's Fury";
+  const printings=['298','359','204','347'].map(number=>({
+    ...editorCard(name),id:'tla-'+number,oracle_id:'aang',set:'tla',set_name:'Avatar: The Last Airbender',
+    collector_number:number,finishes:number==='359'?['foil']:['nonfoil','foil'],
+  }));
+  w.context.fetch=async url=>({ok:true,json:async()=>url==='/api/collection-sets'
+    ? [{code:'tla',name:'Avatar: The Last Airbender'}]
+    : {data:printings}});
+  formValues(w,{list:'Quantity,Name,Edition Name,Collector Number\n1,"'+name+'",tla,\n1,"'+name+'",tla,0298'});
+  vm.runInContext('collectionImport()',w.context);
+  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(vm.runInContext("collection.map(lot=>lot.card.collector_number).join(',')",w.context),'204,298');
+});
+
 test('large collection review resumes after cooldown without repeating completed 75-name batches',async()=>{
   const w=workspace(),names=Array.from({length:80},(_,i)=>'Card '+i);formValues(w,{list:'Quantity,Name\n'+names.map(n=>'1,'+n).join('\n')});let calls=0,time=Date.now();
   w.context.Date=class extends Date{static now(){return time;}};

@@ -11,8 +11,8 @@ export function readCollectionCsv(text) {
   }
   return rows;
 }
-export const COLLECTION_COLUMNS=['Quantity','Name','Finish','Condition','Language','Edition Name'];
-const collectionColumnGroups=[['quantity','qty','count','quantity owned'],['name','card name','card'],['finish','foil'],['condition'],['language','lang'],['edition name','set name','edition code','set code','edition','set','expansion']];
+export const COLLECTION_COLUMNS=['Quantity','Name','Finish','Condition','Language','Edition Name','Collector Number'];
+const collectionColumnGroups=[['quantity','qty','count','quantity owned'],['name','card name','card'],['finish','foil'],['condition'],['language','lang'],['edition name','set name','edition code','set code','edition','set','expansion'],['collector number','collector no','card number']];
 const normalizeColumn = value => value.trim().toLowerCase().replace(/[_\s-]+/g, ' ');
 const columnGroup = value => collectionColumnGroups.findIndex(group => group.includes(normalizeColumn(value)));
 export const normalizeEdition = value => value.normalize('NFKC').replace(/[’‘]/g, "'").trim().replace(/\s+/g, ' ').toLowerCase();
@@ -56,8 +56,8 @@ export function parseCollectionImport(text) {
 function parseCollectionRecords(headers,rows,firstRow) {
   if(!rows.length||rows.length>5000)throw Error('Import 1–5000 CSV rows.');
   const groups=headers.map(columnGroup);
-  const [qty,name,finish,condition,language,set]=collectionColumnGroups.map((_,i)=>groups.indexOf(i));
-  const cols={qty,name,finish,condition,language,set};
+  const [qty,name,finish,condition,language,set,collectorNumber]=collectionColumnGroups.map((_,i)=>groups.indexOf(i));
+  const cols={qty,name,finish,condition,language,set,collectorNumber};
   if(cols.qty<0||cols.name<0)throw Error('CSV needs Quantity and Name columns.');
   for(const [index,names] of collectionColumnGroups.entries())if(groups.indexOf(index)!==groups.lastIndexOf(index))throw Error('Duplicate or conflicting CSV columns: '+names.join(' / '));
   const finishes={normal:'regular',regular:'regular',nonfoil:'regular','non-foil':'regular',false:'regular',no:'regular','0':'regular',foil:'foil',true:'foil',yes:'foil','1':'foil',etched:'etched','etched foil':'etched','foil etched':'etched'};
@@ -70,6 +70,8 @@ function parseCollectionRecords(headers,rows,firstRow) {
     const finish=finishes[get('finish').toLowerCase()||'normal'];if(!finish)throw Error(label+'unknown finish '+get('finish'));
     const rawCondition=get('condition').toLowerCase().replace(/_/g,' '),condition=rawCondition?conditions[rawCondition]:undefined;if(rawCondition&&!condition)throw Error(label+'unknown condition '+get('condition'));
     const rawLanguage=get('language').toLowerCase(),language=languages[rawLanguage]||rawLanguage;if(language&&!['en','de','fr','it','es','pt','ja','ko','ru','zhs','zht','he','la','grc','ar','sa','ph'].includes(language))throw Error(label+'unknown language '+get('language'));
-    return {name,qty,finish,...(condition?{condition}:{}),...(language?{language}:{}),...(get('set')?{set:get('set')}:{})};
+    const number=get('collectorNumber');
+    if(number&&!get('set'))throw Error(label+'include a set with the collector number.');
+    return {name,qty,finish,...(number?{collectorNumber:number}:{}),...(condition?{condition}:{}),...(language?{language}:{}),...(get('set')?{set:get('set')}:{})};
   });
 }
