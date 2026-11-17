@@ -6,6 +6,46 @@ import { TYPE_CATALOG, KEYWORD_CATALOG } from '../public/filter-catalog.js';
 
 const edit=(query,family,changes)=>{const state=parseQuery(query);return replaceCondition(state,family,conditionQuery({...state,...changes},family));};
 
+test('activated cost aid round-trips with Elf and functions and matches costs rather than effects',()=>{
+  const make=(kind,mana='')=>edit('t:elf otag:ramp usd<5','activation',{activation:{kind,mana}});
+  // Expand Scryfall's documented mana shorthand for local fixture matching.
+  const matches=(state,text)=>new RegExp(conditionQuery(state,'activation').slice(3,-1).replaceAll('\\sm','\\{[0-9WUBRGCSXYZ/]+\\}'),'im').test(text);
+  const tap=make('tap'),paid=make('mana'),both=make('both'),specific=make('mana','3u');
+  for(const state of [tap,paid,both,specific]){
+    assert.equal(state.error,'');
+    assert.deepEqual(state.types,['elf']);assert.deepEqual(state.tags,['ramp']);
+    assert.equal(state.opaque[0],'usd<5');
+    assert.deepEqual(parseQuery(state.query).activation,state.activation);
+    assert.equal(edit(state.query,'legal',{legal:'modern'}).activation.kind,state.activation.kind);
+    assert.equal(replaceCondition(state,'activation','').query,'t:elf otag:ramp usd<5');
+  }
+  assert.ok(matches(tap,'{T}: Add {G}.'));
+  assert.ok(matches(tap,'Vigilance\n{3}{U}, {T}, Discard a card: Draw a card.'));
+  assert.ok(matches(paid,'{3}{U}: Draw a card.'));
+  assert.ok(matches(paid,'{G/U}, Sacrifice a creature: Draw a card.'));
+  assert.ok(matches(both,'{3}{U}, {T}: Draw a card.'));
+  assert.ok(matches(both,'{T}, Pay {G}: Draw a card.'));
+  assert.ok(matches(specific,'{3}{U}, {T}: Draw a card.'));
+  assert.equal(specific.activation.mana,'3U');
+  for(const state of [tap,paid,both,specific]){
+    for(const text of ['Add {G}.','Whenever you cast a spell, add {U}.']){
+      assert.equal(matches(state,text),false,JSON.stringify({state:state.activation,text}));
+    }
+  }
+  assert.ok(matches(paid,'{0}: Add {T}.'));
+  assert.equal(matches(tap,'{0}: Add {T}.'),false);
+  assert.equal(matches(both,'{T}: Add {G}.\n{3}{U}: Draw a card.'),false);
+  assert.equal(matches(paid,'{T}: Add {G}.'),false);
+  assert.equal(matches(specific,'{U}: Add {3}{U}.'),false);
+  assert.equal(matches(tap,'Creatures have "{T}: Add {G}."'),false);
+  assert.throws(()=>make('mana','3{U}'));
+  assert.throws(()=>make('mana','3/U'));
+  const mixed=parseQuery('('+tap.query+' OR t:goblin)');
+  assert.ok(mixed.locked.includes('activation'));
+  assert.throws(()=>replaceCondition(mixed,'activation',''));
+  assert.ok(parseQuery(conditionQuery(tap,'activation')+' '+conditionQuery(paid,'activation')).locked.includes('activation'));
+});
+
 test('supported Boolean groups project and edits preserve every unrelated source expression',()=>{
   const query='(t:instant OR t:sorcery) AND mv>=2 mv<=4 (otag:ramp OR otag:draw) f:modern usd<5 o:/draw (one|two) cards/';
   const f=parseQuery(query);

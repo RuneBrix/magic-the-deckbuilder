@@ -1009,14 +1009,17 @@ test('type and keyword chips suggest locally, synchronize, and clear independent
   await include.press('Escape');
   await expect(page.locator('#types-suggestions')).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath('explore-type-keyword-chips.png') });
-  await page.getByRole('button', { name: 'Clear Types and subtypes', exact: true }).press('Enter');
+  await page.getByRole('button', { name: 'Clear Types and subtypes search text', exact: true }).press('Enter');
   await expect(include).toBeFocused();
   await expect(include).toHaveValue('');
+  await expect(raw).toHaveValue('usd<5 o:/draw a card/ (t:"elf" OR t:"creature") -t:"artifact" (keyword:"first strike" OR keyword:"flying")');
+  await page.getByRole('button', { name: 'Clear selected types and subtypes', exact: true }).click();
+  await expect(include).toBeFocused();
   await expect(raw).toHaveValue('usd<5 o:/draw a card/ -t:"artifact" (keyword:"first strike" OR keyword:"flying")');
   await page.getByRole('button', { name: 'Remove Artifact from Do not include', exact: true }).click();
   await expect(exclude).toBeFocused();
   await expect(raw).toHaveValue('usd<5 o:/draw a card/ (keyword:"first strike" OR keyword:"flying")');
-  await page.getByRole('button', { name: 'Clear Keyword abilities', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear selected keyword abilities', exact: true }).click();
   await expect(raw).toHaveValue('usd<5 o:/draw a card/');
   await raw.fill('(t:creature OR -t:artifact) -kw:flying');
   await expect(include).toBeDisabled();
@@ -1210,4 +1213,67 @@ test('additional mana and Oracle rows can be removed by keyboard without changin
     await expect(section.locator('[data-remove-filter]')).toBeDisabled();
   }
   await expect(page.locator('#raw')).toHaveValue('usd<5');
+});
+
+
+test('scoped clearing and activated abilities preserve the editable query and focus', async ({ page, isMobile }, testInfo) => {
+  await page.getByRole('button', {name:'Explore cards',exact:true}).click();
+  const raw=page.locator('#raw');
+  await raw.fill('t:elf t:creature -t:artifact keyword:flying mv>=2 mv<=5 c>=G id<=GU o:"draw" otag:ramp usd<5');
+  await page.locator('#search-filters > summary').click();
+  await page.locator('#filter-heading-activation').click();
+  await page.getByLabel('Activation cost includes').selectOption('tap');
+  await expect(page.locator('#result-count')).toHaveText('3 cards found');
+  await expect(raw).toHaveValue(/t:elf t:creature.*otag:ramp usd<5/);
+  await page.getByLabel('Activation cost includes').selectOption('both');
+  const payment=page.getByLabel('Mana symbols in cost (optional)');
+  await payment.fill('3U');
+  await payment.press('Tab');
+  await expect(page.locator('#result-count')).toHaveText('3 cards found');
+  await expect(payment).toHaveValue('3U');
+  const submitted=await raw.inputValue();
+  expect(submitted).toContain('\\{T\\}');
+  expect(submitted).toContain('\\{3\\}\\{U\\}');
+  await payment.fill('3/U');
+  await expect(page.locator('#guided-error')).toContainText('Enter mana as 3U or GG');
+  await expect(raw).toHaveValue(submitted);
+  await payment.fill('3U');
+  await expect(page.locator('#guided-error')).toBeEmpty();
+  await page.locator('#filter-heading-mv').click();
+  await page.getByRole('button',{name:'Clear mana value',exact:true}).press('Enter');
+  await expect(page.locator('#filter-heading-mv')).toBeFocused();
+  await expect(raw).not.toHaveValue(/mv[<>=]/);
+  await expect(raw).toHaveValue(/otag:ramp/);
+  await page.locator('#filter-heading-colors').click();
+  await page.getByRole('button',{name:'Clear colors',exact:true}).click();
+  await expect(raw).not.toHaveValue(/c>=G|id<=GU/);
+  await page.locator('#filter-heading-activation').scrollIntoViewIfNeeded();
+  const ability=page.locator('[data-guided-family="activation"]');
+  await ability.screenshot({path:testInfo.outputPath('activated-ability-filters.png')});
+  if(!isMobile){
+    await page.evaluate(()=>document.documentElement.style.zoom=2);
+    await noPageOverflow(page);
+    await payment.focus();
+    await expect(payment).toBeFocused();
+    await ability.screenshot({path:testInfo.outputPath('activated-ability-enlarged.png')});
+    await page.evaluate(()=>document.documentElement.style.zoom=1);
+  }
+  const clearGuided=page.getByRole('button',{name:'Clear all guided filters',exact:true});
+  if(isMobile)await clearGuided.tap();else await clearGuided.click();
+  await expect(page.getByRole('button',{name:'Clear all guided filters',exact:true})).toBeFocused();
+  await expect(raw).toHaveValue('otag:ramp usd<5');
+  await page.locator('#function-tags > summary').click();
+  const lookup=page.getByRole('searchbox',{name:'Find a function'});
+  await lookup.fill('removal');
+  await page.getByRole('button',{name:'Clear function filters',exact:true}).press('Enter');
+  await expect(lookup).toBeFocused();
+  await expect(lookup).toHaveValue('removal');
+  await expect(raw).toHaveValue('usd<5');
+  await raw.fill('(t:elf OR otag:ramp) mv=2 o:/add/ usd<5');
+  await page.getByRole('button',{name:'Clear all guided filters',exact:true}).click();
+  await expect(raw).toHaveValue('(t:elf OR otag:ramp) o:/add/ usd<5');
+  await page.getByRole('button',{name:'Clear search and filters',exact:true}).click();
+  await expect(raw).toHaveValue('');
+  await expect(page.locator('#search-output')).toBeEmpty();
+  await noPageOverflow(page);
 });
