@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prepareApp } from './fixtures.mjs';
+import { cards, prepareApp } from './fixtures.mjs';
 
 test.beforeEach(async ({page})=>prepareApp(page));
 const stored = page => page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')));
@@ -17,6 +17,7 @@ test('collection uploads show additive totals, protect replacement and retain un
   await expect(page.locator('#collection-impact')).toContainText('3 → 5');
   await expect(page.locator('#collection-impact')).toContainText('Re-uploading');
   await page.locator('#collection-upload-submit').click();
+  await page.getByRole('button',{name:'Finish import'}).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   expect((await stored(page)).collection[0].qty).toBe(5);
   await page.getByRole('button',{name:'Upload card list',exact:true}).click();
@@ -37,10 +38,41 @@ test('collection uploads show additive totals, protect replacement and retain un
   const confirm=page.getByRole('checkbox',{name:'I confirm replacing the entire inventory with this upload'});
   await confirm.focus();await page.keyboard.press('Space');
   await page.locator('#collection-upload-submit').focus();await page.keyboard.press('Enter');
+  await page.getByRole('button',{name:'Finish import'}).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
   expect((await stored(page)).collection[0].qty).toBe(1);
   expect((await stored(page)).decks).toEqual(original);
   await page.reload();expect((await stored(page)).collection[0].qty).toBe(1);
+});
+
+test('collection upload reviews printing choices and missing names before saving',async({page},testInfo)=>{
+  const initial=await stored(page);
+  await page.route('**/api/collection-sets',route=>route.fulfill({json:[{code:'alt',name:'Alternate Edition'}]}));
+  await page.route('**/api/search?**',route=>route.fulfill({status:404,json:{error:'No match'}}));
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  await page.getByRole('button',{name:'Upload card list',exact:true}).click();
+  await page.getByLabel('Card list or CSV').fill('Quantity,Name,Edition Name\n2,Smoke Card 2,Alternate Edition\n1,Unknown Card,Alternate Edition');
+  await page.locator('#collection-upload-submit').click();
+  const review=page.locator('#collection-upload-review');
+  await expect(review).toContainText('Printing · 1');
+  await expect(review).toContainText('Card name · 1');
+  await expect(review).not.toContainText('Smoke Card');
+  expect(await stored(page)).toEqual(initial);
+
+  await page.getByRole('button',{name:'Resolve errors'}).press('Enter');
+  const printing=page.getByLabel('Printing and finish');
+  await printing.selectOption({label:'Smoke Test #2 · en · foil'});
+  await expect(review.getByAltText(cards[1].name)).toBeVisible();
+  await fits(page);
+  await page.screenshot({path:testInfo.outputPath('collection-printing-resolution.png')});
+  await page.getByRole('button',{name:'Use this printing'}).click();
+  await expect(review).toContainText('Unknown Card');
+  await page.getByRole('button',{name:'Skip row'}).click();
+  await expect(review).toContainText('1 row explicitly skipped');
+  expect(await stored(page)).toEqual(initial);
+  await page.getByRole('button',{name:'Finish import'}).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  expect((await stored(page)).collection.at(-1)).toMatchObject({card:{id:cards[1].id},qty:2,finish:'foil'});
 });
 
 test('Checks companion designation persists and keeps unsupported restrictions explicit',async({page},testInfo)=>{

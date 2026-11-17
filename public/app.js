@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, collectionReport, parseImport, parseCollectionImport, prepareCollectionUpload, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, collectionReport, parseImport, parseCollectionImport, prepareCollectionUpload, normalizeEdition, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, compactStoredWorkspace, readStoredWorkspace, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 import { esc, mana, printingLabel, icon, money, currencySymbol } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
@@ -36,7 +36,7 @@ let requestedExportSnapshot=null, requestedExportAt='', downloadError='';
 let decks, collection=[];
 try {
   const savedWorkspace=localStorage.getItem('arcana.workspace.v2'),savedDecks=localStorage.getItem('arcana.decks.v1');
-  const saved=savedWorkspace||savedDecks,parsed=saved?readWorkspaceFile(JSON.parse(saved)):{decks:[],collection:null};
+  const saved=savedWorkspace||savedDecks,parsed=saved?readStoredWorkspace(saved):{decks:[],collection:null};
   decks=parsed.decks;collection=parsed.collection||[];
 }
 catch { decks = []; collection=[];storageError = 'Saved workspace could not be read. Restore a JSON backup before making changes.'; }
@@ -87,10 +87,20 @@ function trackDeck(id) {
   saveTracker(); render();
 }
 const cardKey = c => c.oracle_id || c.id;
+function writeStoredWorkspace(json) {
+  try {
+    localStorage.setItem('arcana.workspace.v2', json);
+  } catch (error) {
+    if (error.name !== 'QuotaExceededError') throw error;
+    const compact = compactStoredWorkspace(json);
+    if (compact === json) throw error;
+    localStorage.setItem('arcana.workspace.v2', compact);
+  }
+}
 function save() {
   updateBackupStatus();
   if (storageError) { toast(storageError); return; }
-  try { localStorage.setItem('arcana.workspace.v2', JSON.stringify(workspaceFile(decks,collection))); }
+  try { writeStoredWorkspace(JSON.stringify(workspaceFile(decks,collection))); }
   catch { storageError = 'Browser storage is full or unavailable. Export a JSON backup now to keep your changes.'; toast(storageError); }
 }
 let toastTimer;
@@ -113,7 +123,7 @@ function commitDeckSnapshot(d,staged) {
   if(!decks.includes(d))throw Error('That deck is no longer available.');
   staged.updated=new Date().toISOString();
   const content=JSON.stringify(workspaceFile(decks.map(deck=>deck===d?staged:deck),collection));
-  try{localStorage.setItem('arcana.workspace.v2',content);}
+  try{writeStoredWorkspace(content);}
   catch{throw Error('Browser storage is full or unavailable. Save a workspace copy or free browser space, then try again.');}
   Object.assign(d,staged);storageError='';updateBackupStatus();
 }
@@ -517,7 +527,7 @@ function collectionLotDialog(card=null,index=null,back=null){
       validateCollection(next);
       if(original){
         if(storageError)throw Error('Resolve the workspace storage warning before updating this card. Save a workspace copy to protect your collection.');
-        try{localStorage.setItem('arcana.workspace.v2',JSON.stringify(workspaceFile(decks,next)));}
+        try{writeStoredWorkspace(JSON.stringify(workspaceFile(decks,next)));}
         catch(error){throw Error('Could not save this card. The original collection is unchanged. Save a workspace copy or free browser storage, then retry. '+error.message);}
         collection=next;updateBackupStatus();
       }else{collection=next;save();}
@@ -529,90 +539,278 @@ function collectionLotDialog(card=null,index=null,back=null){
 }
 const importCardPool=new Map();
 function collectionImport(){
-  showDialog('<h2>Upload collection</h2><p>Choose a TXT or CSV file, or paste card data. Syntax is checked locally before Upload becomes available. Choose whether to add copies or replace inventory. Uploading a previously applied file adds those copies again when Add is selected; files are not deduplicated.</p><form id="collection-import"><label>Upload action<select name="mode" id="collection-import-mode"><option value="add">Add copies to current inventory</option><option value="replace">Replace entire inventory</option></select></label><div id="collection-impact" role="status"></div><div id="collection-replace-review" hidden><p>Replacement removes all current inventory lots and stores only this upload. Decks and prices on deck cards are retained.</p><button type="button" class="secondary" id="collection-upload-backup">Save current workspace copy</button><label class="import-confirm"><input type="checkbox" id="collection-confirm-replace"> I confirm replacing the entire inventory with this upload</label></div><label>TXT or CSV file<input id="collection-csv-file" type="file" accept=".txt,.csv,text/plain,text/csv"></label><label>Card list or CSV<textarea name="list" rows="7" required placeholder="Paste your own card data here…"></textarea></label><details class="import-examples"><summary>Examples of accepted text and CSV</summary><p>Examples only — replace them with your cards.</p><pre>2 Sol Ring&#10;12 Forest</pre><pre>Quantity,Name,Finish,Condition&#10;1,&quot;Aang, Air Nomad&quot;,Normal,NM</pre><pre>Quantity,Name,Language,Edition Name&#10;2,Forest,English,Foundations</pre><p>CSV without headers is also supported: assign its columns below. Collection lists have no deck zones.</p></details><div id="collection-mapping"></div><div id="collection-syntax" role="status"></div><div id="collection-notices"></div><p id="collection-import-error" role="alert"></p><div id="collection-import-preview" role="status"></div><button type="submit" id="collection-upload-submit" class="primary" disabled>Upload</button></form>');
-  const form=$('#collection-import'),button=$('#collection-upload-submit'),responses=new Map(),cache=new Map();let review=null,plan=null,mapping=null,revision=0,pending=false,applied=false,cooldownUntil=0,inventoryReview='';
+  showDialog('<h2>Upload collection</h2><p>Choose a TXT or CSV file, or paste card data. Check the totals before uploading.</p><form id="collection-import"><div id="collection-upload-inputs"><label>Upload action<select name="mode" id="collection-import-mode"><option value="add">Add copies to current inventory</option><option value="replace">Replace entire inventory</option></select></label><div id="collection-impact" role="status"></div><div id="collection-replace-review" hidden><p>Replacement removes all current inventory lots and stores only this upload. Decks and prices on deck cards are retained.</p><button type="button" class="secondary" id="collection-upload-backup">Save current workspace copy</button><label class="import-confirm"><input type="checkbox" id="collection-confirm-replace"> I confirm replacing the entire inventory with this upload</label></div><label>TXT or CSV file<input id="collection-csv-file" type="file" accept=".txt,.csv,text/plain,text/csv"></label><label>Card list or CSV<textarea name="list" rows="7" required placeholder="Paste your own card data here…"></textarea></label><details class="import-examples"><summary>Examples of accepted text and CSV</summary><p>Examples only — replace them with your cards.</p><pre>2 Sol Ring&#10;12 Forest</pre><pre>Quantity,Name,Finish,Condition&#10;1,&quot;Aang, Air Nomad&quot;,Normal,NM</pre><pre>Quantity,Name,Language,Edition Name&#10;2,Forest,English,Foundations</pre><p>CSV without headers is also supported: assign its columns below. Collection lists have no deck zones.</p></details><div id="collection-mapping"></div><div class="collection-upload-summary"><div id="collection-syntax" role="status"></div><div id="collection-notices"></div></div></div><section id="collection-upload-review" hidden></section><div class="collection-upload-actions"><p id="collection-import-error" role="alert"></p><div id="collection-import-preview" role="status"></div><button type="submit" id="collection-upload-submit" class="primary" disabled>Upload</button></div></form>');
+  const form=$('#collection-import'),button=$('#collection-upload-submit'),responses=new Map(),cache=new Map();let review=null,plan=null,mapping=null,revision=0,pending=false,applied=false,cooldownUntil=0,inventoryReview='',issues=[],omitted=0;
   const mode=()=>$('#collection-import-mode').value==='replace'?'replace':'add';
   $('#collection-upload-backup').onclick=()=>saveWorkspaceCopy();
   const lookup=async(url,options)=>{if(!form.isConnected||$('#dialog').open===false)throw Error('Upload closed.');const key=url+(options?.body||'');if(responses.has(key))return responses.get(key);const data=await api(url,options);responses.set(key,data);return data;};
   const progress=message=>{if(form.isConnected)$('#collection-import-preview').textContent=message;};
-  const validate=()=>{
-    plan=null;button.disabled=true;$('#collection-import-error').textContent='';$('#collection-notices').innerHTML='';
+  const issueTypes=['Printing','Language','Finish','Card name'];
+  const issueError=(category,message)=>Object.assign(Error(message),{category});
+  const finishFor=(card,row)=>row.finishUnspecified&&!card.finishes?.includes('nonfoil')
+    ? (card.finishes?.includes('foil')?'foil':card.finishes?.includes('etched')?'etched':'regular')
+    : row.finish;
+  const resolvedLot=(card,row,finish=finishFor(card,row))=>({card,qty:row.qty,finish,...(row.condition?{condition:row.condition}:{})});
+  const reviewPanel=$('#collection-upload-review');
+  const showReview=()=>{
+    $('#collection-upload-inputs').hidden=true;
+    reviewPanel.hidden=false;
+    const counts=issueTypes.map(type=>[type,issues.filter(issue=>issue.category===type).length]).filter(([,n])=>n);
+    const overLimit=counts.some(([,n])=>n>20);
+    const copies=review.reduce((sum,lot)=>sum+lot.qty,0);
+    reviewPanel.innerHTML='<h3 tabindex="-1" id="collection-review-heading">Import check complete</h3>'+
+      '<p>'+issues.length+' '+(issues.length===1?'row needs':'rows need')+' attention. '+copies+(copies===1?' copy':' copies')+' ready to '+(mode()==='replace'?'replace the entire inventory':'add')+'.</p>'+
+      (omitted?'<p>'+omitted+' '+(omitted===1?'row explicitly skipped.':'rows explicitly skipped.')+'</p>':'')+
+      (counts.length?'<ul>'+counts.map(([type,n])=>'<li>'+type+' · '+n+'</li>').join('')+'</ul>':'')+
+      (overLimit?'<p>More than 20 rows need help in at least one category. Correct those columns in the source file or upload a smaller list.</p>':'')+
+      '<button type="button" class="secondary" id="collection-abort-upload">Abort import</button>';
+    $('#collection-abort-upload').onclick=()=>closeDialog();
+    button.textContent=issues.length?'Resolve errors':'Finish import';
+    button.disabled=overLimit||(!issues.length&&!review.length);
+    progress('');
+    $('#collection-review-heading').focus();
+  };
+  const showIssue=async()=>{
+    const issue=issues[0],{row,card}=issue;
+    $('#collection-import-error').textContent='';
+    reviewPanel.innerHTML='<h3 tabindex="-1" id="collection-review-heading">'+esc(issue.category)+' issue</h3>'+
+      '<p><strong>'+esc(issue.label)+'</strong></p><p>'+esc(issue.message)+'</p>'+
+      '<p>'+esc([row.qty+' copies',row.language&&'Language '+row.language,row.collectorNumber&&'Collector number '+row.collectorNumber,!row.finishUnspecified&&'Finish '+row.finish].filter(Boolean).join(' · '))+'</p>'+
+      '<p>'+issues.length+' '+(issues.length===1?'row':'rows')+' left to review.</p>'+
+      '<div id="collection-resolution-art"></div><div id="collection-resolution-options"></div><div class="settings-actions"><button class="secondary" type="button" id="collection-skip-row">Skip row</button><button class="secondary" type="button" id="collection-abort-upload">Abort import</button></div>';
+    $('#collection-review-heading').focus();
+    button.disabled=true;
+    const advance=()=>{
+      issues.shift();
+      if(issues.length)void showIssue();
+      else showReview();
+    };
+    $('#collection-skip-row').onclick=()=>{omitted++;advance();};
+    $('#collection-abort-upload').onclick=()=>closeDialog();
+    if(!card?.oracle_id)return;
+    const art=$('#collection-resolution-art');
+    const showArt=printing=>{
+      const src=safeUrl(imageFor(printing),true);
+      art.innerHTML=src?'<img src="'+esc(src)+'" alt="'+esc(printing.name)+'">':'';
+    };
+    showArt(card);
+    const options=$('#collection-resolution-options');
+    options.textContent='Loading printings…';
+    const choices=[];
     try{
-      const text=String(new FormData(form).get('list')||'');const result=prepareCollectionUpload(text,mapping);
+      for(let page=1;;page++){
+        if(!form.isConnected||issues[0]!==issue)return;
+        const data=await lookup('/api/printings?'+new URLSearchParams({oracle:card.oracle_id,page,multilingual:'1'}));
+        choices.push(...data.data.filter(printing=>printing.oracle_id===card.oracle_id));
+        if(!data.has_more)break;
+      }
+    }catch(error){
+      if(!form.isConnected||issues[0]!==issue)return;
+      options.innerHTML='<p>Could not load all printings. '+(error.status===429?'Wait for the lookup cooldown, then retry.':'Check your connection and retry.')+'</p><button type="button" class="secondary" id="collection-retry-printings">Retry printings</button>';
+      $('#collection-retry-printings').onclick=()=>void showIssue();
+      return;
+    }
+    if(!form.isConnected||issues[0]!==issue)return;
+    const variants=choices.flatMap(printing=>(printing.finishes||[]).map(finish=>({printing,finish:finish==='nonfoil'?'regular':finish})));
+    if(!variants.length){options.textContent='No supported paper printings are available for this name.';return;}
+    options.innerHTML='<label>Printing and finish<select id="collection-resolved-printing"><option value="">Choose a printing</option>'+
+      variants.map(({printing,finish},i)=>'<option value="'+i+'">'+esc((printing.set_name||printing.set||'Unknown set')+' #'+(printing.collector_number||'—')+' · '+(printing.lang||'—')+' · '+(finish==='regular'?'nonfoil':finish))+'</option>').join('')+
+      '</select></label><button type="button" class="primary" id="collection-use-printing" disabled>Use this printing</button>';
+    const select=$('#collection-resolved-printing'),use=$('#collection-use-printing');
+    select.onchange=()=>{use.disabled=select.value==='';showArt(use.disabled?card:variants[Number(select.value)].printing);};
+    use.onclick=()=>{
+      const choice=select.value===''?null:variants[Number(select.value)];
+      if(!choice)return;
+      review.push(resolvedLot(choice.printing,row,choice.finish));advance();
+    };
+  };
+  const validate=(editMapping=false)=>{
+    progress('');plan=null;button.disabled=true;$('#collection-import-error').textContent='';$('#collection-notices').innerHTML='';
+    const text=String(new FormData(form).get('list')||'');
+    try{
+      const result=prepareCollectionUpload(text,mapping,editMapping);
       if(result.needsMapping){
-        $('#collection-syntax').textContent='Assign the CSV columns, then check syntax.';
-        $('#collection-mapping').innerHTML='<h3>Define CSV columns</h3><label><input type="checkbox" id="csv-has-header" '+(result.suggestHeaders?'checked':'')+'> First row contains column headings</label>'+Array.from({length:result.width},(_,i)=>'<label>Column '+(i+1)+' · '+esc(result.preview.map(row=>row[i]||'').join(' / ').slice(0,120))+'<select data-csv-column="'+i+'"><option value="">Ignore this column</option>'+COLLECTION_COLUMNS.map(c=>'<option>'+c+'</option>').join('')+'</select></label>').join('')+'<button type="button" class="secondary" id="csv-check-mapping">Check syntax</button>';
+        $('#collection-syntax').textContent='Waiting for column mappings. Assign Quantity and Name, then check syntax.';
+        $('#collection-mapping').innerHTML='<h3>Define CSV columns</h3><label><input type="checkbox" id="csv-has-header" '+((mapping?.header??result.suggestHeaders)?'checked':'')+'> First row contains column headings</label>'+Array.from({length:result.width},(_,i)=>'<label>Column '+(i+1)+' · '+esc(result.preview.map(row=>row[i]||'').join(' / ').slice(0,120))+'<select data-csv-column="'+i+'"><option value="">Ignore this column</option>'+COLLECTION_COLUMNS.map(c=>'<option'+(c===(mapping?.columns[i]??result.suggestedColumns[i])?' selected':'')+'>'+c+'</option>').join('')+'</select></label>').join('')+'<button type="button" class="secondary" id="csv-check-mapping">Check syntax</button>';
         $('#csv-check-mapping').onclick=()=>{mapping={header:$('#csv-has-header').checked,columns:[...form.querySelectorAll('[data-csv-column]')].map(node=>node.value)};validate();};return;
       }
+      $('#collection-mapping').innerHTML=result.csv?'<button type="button" class="secondary" id="csv-edit-mapping">Change CSV columns</button>':'';
+      if(result.csv)$('#csv-edit-mapping').onclick=()=>validate(true);
       if(mode()==='replace' && result.skipped.length)throw Error('Replacement requires every row to be valid collection data. Correct or remove the skipped lines.');
       inventoryReview=JSON.stringify(collection);plan=result;const copies=result.rows.reduce((n,row)=>n+row.qty,0),current=count({cards:collection});
       $('#collection-replace-review').hidden=mode()!=='replace';
       $('#collection-impact').textContent=mode()==='replace'?'Replace '+current+' current copies in '+collection.length+' lots with '+copies+' uploaded copies.':'Add '+copies+' copies: '+current+' → '+(current+copies)+' owned copies. Re-uploading this file adds them again.';
       $('#collection-syntax').textContent='Syntax valid · '+result.rows.length+' card rows · '+result.rows.reduce((n,r)=>n+r.qty,0)+' copies.';
       $('#collection-notices').innerHTML='<p>Processed columns: '+result.accepted.map(esc).join(', ')+'.</p>'+(result.ignored.length?'<p>Not counted: '+result.ignored.map(esc).join(', ')+'.</p>':'')+(result.skipped.length?'<h3>Could not process the following cards</h3><ul>'+result.skipped.map(line=>'<li>'+esc(line)+'</li>').join('')+'</ul><p>These lines will be skipped. Valid card rows can still be uploaded.</p>':'')+(result.ignored.length||result.skipped.length?'<label class="import-confirm"><input type="checkbox" id="collection-accept-ignored"> Continue with only the processed columns and valid card rows</label>':'');
+      if(result.rows.some(row=>row.set&&!row.collectorNumber))$('#collection-notices').innerHTML+='<p>With no collector number, Arcana uses a matching printing from the specified edition.</p>';
       const confirm=$('#collection-accept-ignored'),needsConfirm=result.ignored.length||result.skipped.length;
       if(needsConfirm)confirm.onchange=()=>{button.disabled=!confirm.checked||pending||Date.now()<cooldownUntil;};
       button.disabled=Boolean(needsConfirm)||pending||Date.now()<cooldownUntil;button.textContent='Upload';
-    }catch(error){$('#collection-syntax').textContent=error.message;}
+    }catch(error){
+      $('#collection-syntax').textContent='';
+      $('#collection-import-error').textContent=error.message;
+      if(!editMapping&&text.trim().split(/\r?\n/,1)[0].includes(',')&&!$('#collection-mapping').innerHTML){
+        $('#collection-mapping').innerHTML='<button type="button" class="secondary" id="csv-edit-mapping">Change CSV columns</button>';
+        $('#csv-edit-mapping').onclick=()=>validate(true);
+      }
+    }
   };
-  form.oninput=e=>{if(['collection-accept-ignored','collection-confirm-replace'].includes(e?.target?.id))return;if(e?.target?.id==='collection-import-mode'){revision++;review=null;$('#collection-confirm-replace').checked=false;validate();return;}if(e?.target?.dataset?.csvColumn!==undefined||e?.target?.id==='csv-has-header'){revision++;review=null;plan=null;button.disabled=true;$('#collection-syntax').textContent='Column mapping changed. Check syntax again.';return;}revision++;review=null;mapping=null;$('#collection-mapping').innerHTML='';$('#collection-import-preview').textContent='';validate();};
+  form.oninput=e=>{if(['collection-accept-ignored','collection-confirm-replace','collection-resolved-printing'].includes(e?.target?.id))return;if(e?.target?.id==='collection-import-mode'){revision++;review=null;$('#collection-confirm-replace').checked=false;validate();return;}if(e?.target?.dataset?.csvColumn!==undefined||e?.target?.id==='csv-has-header'){revision++;review=null;plan=null;button.disabled=true;$('#collection-syntax').textContent='Column mapping changed. Check syntax again.';return;}revision++;review=null;mapping=null;$('#collection-mapping').innerHTML='';$('#collection-import-preview').textContent='';validate();};
   $('#collection-csv-file').onchange=async e=>{revision++;review=null;plan=null;mapping=null;button.disabled=true;const version=revision,file=e.target.files[0];if(!file)return;try{if(!/\.(txt|csv)$/i.test(file.name))throw Error('Choose a .txt or .csv file.');if(file.size>15_000_000)throw Error('File exceeds 15 MB.');const text=await file.text();if(form.isConnected&&revision===version){form.querySelector('textarea').value=text;$('#collection-mapping').innerHTML='';validate();}}catch(error){if(form.isConnected)$('#collection-import-error').textContent=error.message;}};
-  form.onsubmit=async e=>{e.preventDefault();if(applied||pending||Date.now()<cooldownUntil||!form.isConnected||$('#dialog').open===false)return;if(!plan)validate();if(!plan)return;if((plan.ignored.length||plan.skipped.length)&&!$('#collection-accept-ignored').checked)return;if(mode()==='replace' && inventoryReview!==JSON.stringify(collection)){revision++;review=null;$('#collection-confirm-replace').checked=false;validate();$('#collection-import-error').textContent='Inventory changed. Review the updated replacement totals and confirm again.';return;}if(mode()==='replace'&&!$('#collection-confirm-replace').checked){$('#collection-import-error').textContent='Confirm replacing the entire inventory before uploading.';return;}const operationMode=mode(),operationRevision=revision,inventorySnapshot=JSON.stringify(collection);pending=true;button.disabled=true;try{
+  form.onsubmit=async e=>{e.preventDefault();if(applied||pending||Date.now()<cooldownUntil||!form.isConnected||$('#dialog').open===false)return;if(review&&issues.length){if(!issueTypes.some(type=>issues.filter(issue=>issue.category===type).length>20))await showIssue();return;}if(review&&!review.length)return;if(!plan)validate();if(!plan)return;if((plan.ignored.length||plan.skipped.length)&&!$('#collection-accept-ignored').checked)return;if(mode()==='replace' && inventoryReview!==JSON.stringify(collection)){revision++;review=null;$('#collection-confirm-replace').checked=false;validate();$('#collection-import-error').textContent='Inventory changed. Review the updated replacement totals and confirm again.';return;}if(mode()==='replace'&&!$('#collection-confirm-replace').checked){$('#collection-import-error').textContent='Confirm replacing the entire inventory before uploading.';return;}const operationMode=mode(),operationRevision=revision,inventorySnapshot=JSON.stringify(collection);pending=true;button.disabled=true;button.textContent='Uploading…';$('#collection-import-error').textContent='';try{
     if(storageError)throw Error('Resolve the workspace storage warning before uploading. '+storageError);
     if(!review){
-      const version=revision,parsed=plan.rows;
+      const version=revision,{rows:parsed,csv,firstRow}=plan;
+      issues=[];omitted=0;
       const pool=[...importCardPool.values(),...collection.map(l=>l.card),...decks.flatMap(d=>d.cards.map(e=>e.card))];
       const indexCards=values=>{const index=new Map();for(const c of values)for(const name of new Set([c.name,...(c.card_faces||[]).map(f=>f.name)].filter(Boolean))){const key=name.toLowerCase();if(!index.has(key))index.set(key,[]);index.get(key).push(c);}return index;};
       const localIndex=indexCards(pool);
-      const matchesRow=(c,row)=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(v=>v?.toLowerCase()===row.set.toLowerCase()))&&c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish);
-      const local=new Map();for(const row of parsed){const found=(localIndex.get(row.name.toLowerCase())||[]).find(c=>matchesRow(c,row));if(found)local.set(JSON.stringify([row.name,row.set,row.language,row.finish]),found);}
-      const names=[...new Set(parsed.filter(row=>!row.set&&!row.language&&!local.has(JSON.stringify([row.name,row.set,row.language,row.finish]))).map(p=>p.name.split(' // ')[0]))],cards=[],resolved=[];
+      const printingKey=row=>JSON.stringify([row.name,row.set,row.language,row.finish,row.collectorNumber,row.finishUnspecified]);
+      const sameNumber=(card,row)=>!row.collectorNumber||String(card.collector_number||'').localeCompare(row.collectorNumber,undefined,{numeric:true,sensitivity:'base'})===0;
+      const matchesRow=(c,row)=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(v=>v&&normalizeEdition(v)===normalizeEdition(row.set)))&&sameNumber(c,row)&&(row.finishUnspecified||c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish));
+      const local=new Map();
+      for(const row of parsed){
+        const matches=new Map((localIndex.get(row.name.toLowerCase())||[]).filter(c=>matchesRow(c,row)).map(c=>[c.id,c]));
+        if(matches.size===1)local.set(printingKey(row),matches.values().next().value);
+      }
+      const names=[...new Set(parsed.filter(row=>!row.set&&!row.language&&!local.has(printingKey(row))).map(p=>p.name.split(' // ')[0]))],cards=[],resolved=[];
       for(let i=0;i<names.length;i+=75){
         if(!form.isConnected||$('#dialog').open===false)return;if(version!==revision)throw Error('List changed; review it again.');
         progress('Looking up names '+(i+1)+'–'+Math.min(i+75,names.length)+' of '+names.length+'. Completed lookups are retained for retry.');
-        const data=await lookup('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})});cards.push(...data.data);for(const c of data.data){importCardPool.set(c.id,c);if(importCardPool.size>5000)importCardPool.delete(importCardPool.keys().next().value);}
+        const data=await lookup('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:names.slice(i,i+75)})}).catch(error=>{
+          if(error.status===429)throw error;
+          throw Error('Could not look up names '+(i+1)+'–'+Math.min(i+75,names.length)+' of '+names.length+'. Check your connection, then retry the upload.');
+        });
+        cards.push(...data.data);for(const c of data.data){importCardPool.set(c.id,c);if(importCardPool.size>5000)importCardPool.delete(importCardPool.keys().next().value);}
       }
       const remoteIndex=indexCards(cards);
-      for(const row of parsed){
+      const printingResults=new Map();
+      let editions;
+      const setCode=row=>{
+        const edition=normalizeEdition(row.set);
+        const matches=editions.get(edition)||[];
+        if(matches.length!==1)throw issueError('Printing',matches.length?'Set name is ambiguous. Use the set code in the CSV.':'Set is unrecognized. Check the edition name or use its set code.');
+        return matches[0];
+      };
+      const printingTerm=(row,set)=>'!"'+row.name.split(' // ')[0].replace(/["\\]/g,'\\$&')+'"'+(set?' set:'+set:'')+(row.language?' lang:'+row.language:'');
+      for(const [rowIndex,row] of parsed.entries()){
         if(!form.isConnected||$('#dialog').open===false)return;
         if(version!==revision)throw Error('List changed; review it again.');
-        progress('Resolving '+(resolved.length+1)+' of '+parsed.length+' card rows…');
-        let card=local.get(JSON.stringify([row.name,row.set,row.language,row.finish]));
-        if(card){/* Reuse the already verified local printing. */}
-        else if(row.set||row.language){
-          const cacheKey=JSON.stringify([row.name,row.set,row.language,row.finish]);
-          if(cache.has(cacheKey))card=cache.get(cacheKey);else{
-            const quote=value=>'"'+value.replace(/["\\]/g,'\\$&')+'"';
-            const q='game:paper !'+quote(row.name)+(row.set?' set:'+quote(row.set):'')+(row.language?' lang:'+row.language:'')+' unique:prints';
-            const result=await lookup('/api/search?'+new URLSearchParams({q,order:'name'}));
-            const candidates=result.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&(!row.language||c.lang===row.language)&&(!row.set||[c.set,c.set_name].some(value=>value?.toLowerCase()===row.set.toLowerCase()))&&(!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)));
-            if(result.has_more||candidates.length!==1)throw Error(row.name+': set/language does not identify one supported printing. Refine the CSV set or add this printing manually.');
-            card=candidates[0];cache.set(cacheKey,card);
-          }
-        }else{
-          const result=resolveImport([{name:row.name,qty:1}],remoteIndex.get(row.name.toLowerCase())||[]);
-          card=result.entries[0]?.card;
-          if(!card||card.finishes&&!card.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)){
-            const cacheKey=JSON.stringify([row.name,row.finish]);
+        const label=(csv?'CSV row '+(firstRow+rowIndex)+' · ':'')+row.name+(row.set?' · '+row.set:'');
+        progress('Resolving '+(rowIndex+1)+' of '+parsed.length+' card rows · '+row.name);
+        let card=local.get(printingKey(row));
+        try {
+          if(card){/* Reuse the already verified local printing. */}
+          else if(row.set||row.language){
+            const cacheKey=printingKey(row);
             if(cache.has(cacheKey))card=cache.get(cacheKey);else{
-              const front=row.name.split(' // ')[0],quoted='"'+front.replace(/["\\]/g,'\\$&')+'"';
-              let chosen=null;
-              for(let page=1;page<=20;page++){
-                const data=await lookup('/api/search?'+new URLSearchParams({q:'game:paper !'+quoted+' unique:prints',order:'name',page}));
-                const matches=data.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish));
-                const identities=new Set(matches.map(c=>c.oracle_id||c.id));if(identities.size>1)throw Error(row.name+': ambiguous rules identity. Specify a set.');
-                if(matches.length){chosen=matches[0];break;}if(!data.has_more)break;
+              if(row.set&&!editions){
+                const sets=await lookup('/api/collection-sets').catch(error=>{
+                  if(error.status===404)throw Error('The running Arcana server could not load the edition catalog. Restart the Arcana CMD server, refresh this page and upload the CSV again.');
+                  throw error;
+                });
+                editions=new Map();
+                for(const {code,name} of sets){
+                  const key=normalizeEdition(name);
+                  editions.set(key,[...(editions.get(key)||[]),code]);
+                }
+                for(const {code} of sets)editions.set(code,[code]);
               }
-              if(!chosen)throw Error(row.name+': no compatible '+row.finish+' printing found. Specify a set or add manually.');
-              card=chosen;cache.set(cacheKey,card);
+              const set=row.set?setCode(row):'';
+              if(!printingResults.has(cacheKey)){
+                const batch=new Map();
+                let queryLength=32;
+                for(const next of parsed.slice(rowIndex,rowIndex+20)){
+                  const key=printingKey(next);
+                  if((!next.set&&!next.language)||local.has(key)||cache.has(key)||printingResults.has(key)||batch.has(key))continue;
+                  const codes=next.set?editions?.get(normalizeEdition(next.set)):[''];
+                  if(codes?.length!==1)continue;
+                  const term=printingTerm(next,codes[0]);
+                  if(batch.size&&queryLength+term.length+6>1450)break;
+                  batch.set(key,term);
+                  queryLength+=term.length+6;
+                }
+                const q='game:paper unique:prints ('+[...new Set(batch.values())].map(term=>'('+term+')').join(' OR ')+')';
+                const batchCards=[];
+                for(let page=1;;page++){
+                  if(version!==revision)throw Error('List changed; review it again.');
+                  const result=await lookup('/api/search?'+new URLSearchParams({q,order:'name',page})).catch(error=>{
+                    if(error.status===404&&page===1)return {data:[]};
+                    throw error;
+                  });
+                  batchCards.push(...result.data);
+                  if(!result.has_more)break;
+                }
+                const index=indexCards(batchCards);
+                for(const key of batch.keys())printingResults.set(key,index);
+              }
+              const editionMatches=(printingResults.get(cacheKey).get(row.name.toLowerCase())||[]).filter(c=>(!set||c.set===set)&&sameNumber(c,row));
+              const languageMatches=editionMatches.filter(c=>!row.language||c.lang===row.language);
+              const candidates=languageMatches.filter(c=>row.finishUnspecified||!c.finishes||c.finishes.includes(row.finish==='regular'?'nonfoil':row.finish));
+              if(!candidates.length){
+                if(languageMatches.length)throw issueError('Finish','This printing does not support the requested finish.');
+                if(row.language)throw issueError('Language','No printing matched the requested language and edition.');
+                throw issueError('Printing','No compatible printing found for the requested edition or collector number.');
+              }
+              if(new Set(candidates.map(c=>c.oracle_id||c.id)).size!==1)throw issueError('Card name','This exact name matches more than one rules identity.');
+              candidates.sort((a,b)=>(row.finishUnspecified?Number(finishFor(a,row)!=='regular')-Number(finishFor(b,row)!=='regular'):0)||String(a.collector_number||'').localeCompare(String(b.collector_number||''),undefined,{numeric:true})||a.id.localeCompare(b.id));
+              card=candidates[0];cache.set(cacheKey,card);
+            }
+          }else{
+            const result=resolveImport([{name:row.name,qty:1}],remoteIndex.get(row.name.toLowerCase())||[]);
+            if(result.problems.some(entry=>entry.reason==='Ambiguous name'))throw issueError('Card name','This exact name matches more than one rules identity.');
+            card=result.entries[0]?.card;
+            if(!card||!row.finishUnspecified&&card.finishes&&!card.finishes.includes(row.finish==='regular'?'nonfoil':row.finish)){
+              const cacheKey=JSON.stringify([row.name,row.finish]);
+              if(cache.has(cacheKey))card=cache.get(cacheKey);else{
+                const front=row.name.split(' // ')[0],quoted='"'+front.replace(/["\\]/g,'\\$&')+'"';
+                let chosen=null;
+                for(let page=1;page<=20;page++){
+                  const data=await lookup('/api/search?'+new URLSearchParams({q:'game:paper !'+quoted+' unique:prints',order:'name',page}));
+                  const matches=data.data.filter(c=>(c.name.toLowerCase()===row.name.toLowerCase()||c.card_faces?.some(f=>f.name?.toLowerCase()===row.name.toLowerCase()))&&c.finishes?.includes(row.finish==='regular'?'nonfoil':row.finish));
+                  const identities=new Set(matches.map(c=>c.oracle_id||c.id));if(identities.size>1)throw issueError('Card name','This exact name matches more than one rules identity.');
+                  if(matches.length){chosen=matches[0];break;}if(!data.has_more)break;
+                }
+                if(!chosen)throw issueError(card?'Finish':'Card name',card?'No printing supports the requested finish.':'No card matched the exact name.');
+                card=chosen;cache.set(cacheKey,card);
+              }
             }
           }
+        } catch (error) {
+          if(error.category||error.status===404){
+            issues.push({row,label,category:error.category||'Card name',message:error.category?error.message:'No card matched the exact name.',card});
+            continue;
+          }
+          if(error.status===429)throw error;
+          const detail=error.status?'Lookup failed. Check your connection or try again shortly.':error.message;
+          throw Error(label+' — '+detail);
         }
         importCardPool.set(card.id,card);if(importCardPool.size>5000)importCardPool.delete(importCardPool.keys().next().value);
-        resolved.push({card,qty:row.qty,finish:row.finish,...(row.condition?{condition:row.condition}:{})});
+        resolved.push(resolvedLot(card,row));
       }
       if(!form.isConnected||$('#dialog').open===false)return;if(version!==revision)throw Error('List changed; review it again.');
+      const namesToCheck=[...new Set(issues.filter(issue=>!issue.card&&issue.category!=='Card name').map(({row})=>row.name.split(' // ')[0]))];
+      const fallback=[];
+      for(let i=0;i<namesToCheck.length;i+=75){
+        if(!form.isConnected||$('#dialog').open===false)return;
+        if(version!==revision)throw Error('List changed; review it again.');
+        progress('Checking exact names for rows with printing issues…');
+        const batch=await lookup('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:namesToCheck.slice(i,i+75)})});
+        fallback.push(...batch.data);
+      }
+      const fallbackIndex=indexCards(fallback);
+      for(const issue of issues){
+        if(issue.card||issue.category==='Card name')continue;
+        const matches=resolveImport([issue.row],fallbackIndex.get(issue.row.name.toLowerCase())||[]);
+        issue.card=matches.entries[0]?.card;
+        if(!issue.card){issue.category='Card name';issue.message=matches.problems[0]?.reason==='Ambiguous name'?'This exact name matches more than one rules identity.':'No card matched the exact name.';}
+      }
+      if(!form.isConnected||$('#dialog').open===false)return;
+      if(version!==revision)throw Error('List changed; review it again.');
+      issues.sort((a,b)=>issueTypes.indexOf(a.category)-issueTypes.indexOf(b.category));
       review=resolved;
+      showReview();
+      return;
     }
     if(!form.isConnected||$('#dialog').open===false)return;
     if(operationRevision!==revision)throw Error('Upload changed. Check it again before applying.');
@@ -620,9 +818,14 @@ function collectionImport(){
     const next=operationMode==='replace'?[]:structuredClone(collection);
     for(const e of review){const found=next.find(l=>l.card.id===e.card.id&&l.finish===e.finish&&(l.condition||'')===(e.condition||''));if(found){found.qty+=e.qty;found.updatedAt=new Date().toISOString();}else next.push({...e,addedAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}
     validateCollection(next);
-    localStorage.setItem('arcana.workspace.v2',JSON.stringify(workspaceFile(decks,next)));
+    progress('Saving collection…');
+    try{writeStoredWorkspace(JSON.stringify(workspaceFile(decks,next)));}
+    catch(error){
+      if(error.name==='QuotaExceededError')throw Error('Browser storage is full. Save a workspace backup, free browser space or reduce the upload, then retry. Your collection was kept.');
+      throw Error('Browser storage is unavailable. Check the browser’s storage settings, then retry. Your collection was kept.');
+    }
     applied=true;collection=next;storageError='';updateBackupStatus();closeDialog();render();toast(operationMode==='replace'?'Collection replaced and saved.':'Collection copies added and saved.');
-  }catch(error){if(form.isConnected){$('#collection-import-error').textContent=error.message;if(error.status===429){cooldownUntil=Date.now()+Math.max(60,Number(error.retryAfter)||60)*1000;const tick=()=>{if(!form.isConnected)return;const left=Math.max(0,Math.ceil((cooldownUntil-Date.now())/1000));button.disabled=left>0;button.textContent=left?'Paused · '+left+'s remaining':'Resume upload';progress('Rate limit reached. No cards added yet. Completed lookups are retained in this window.');if(left)setTimeout(tick,1000);};tick();}else button.textContent=review?'Upload':'Retry upload';}}finally{pending=false;if(Date.now()>=cooldownUntil)button.disabled=false;}};
+  }catch(error){if(form.isConnected){progress('');$('#collection-import-error').textContent=error.message;if(error.status===429){cooldownUntil=Date.now()+Math.max(60,Number(error.retryAfter)||60)*1000;const tick=()=>{if(!form.isConnected)return;const left=Math.max(0,Math.ceil((cooldownUntil-Date.now())/1000));button.disabled=left>0||!plan||Boolean((plan.ignored.length||plan.skipped.length)&&!$('#collection-accept-ignored').checked);button.textContent=left?'Paused · '+left+'s remaining':'Resume upload';progress(left?'Rate limit reached. Completed lookups are retained for retry.':'Cooldown ended. Resume upload when ready.');if(left)setTimeout(tick,1000);};tick();}else button.textContent='Retry upload';if(operationRevision===revision)button.scrollIntoView({block:'nearest'});}}finally{pending=false;if(!(review&&issues.length)&&Date.now()>=cooldownUntil)button.disabled=applied||Boolean(review&&!review.length)||!plan||Boolean((plan.ignored.length||plan.skipped.length)&&!$('#collection-accept-ignored').checked);}};
 }
 function removeCollectionLot(index){
   const lot=collection[index];if(!lot)return;
@@ -639,7 +842,7 @@ function clearCollection(){
   showDialog('<h2>Delete entire collection?</h2><p>This removes all owned-card quantities from this browser. Your decks stay intact. This cannot be undone here; save a workspace copy first if you want to restore it later.</p><button class="secondary" id="clear-collection-backup">Save workspace copy</button><label>Type DELETE to confirm<input id="clear-collection-confirm" autocomplete="off"></label><p id="clear-collection-error" role="alert"></p><div class="settings-actions"><button class="danger" id="clear-collection-apply" disabled>Delete entire collection</button><button class="secondary" id="clear-collection-cancel">Keep collection</button></div>');
   $('#clear-collection-backup').onclick=()=>saveWorkspaceCopy();$('#clear-collection-cancel').onclick=()=>closeDialog();
   $('#clear-collection-confirm').oninput=e=>$('#clear-collection-apply').disabled=e.target.value!=='DELETE';
-  $('#clear-collection-apply').onclick=()=>{if($('#clear-collection-confirm').value!=='DELETE')return;try{localStorage.setItem('arcana.workspace.v2',JSON.stringify(workspaceFile(decks,[])));collection=[];storageError='';updateBackupStatus();closeDialog();render();toast('Collection deleted. Decks retained.');}catch(error){$('#clear-collection-error').textContent='Collection was not deleted. '+error.message;}};
+  $('#clear-collection-apply').onclick=()=>{if($('#clear-collection-confirm').value!=='DELETE')return;try{writeStoredWorkspace(JSON.stringify(workspaceFile(decks,[])));collection=[];storageError='';updateBackupStatus();closeDialog();render();toast('Collection deleted. Decks retained.');}catch(error){$('#clear-collection-error').textContent='Collection was not deleted. '+error.message;}};
   $('#clear-collection-cancel').focus();
 }
 function deckWorkspace(d, statistics, previousStatistics) {
@@ -2091,7 +2294,7 @@ function restore(){
     try {
       const next=validateBackup([...decks,...staged.decks]),choice=$('#restore-collection')?.value||'keep',nextCollection=choice==='replace'&&staged.collection!==null?validateCollection(staged.collection):collection;
       // Persist the staged copy first: a failed write leaves the live workspace untouched.
-      localStorage.setItem('arcana.workspace.v2',JSON.stringify(workspaceFile(next,nextCollection)));
+      writeStoredWorkspace(JSON.stringify(workspaceFile(next,nextCollection)));
       const first=staged.decks[0]?.id;decks=next;collection=nextCollection;staged=null;apply.disabled=true;storageError='';if(first)active=first;updateBackupStatus();
       $('#dialog').close();render();toast('Reviewed workspace changes saved in this browser.');
     }catch(error){

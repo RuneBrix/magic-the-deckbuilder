@@ -26,3 +26,14 @@ test('headerless CSV requires mapping and keeps the first card as data',()=>{
   const result=prepareCollectionUpload(text,{header:false,columns:['Quantity','Name','Finish','Condition']});assert.equal(result.rows.length,2);assert.equal(result.rows[0].name,'Aang, Air Nomad');assert.equal(result.rows[1].finish,'foil');
   assert.throws(()=>prepareCollectionUpload(text,{header:false,columns:['Name','Name','Finish','Condition']}));
 });
+
+test('CSV mapping suggestions retain recognized fields and flag uneven rows for correction',()=>{
+  const source='Quantity Owned,Item,Edition-Name,Notes\n2,"Aang, Air Nomad",Example Set,note';
+  const suggestion=prepareCollectionUpload(source);
+  assert.deepEqual(suggestion.suggestedColumns,['Quantity','','Edition Name','']);
+  const result=prepareCollectionUpload(source,{header:true,columns:['Quantity','Name','Edition Name','']});
+  assert.equal(result.rows[0].name,'Aang, Air Nomad');
+  assert.equal(result.rows[0].set,'Example Set');
+  assert.deepEqual(result.ignored,['Notes']);
+  assert.throws(()=>prepareCollectionUpload(source+'\n1,Forest',{header:true,columns:['Quantity','Name','Edition Name','']}),/CSV row 3.*expected 4 columns, found 2/);
+});

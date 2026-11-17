@@ -82,3 +82,18 @@ test('collection proxy forwards bounded exact printing ids without name substitu
     for(let i=0;i<2;i++){const result=await post({ids:[id]});assert.equal(result.status,200);assert.equal((await result.json()).calls,1);}
   }finally{child.kill();}
 });
+
+test('collection set catalog returns names and codes through the fixed upstream route', async () => {
+  const stub = `globalThis.fetch=async(url,options)=>{
+    if(url!=='https://api.scryfall.com/sets'||options.method!=='GET')throw Error('Unexpected upstream request');
+    return {ok:true,json:async()=>({data:[{code:'fdn',name:'Foundations',icon_svg_uri:'unused'}]})};
+  };await import('./server.mjs');`;
+  const child=spawn(process.execPath,['--input-type=module','--eval',stub],{cwd:new URL('../',import.meta.url),env:{...process.env,PORT:'0'},stdio:['ignore','pipe','pipe']});
+  try {
+    const [output]=await once(child.stdout,'data',{signal:AbortSignal.timeout(5000)});
+    const port=output.toString().match(/localhost:(\d+)/)[1];
+    const response=await fetch('http://127.0.0.1:'+port+'/api/collection-sets');
+    assert.equal(response.status,200);
+    assert.deepEqual(await response.json(),[{code:'fdn',name:'Foundations'}]);
+  } finally { child.kill(); }
+});

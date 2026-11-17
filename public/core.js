@@ -1,5 +1,5 @@
 export { parseImport } from './deck-import.js';
-export { readCollectionCsv, COLLECTION_COLUMNS, prepareCollectionUpload, parseCollectionImport } from './collection-import.js';
+export { readCollectionCsv, COLLECTION_COLUMNS, prepareCollectionUpload, parseCollectionImport, normalizeEdition } from './collection-import.js';
 import { COMMANDER_BRACKETS } from './commander-brackets.js';
 export { COMMANDER_BRACKETS };
 import { TAG_CATALOG } from './tag-catalog.js';
@@ -610,6 +610,82 @@ export function workspaceFile(decks, collection=null) {
   const file={format:'arcana-workspace',version:collection===null?1:2,exportedAt:new Date().toISOString(),decks:validateBackup(decks)};
   if(collection!==null)file.collection=validateCollection(collection);
   return file;
+}
+
+const workspacePackingPrefix = 'arcana-packed-v2\t';
+const packingWindow = 65536;
+
+// JSON.stringify escapes NUL. Use it to mark a distance/length pair and
+// preserve everything else as literal UTF-16, including card and face data.
+export function compactStoredWorkspace(json) {
+  const lastPositions = new Uint32Array(packingWindow);
+  const parts = [workspacePackingPrefix];
+  let literalStart = 0;
+  for (let i = 0; i + 4 < json.length;) {
+    const hash = (Math.imul(json.charCodeAt(i), 31 ** 3) + Math.imul(json.charCodeAt(i + 1), 31 ** 2)
+      + Math.imul(json.charCodeAt(i + 2), 31) + json.charCodeAt(i + 3)) & (packingWindow - 1);
+    const previous = lastPositions[hash] - 1;
+    lastPositions[hash] = i + 1;
+    const distance = i - previous;
+    let length = 0;
+    if (previous >= 0 && distance < packingWindow) {
+      const limit = Math.min(packingWindow - 1, json.length - i);
+      while (length < limit && json.charCodeAt(previous + length) === json.charCodeAt(i + length)) length++;
+    }
+    if (length < 5) {
+      i++;
+      continue;
+    }
+    parts.push(json.slice(literalStart, i), String.fromCharCode(0, distance, length));
+    i += length;
+    literalStart = i;
+  }
+  parts.push(json.slice(literalStart));
+  const packed = parts.join('');
+  return packed.length < json.length ? packed : json;
+}
+
+function unpackStoredWorkspace(packed) {
+  const history = new Uint16Array(packingWindow);
+  const chunk = new Uint16Array(8192);
+  const parts = [];
+  let written = 0, used = 0;
+  const append = code => {
+    history[written++ & (packingWindow - 1)] = code;
+    chunk[used++] = code;
+    if (used === chunk.length) {
+      parts.push(String.fromCharCode(...chunk));
+      used = 0;
+    }
+  };
+  for (let i = workspacePackingPrefix.length; i < packed.length; i++) {
+    const literal = packed.charCodeAt(i);
+    if (literal) {
+      append(literal);
+      continue;
+    }
+    const distance = packed.charCodeAt(++i);
+    const length = packed.charCodeAt(++i);
+    if (!distance || distance > written || !(length >= 5)) throw Error('Invalid compressed workspace.');
+    for (let step = 0; step < length; step++) append(history[(written - distance) & (packingWindow - 1)]);
+  }
+  parts.push(String.fromCharCode(...chunk.subarray(0, used)));
+  return parts.join('');
+}
+
+export function readStoredWorkspace(value) {
+  if (value.startsWith(workspacePackingPrefix)) value = unpackStoredWorkspace(value);
+  const prefix = 'arcana-packed-v1\t';
+  if (value.startsWith(prefix)) {
+    const split = value.indexOf('\n');
+    const table = JSON.parse(value.slice(prefix.length, split));
+    value = value.slice(split + 1).replace(/\t([0-9a-z]+)\t/g, (_, index) => {
+      const token = table[parseInt(index, 36)];
+      if (typeof token !== 'string') throw Error('Invalid compressed workspace.');
+      return token;
+    });
+  }
+  return readWorkspaceFile(JSON.parse(value));
 }
 export function readWorkspaceFile(data) {
   if (Array.isArray(data)) return {decks:validateBackup(data),collection:null};
