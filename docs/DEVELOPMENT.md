@@ -51,6 +51,20 @@ Add meaningful behavior/risk regressions; wording-only edits need no new tests. 
 
 Use synthetic fixtures and isolated browser storage/server. Never clear personal storage to test. Different origins/ports have separate storage. Keep live-network tests opt-in. Loopback EACCES is an environment restriction, not a passing check; resolve permitted access before retrying, and report any remaining block.
 
+### Card lookup and import verification
+
+Choose cases that exercise the changed workflow end to end. Check its contract for which fields identify a rules card, a printing, or an owned lot. Search discovery can return broad matches. Once a workflow selects or imports a card, verify the exact name or known identity before applying changes.
+
+| Boundary | Cases to exercise |
+| --- | --- |
+| Name and identity | A quoted name containing a comma, the full double-faced name, an exact face name, no exact match, and the same name returned for different rules identities. Where supported, check reversible printings and preserve both faces. |
+| Edition and printing | An edition name and code, punctuation or spacing variations, several printings in the same set, and a collector number with a suffix. Check explicit language, wrong set or number, and a result beyond the first page. Check stored, fresh, and legacy records where they can take different paths. |
+| Finish | An omitted finish with nonfoil available, a foil-only or etched-only printing, and an explicit finish the printing lacks. Verify the default or recovery policy for the specific workflow, including the saved finish and its displayed quote. |
+| Remote work | Separate a genuine no-match from an unavailable endpoint, network failure, or rate limit. For bulk operations, count requests at representative scale and exercise partial results, pagination, cooldown, retry and cancellation. |
+| Apply and persistence | For staged imports and printing changes, confirm no writes before approval, no partial change on a failed write, and a single application on retry. Check saved quantity, identity, printing, finish and relevant metadata after reload or compatible JSON round-trip. Combine a representative bulk import with an existing workspace for quota checks. |
+
+Use small synthetic fixtures for semantic edge cases and a representative synthetic batch for scale. Mock upstream responses in the native suite. Use live lookups only when testing upstream behavior explicitly, and keep personal exports out of Git. [Cross-app audit #226](https://github.com/RuneBrix/magic-the-deckbuilder/issues/226) tracks existing workflows that still need this review.
+
 ## UI acceptance
 
 Apply [the interface principles](../DESIGN.md#interface-principles) within the affected workflow. Identify the player's task, an existing pattern to reuse, variable-content/interaction risks and conflicts with selected criteria before implementation. This is agent work, not a routine developer approval checkpoint.

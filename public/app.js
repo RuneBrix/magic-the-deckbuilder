@@ -1546,6 +1546,9 @@ function bindGuided(){
       return;
     }
     const field=e.target.closest('[data-family]'),family=field?.dataset.family;
+    // A change can rebuild the form before the disclosure's queued toggle arrives.
+    const panel=field?.closest('[data-guided-family]');
+    if(panel?.open)openFilterFamilies.add(panel.dataset.guidedFamily);
     const color=family==='color'||family==='identity';
     if(color&&e.target.name===family+'-mode'){
       const disabled=colorSelectionDisabled(e.target.value);

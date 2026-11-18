@@ -1313,8 +1313,16 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   const raw=page.locator('#raw');
   await raw.fill('t:elf t:creature -t:artifact keyword:flying mv>=2 mv<=5 c>=G id<=GU o:"draw" otag:ramp usd<5');
   await page.locator('#search-filters > summary').click();
-  await page.locator('#filter-heading-activation').click();
-  await page.getByLabel('Activation cost includes').selectOption('tap');
+  await page.locator('#filter-heading-activation').evaluate(heading=>{
+    // Keep opening and changing the select in the same task so the queued
+    // details toggle event cannot run before the form is rebuilt.
+    heading.click();
+    const activation=heading.parentElement.querySelector('select[name="activation-kind"]');
+    activation.value='tap';
+    activation.dispatchEvent(new Event('input',{bubbles:true}));
+    activation.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await expect(page.getByLabel('Activation cost includes')).toBeVisible();
   await expect(page.locator('#result-count')).toHaveText('3 cards found');
   await expect(raw).toHaveValue(/t:elf t:creature.*otag:ramp usd<5/);
   await page.getByLabel('Activation cost includes').selectOption('both');
