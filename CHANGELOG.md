@@ -1,5 +1,10 @@
 # Changelog
 
+## Owned printings and text exports — 2026-11-18
+
+- Review and match deck copies to verified owned printings in selected zones, including finish/language changes and partial quantity splits. Preserve unmatched copies, functions and inventory; failed saves retain a retryable review (#175).
+- Lead deck export with a text preview, independent zone/headings/quantity options and missing-copy output using the deck’s ownership matching. Keep complete JSON as a secondary backup action (#176).
+
 ## Collection upload recovery — 2026-11-17
 
 - Recover CSV mappings with suggested columns, normalize edition names and codes, and show row-specific lookup errors with a correction path (#181). For set-only rows, select a compatible printing when the rules identity is clear, and accept Collector Number to select an exact variant. Batch edition-constrained lookups to reduce large CSV upload times.

@@ -488,11 +488,21 @@ export function legalityReport(deck) {
   return { failed:[...new Set(failed)], unavailable:[...new Set(unavailable)], manual:[...new Set(manual)] };
 }
 export function legality(deck) { const report = legalityReport(deck); return [...report.failed, ...report.unavailable]; }
-export function exportDeckText(deck) {
-  return Object.entries(ZONES).filter(([z])=>zoneCount(deck,z)>0).map(([z,label])=>{
-    const quantities=new Map();
-    for(const {card,qty} of deck.cards.filter(e=>zoneFor(e)===z))quantities.set(card.name,(quantities.get(card.name)||0)+qty);
-    return label+'\n'+[...quantities].map(([name,qty])=>`${qty} ${name}`).join('\n');
+export function exportDeckText(deck, { zones=Object.keys(ZONES), headings=true, quantities=true, missingOnly=false, collection=[] } = {}) {
+  const rows=missingOnly?collectionReport({...deck,budgetZones:zones},collection).rows:null;
+  const selected=deck.cards.map(entry=>({...entry,qty:rows?rows.find(row=>row.entry===entry)?.missing??0:entry.qty}));
+  const sections=Object.entries(ZONES).filter(([z])=>zones.includes(z)).map(([z,label])=>{
+    const totals=new Map();
+    for(const {card,qty} of selected.filter(e=>zoneFor(e)===z && e.qty>0))totals.set(card.name,(totals.get(card.name)||0)+qty);
+    return {label,totals};
+  }).filter(section=>section.totals.size);
+  if(!headings){
+    const combined=new Map();
+    for(const {totals} of sections)for(const [name,qty] of totals)combined.set(name,(combined.get(name)||0)+qty);
+    return [...combined].map(([name,qty])=>`${quantities?qty+' ':''}${name}`).join('\n');
+  }
+  return sections.map(({label,totals})=>{
+    return label+'\n'+[...totals].map(([name,qty])=>`${quantities?qty+' ':''}${name}`).join('\n');
   }).join('\n\n');
 }
 export function resolveImport(parsed, cards) {
@@ -603,6 +613,50 @@ export function collectionReport(deck, collection) {
     return {...row,owned:used,missing:needed};
   });
   return {mode,zones,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced,basicCopies};
+}
+
+export function ownedPrintingPlan(deck, collection) {
+  validateBackup([deck]);validateCollection(collection);
+  const staged=structuredClone(deck),zones=deck.budgetZones??DEFAULT_BUDGET_ZONES;
+  const lots=collection.filter(lot=>rulesIdentity(lot.card) && deckFinishOptions(lot.card).includes(lot.finish))
+    .map(lot=>({...lot,remaining:lot.qty})).sort((a,b)=>a.card.id.localeCompare(b.card.id)||FINISHES.indexOf(a.finish)-FINISHES.indexOf(b.finish)||(a.condition||'').localeCompare(b.condition||''));
+  const entries=[...staged.cards].sort((a,b)=>BUDGET_ZONE_ORDER.indexOf(zoneFor(a))-BUDGET_ZONE_ORDER.indexOf(zoneFor(b))||a.card.id.localeCompare(b.card.id));
+  const replacements=new Map(),changes=[];
+  let matched=0,already=0,unmatched=0;
+  for(const entry of entries){
+    if(!zones.includes(zoneFor(entry)))continue;
+    const id=rulesIdentity(entry.card),finish=entry.finish??defaultDeckFinish(entry.card);
+    const candidates=lots.filter(lot=>id && rulesIdentity(lot.card)===id).sort((a,b)=>Number(b.card.id===entry.card.id && b.finish===finish)-Number(a.card.id===entry.card.id && a.finish===finish));
+    let remaining=entry.qty;
+    const parts=[];
+    for(const lot of candidates){
+      const qty=Math.min(remaining,lot.remaining);
+      if(!qty)continue;
+      const part={...structuredClone(entry),qty};
+      part.card.oracle_id=id;
+      setEntryPrinting({cards:[part]},entryKey(part),validatePrinting({...entry.card,oracle_id:id},structuredClone(lot.card)),lot.finish);
+      if(part.companion && parts.some(other=>other.companion))delete part.companion;
+      parts.push(part);remaining-=qty;lot.remaining-=qty;matched+=qty;
+      if(entry.card.id===part.card.id && finish===part.finish)already+=qty;
+      else changes.push({name:entry.card.name,zone:zoneFor(entry),qty,from:entry.card,to:part.card,fromFinish:finish,finish:part.finish});
+      if(!remaining)break;
+    }
+    if(remaining){const part={...entry,qty:remaining};if(parts.some(other=>other.companion))delete part.companion;parts.push(part);unmatched+=remaining;}
+    replacements.set(entry,parts);
+  }
+  const merged=[];let mergedEntries=0;
+  for(const entry of staged.cards.flatMap(entry=>replacements.get(entry)??[entry])){
+    const same=matchingEntry({cards:merged},entry);
+    if(same){
+      same.qty+=entry.qty;same.tags=[...new Set([...same.tags,...entry.tags])];if(entry.companion)same.companion=true;mergedEntries++;
+      if(entry.card.legalityUpdatedAt && (!same.card.legalityUpdatedAt || entry.card.legalityUpdatedAt>same.card.legalityUpdatedAt)){
+        same.card.legalities=entry.card.legalities;same.card.legalityUpdatedAt=entry.card.legalityUpdatedAt;
+      }
+    }
+    else merged.push(entry);
+  }
+  staged.cards=merged;validateBackup([staged]);
+  return {deck:staged,changes,matched,already,unmatched,changed:matched-already,merged:mergedEntries};
 }
 
 

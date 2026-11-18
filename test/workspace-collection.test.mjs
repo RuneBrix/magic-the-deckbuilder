@@ -549,6 +549,28 @@ test('deck currency saves atomically, clears cheapest quotes and ignores late sc
   assert.equal(vm.runInContext('JSON.stringify(current().cards)',w.context),before);
 });
 
+test('owned matching reviews, cancels, rejects stale data and saves once after a failed write',()=>{
+  const d=editorDeck(),owned={card:{...d.cards[1].card,id:'owned',lang:'ja',finishes:['foil']},qty:1,finish:'foil'};
+  const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],[owned]))});
+  vm.runInContext("openDeck('editor');deckTab='planning';matchOwnedDialog()",w.context);
+  const before=vm.runInContext('JSON.stringify({decks,collection})',w.context);
+  assert.match(w.node('#dialog').innerHTML,/1 copy to update/);
+  assert.match(w.node('#dialog').innerHTML,/foil \/ ja/);
+  w.node('#cancel-owned-match').onclick();assert.equal(w.writes.length,0);
+  assert.equal(vm.runInContext('JSON.stringify({decks,collection})',w.context),before);
+  vm.runInContext('matchOwnedDialog();collection[0].qty++',w.context);
+  w.node('#confirm-owned-match').onclick();assert.match(w.node('#match-owned-error').textContent,/deck or Collection changed/);
+  assert.equal(w.writes.length,0);vm.runInContext('collection[0].qty--',w.context);
+  vm.runInContext('matchOwnedDialog()',w.context);
+  const write=w.context.localStorage.setItem;w.context.localStorage.setItem=()=>{throw Error('Quota');};
+  w.node('#confirm-owned-match').onclick();assert.match(w.node('#match-owned-error').textContent,/Browser storage is full/);
+  assert.equal(vm.runInContext('JSON.stringify({decks,collection})',w.context),before);
+  w.context.localStorage.setItem=write;w.node('#confirm-owned-match').onclick();
+  const restored=core.readWorkspaceFile(JSON.parse(w.writes.at(-1)[1]));
+  assert.deepEqual(restored.collection,[owned]);assert.equal(restored.decks[0].cards.find(e=>e.card.id==='owned').finish,'foil');
+  const writes=w.writes.length;w.node('#confirm-owned-match').onclick();assert.equal(w.writes.length,writes);
+});
+
 test('cheapest printing application reviews scope, cancels safely and commits atomically with stale-result protection',()=>{
   const d=editorDeck();
   const oracle='00000000-0000-4000-8000-000000000001';

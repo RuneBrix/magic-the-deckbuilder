@@ -3,7 +3,7 @@ import { esc, mana, printingLabel, icon, money, currencySymbol } from './view-ut
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
-import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions } from './core.js';
+import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions, ownedPrintingPlan } from './core.js';
 import { cheapestPrintings, refreshPriceQuotes, cheapestDeckPlan } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -1402,9 +1402,18 @@ function deleteDeck(deck) {
   $('#cancel-delete').focus();
 }
 function exportDialog(deck) {
-  showDialog(`<h2>Export ${esc(deck.name)}</h2><p>JSON preserves every card, quantity, zone, companion designation, ordered role tag and player-assigned bracket. Text includes names, quantities and zone headings, but loses companion designation, roles, printing details and assigned brackets.</p><div class="workspace-actions"><button class="primary" id="export-json">Complete JSON backup</button><button class="secondary" id="export-text">Text decklist</button></div>`);
+  showDialog(`<h2>Export ${esc(deck.name)}</h2><form id="export-options"><fieldset class="planning-scope"><legend>Include zones</legend><div>${Object.entries(ZONES).map(([zone,label])=>`<label><input type="checkbox" id="export-zone-${zone}" checked> ${label}</label>`).join('')}</div></fieldset><label class="export-check"><input type="checkbox" id="export-missing"> Only copies missing from Collection</label><div class="export-format"><label class="export-check"><input type="checkbox" id="export-headings" checked> Zone headings</label><label class="export-check"><input type="checkbox" id="export-quantities" checked> Quantities</label></div><p id="export-status" role="status"></p><label>Text decklist<textarea id="export-preview" rows="7" readonly></textarea></label><button class="primary" id="export-text" type="button">Download text decklist</button></form><details class="planning-help"><summary>Text format and ownership</summary><p>Missing copies use this deck’s ownership matching and allocate Collection copies across the selected export zones. Text includes only the selected names, quantities and headings. Printing details, functions, companion designation and brackets require JSON.</p></details><div class="export-backup"><button class="text-button" id="export-json">Complete JSON backup</button></div>`);
+  const options=()=>({zones:Object.keys(ZONES).filter(zone=>$('#export-zone-'+zone).checked),headings:$('#export-headings').checked,quantities:$('#export-quantities').checked,missingOnly:$('#export-missing').checked,collection});
+  const update=()=>{
+    const selected=options(),text=exportDeckText(deck,selected);
+    $('#export-preview').value=text;$('#export-text').disabled=!text;
+    $('#export-status').textContent=!selected.zones.length?'Select at least one zone.':!text?(selected.missingOnly?'No missing copies in the selected zones.':'No cards in the selected zones.'):`${selected.missingOnly?'Missing copies':'All copies'} · ${selected.zones.map(zone=>ZONES[zone]).join(', ')}`;
+  };
+  $('#export-options').onchange=update;
+  $('#export-options').onsubmit=e=>e.preventDefault();
   $('#export-json').onclick=()=>saveWorkspaceCopy([deck],deck.name+'.json');
-  $('#export-text').onclick=()=>download(deck.name+'.txt',exportDeckText(deck),'text/plain');
+  $('#export-text').onclick=()=>{const text=exportDeckText(deck,options());if(text)download(deck.name+'.txt',text,'text/plain');};
+  update();$('#export-text').focus();
 }
 
 function readFilters() {
@@ -1799,6 +1808,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='refresh-prices')await refreshPrices();
   if(action==='cheapest-prices')await checkCheapestPrices();
   if(action==='apply-cheapest')applyCheapestDialog();
+  if(action==='match-owned')matchOwnedDialog();
   if(action==='add-owned')collectionLotDialog();
   if(action==='import-collection')collectionImport();
   if(action==='clear-collection')clearCollection();
@@ -2236,6 +2246,24 @@ function applyCheapestDialog(d=current()){
     }catch(error){$('#apply-cheapest-error').textContent=error.message;}
   };
   $('#cancel-cheapest').focus();
+}
+function matchOwnedDialog(d=current()){
+  if(!d)return;
+  let plan;
+  try{plan=ownedPrintingPlan(d,collection);}catch(error){toast(error.message);return;}
+  const snapshot=()=>JSON.stringify({deck:d,collection}),before=snapshot();let applied=false;
+  const zones=(d.budgetZones??DEFAULT_BUDGET_ZONES).map(zone=>ZONES[zone]).join(', ')||'None';
+  showDialog(`<h2>Match owned printings?</h2><p>${esc(d.name)} · ${esc(zones)}</p><p>Adopt the owned printing, finish and language for available copies. Excess copies keep their current versions. Collection stays unchanged.</p><p>${plan.changed} ${plan.changed===1?'copy':'copies'} to update · ${plan.already} already match · ${plan.unmatched} without an eligible owned copy</p>${plan.merged?'<p>Converging entries combine their function lists in deck order.</p>':''}${plan.changes.length?`<details><summary>Review ${plan.changes.length} printing ${plan.changes.length===1?'change':'changes'}</summary><ul>${plan.changes.map(change=>`<li>${change.qty} × ${esc(change.name)} · ${ZONES[change.zone]} · ${esc(change.from.set?.toUpperCase()||'Unknown set')} ${esc(change.from.collector_number||'')} / ${esc(change.fromFinish||'unspecified')} / ${esc(change.from.lang||'unknown language')} → ${esc(change.to.set?.toUpperCase()||'Unknown set')} ${esc(change.to.collector_number||'')} / ${esc(change.finish)} / ${esc(change.to.lang||'unknown language')}</li>`).join('')}</ul></details>`:''}<details><summary>How copies are matched</summary><p>Verified rules identity is required. Selected zones allocate copies in Main deck, Command zone, Sideboard, Maybeboard order, then by current printing ID. Each entry prefers its current printing and finish, then owned printing ID and regular, foil, etched finish order. Condition lots share their available quantities. Unavailable finishes and cards without identity stay unchanged. Splits retain functions; merged entries retain ordered function memberships.</p></details><p id="match-owned-error" role="alert"></p><div class="settings-actions"><button class="secondary" id="cancel-owned-match">Keep printings</button><button class="primary" id="confirm-owned-match" ${!plan.changed?'disabled':''}>Apply ${plan.changed} copies</button></div>`);
+  $('#cancel-owned-match').onclick=()=>closeDialog();
+  $('#confirm-owned-match').onclick=()=>{
+    if(applied || !plan.changed)return;
+    try{
+      if(snapshot()!==before || !decks.includes(d))throw Error('The deck or Collection changed. Close this review and try again.');
+      commitDeckSnapshot(d,plan.deck);applied=true;
+      closeDialog();render();$('[data-action="match-owned"]')?.focus();toast(`Updated ${plan.changed} copies; ${plan.unmatched} without an eligible owned copy.`);
+    }catch(error){$('#match-owned-error').textContent=error.message;}
+  };
+  $('#cancel-owned-match').focus();
 }
 function importDialog(target=current()){
   showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste Archidekt text using “1 Card Name” and generic Commander, Mainboard, Sideboard or Maybeboard headings. Main deck and Command zone also work. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><div id="import-preview" aria-live="polite"></div><button class="primary">Review import</button></form>`);

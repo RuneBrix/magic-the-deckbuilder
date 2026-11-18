@@ -26,6 +26,14 @@ Text preserves quantities, names and explicit zones, including commander designa
 
 The sample above is a small representative fixture derived from the supplied export settings, not the user’s personal 183-card deck. The user subsequently confirmed successful Archidekt deck import and export and accepted the options on 1 November 2026. This is user-reported workflow validation, not an agent reproduction of the full personal list. [Issue #6](https://github.com/RuneBrix/magic-the-deckbuilder/issues/6) is complete for this selected scope.
 
+## Export options (#176)
+
+Export deck leads with a live text preview and Download text decklist. Include zones independently selects Main deck, Command zone, Sideboard and Maybeboard (all on initially). Zone headings and Quantities are separate controls, both initially on. Without headings, repeated names across selected zones combine; without quantities, each name appears once per retained section, or once overall without headings. No zones/no cards disables text download with a visible explanation.
+
+Only copies missing from Collection uses the same allocation helper and saved rules/printing matching setting as Ownership & costs, with the independently selected export zones as its scope. Owned copies allocate across that scope in Main deck, Command zone, Sideboard, Maybeboard order, then current printing ID; excluding a zone can free owned copies for another exported zone. A fully covered selection produces an empty preview and no download. Options and downloads do not edit deck, inventory or saved ownership settings.
+
+Complete JSON backup remains a smaller secondary action and always includes the complete deck, regardless of text options. Only default quantity/heading text promises the existing zone/quantity import round trip. Name-only output is for copying to other tools; Arcana’s importer still requires quantities. JSON remains necessary for printing/finish, functions, companion designation, brackets and complete metadata.
+
 ## Verification
 
 1 November 2026: all 106 native Node tests pass on Windows/Node v24.14.1, including unresolved/ambiguous resolution, invalidated/in-flight reviews, overflow rollback and quantity/zone round trips. Live Windows in-app-browser checks cover missing-name feedback without mutation, corrected review, Enter application into all four zones, reload persistence, Escape cancellation/focus return, desktop light and 390px dark layout. Phone page/dialog widths were 390/358px with no horizontal page overflow. Browser version was not exposed/recorded; physical touch and macOS/Safari remain untested. The user's subsequent Archidekt import/export confirmation supplies the remaining real-workflow evidence. Their OS/browser and full list were not supplied; no broader format or platform coverage is inferred.

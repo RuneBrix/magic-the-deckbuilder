@@ -28,6 +28,8 @@ API requests receive deterministic fixture responses, and external requests rece
 
 ## Coverage and failure evidence
 
+- Owned-printing matching reviews finish/language changes, cancels without writes, retries quota failure and preserves split quantities, functions and unchanged inventory after reload. Text export covers independent zones, headings and quantities, missing-copy allocation, empty/fully covered selections, actual text/complete JSON downloads, keyboard dismissal and enlarged-text dialog fit in all four projects.
+
 - Settings page/Back navigation from library, editor, Explore and Collection; retained deck tab/query/inventory, workspace download/open and keyboard focus. Fourteen Light/Dark palette combinations cover desktop/phone forms, guide dialogs, chart/deck surfaces, token contrast, legacy migration, per-appearance reload and enlarged-text reflow.
 
 - Collection upload Add/Replace quantities, repeat warnings, explicit replacement confirmation/cancellation, keyboard application and preserved decks; companion selection, focus, reload and clearing in Checks. Native tests separately exercise failed writes, stale operations and rule predicates.
