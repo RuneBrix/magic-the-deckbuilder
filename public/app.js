@@ -362,17 +362,18 @@ function tagOptions(matches) {
 
 function browseFunctions(id) {
   if (!tagById.has(id)) return;
+  const dialog=$('#related-dialog');
   showDialog(`<h2>Related functions</h2><section class="function-discovery">
     <h3 id="browsed-function" tabindex="-1"></h3>
     <nav class="tag-history" aria-label="Function browsing history"><button class="secondary" data-tag-step="-1">Back</button><button class="secondary" data-tag-step="1">Forward</button></nav>
     <div id="tag-relationships"></div>
     <section aria-label="Example cards"><h4>Example cards</h4><p class="hint">Paper cards from Scryfall search, which can include related tags.</p>
-      <p id="tag-example-status" role="status"></p><div id="tag-examples"></div></section></section>`);
-  const dialog=$('#dialog'),overlay=$('.function-discovery'),heading=$('#browsed-function');
+      <p id="tag-example-status" role="status"></p><div id="tag-examples"></div></section></section>`,dialog);
+  const overlay=$('.function-discovery'),heading=$('#browsed-function');
   const examples=$('#tag-examples'),status=$('#tag-example-status');
   const back=overlay.querySelector('[data-tag-step="-1"]'),forward=overlay.querySelector('[data-tag-step="1"]');
   const history=[id];
-  let index=0,controller,timer;
+  let index=0,controller,timer,exampleCards=[];
   function cancelExamples() {
     clearTimeout(timer);
     controller?.abort();
@@ -380,6 +381,7 @@ function browseFunctions(id) {
   function loadExamples(tag) {
     cancelExamples();
     const {signal}=controller=new AbortController();
+    exampleCards=[];
     examples.innerHTML='';
     status.textContent='Loading example cards…';
     timer=setTimeout(async()=>{
@@ -388,9 +390,10 @@ function browseFunctions(id) {
         const {data}=await api('/api/search?'+new URLSearchParams({q:'game:paper otag:'+tag,order:'edhrec'}),{signal});
         if (!isCurrent()) return;
         status.textContent=data.length?'':'No paper cards matched this function.';
-        examples.innerHTML=data.length?`<ul class="tag-example-grid">${data.slice(0,8).map(card=>{
-          const image=safeUrl(card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || imageFor(card),true);
-          return `<li>${image?`<img src="${esc(image)}" alt="" width="488" height="680">`:''}<span>${esc(card.name)}</span></li>`;
+        exampleCards=data.slice(0,8);
+        examples.innerHTML=exampleCards.length?`<ul class="tag-example-grid">${exampleCards.map((card,i)=>{
+          const image=safeUrl(imageFor(card),true)||safeUrl(card.image_uris?.small||card.card_faces?.[0]?.image_uris?.small,true);
+          return `<li><button type="button" class="tag-example" data-tag-example="${i}">${image?`<img src="${esc(image)}" alt="" width="488" height="680">`:'<span class="tag-example-missing" aria-hidden="true">Artwork unavailable</span>'}<span>${esc(card.name)}</span></button></li>`;
         }).join('')}</ul>`:'';
       } catch (error) {
         if (!isCurrent()) return;
@@ -427,13 +430,17 @@ function browseFunctions(id) {
     if (!button) return;
     if (button.dataset.tagStep) {index+=Number(button.dataset.tagStep);showTag();}
     else if (button.dataset.tagNavigate) navigate(button.dataset.tagNavigate);
-    else if (button.hasAttribute('data-tag-retry')) {loadExamples(history[index]);heading.focus();}
+    else if (button.dataset.tagExample!==undefined) {
+      const card=exampleCards[Number(button.dataset.tagExample)];
+      if(card)showCardDetails({...printingState(card),zone:'main',relatedExample:button});
+    } else if (button.hasAttribute('data-tag-retry')) {loadExamples(history[index]);heading.focus();}
     else if (button.id==='tag-apply'&&setCondition('tags',toggleFunction(history[index]),true,true)) {
       refreshFunctionFilters();
-      closeDialog();
+      dialog.close();
     }
   };
   dialog.onclose=()=>{
+    if(dialog.open)return;
     cancelExamples();
     (document.querySelector(`[data-browse-tag="${id}"]`) || $('#tag-search'))?.focus({preventScroll:true});
   };
@@ -1159,9 +1166,26 @@ function scrollCardDrag() {
   }
   cardDrag.frame=requestAnimationFrame(scrollCardDrag);
 }
-// Leave touch scrolling and keyboard controls native. Mouse/trackpad dragging uses
-// the same pointer events as the existing tracker resize, without browser image drags.
-$('#app').addEventListener('dragstart',e=>{if(e.target.closest('[data-card-draggable]'))e.preventDefault();});
+function pointerOnText(target,x,y) {
+  const node=document.caretPositionFromPoint?.(x,y)?.offsetNode??document.caretRangeFromPoint?.(x,y)?.startContainer;
+  if(node?.nodeType!==3||!node.textContent.trim()||!target.contains(node))return false;
+  const range=document.createRange();
+  range.selectNodeContents(node);
+  return [...range.getClientRects()].some(rect=>x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom);
+}
+// Caret lookup can snap across blank space. Check the text's rendered bounds
+// before allowing a mouse selection to start there.
+addEventListener('pointerdown',e=>{
+  if(e.pointerType!=='mouse'||e.button!==0)return;
+  const target=e.target;
+  if(!target.closest?.('input,textarea,[contenteditable]')&&!pointerOnText(target,e.clientX,e.clientY)){
+    document.documentElement.dataset.blankSelection='';
+  }
+});
+function finishBlankSelection(){delete document.documentElement.dataset.blankSelection;}
+addEventListener('dragstart',e=>{if(e.target.closest('img,svg,[data-card-draggable]'))e.preventDefault();});
+// Leave touch scrolling and keyboard controls native. Deck cards keep their
+// custom mouse drag targets instead of starting a browser image drag.
 $('#app').addEventListener('pointerdown',e=>{
   suppressCardClick=false;
   if(e.pointerType!=='mouse' || e.button!==0)return;
@@ -1197,6 +1221,7 @@ addEventListener('pointermove',e=>{
   highlightCardDrop(document.elementFromPoint(e.clientX,e.clientY));
 });
 addEventListener('pointerup',e=>{
+  finishBlankSelection();
   if(!cardDrag){cardDragPress=null;return;}
   if(e.pointerId!==cardDrag.pointerId)return;
   e.preventDefault();
@@ -1221,8 +1246,9 @@ addEventListener('pointerup',e=>{
     else {const zone=target.dataset.dropZone;changeNamedDeck(d,deck=>moveEntry(deck,key,zone));toast('All entry copies moved to '+ZONES[zone]);}
   }catch(error){toast(error.message);}
 });
-addEventListener('pointercancel',finishCardDrag);
-addEventListener('blur',finishCardDrag);
+function cancelPointerDrag(){finishBlankSelection();finishCardDrag();}
+addEventListener('pointercancel',cancelPointerDrag);
+addEventListener('blur',cancelPointerDrag);
 addEventListener('keydown',e=>{if(e.key==='Escape'&&(cardDrag||cardDragPress)){e.preventDefault();finishCardDrag();}});
 
 function closeCardSubmenu(restore=false) {
@@ -1907,21 +1933,21 @@ function chooseDestination(id,zone='main') {
   if(card)deckCardDialog(card,{zone});
 }
 function closeDialog() {$('#dialog').close();}
-function showDialog(html) {
-  const dialog=$('#dialog');
+function showDialog(html,dialog=$('#dialog')) {
   dialog.onclose=null;
   dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Close dialog">${icon('close')}</button>${html}`;
   dialog.scrollTop=0;
   dialog.setAttribute('aria-label',dialog.querySelector('h2')?.textContent || 'Card details');
   if(!dialog.open)dialog.showModal();
   else dialog.querySelector('.dialog-close').focus();
-  dialog.querySelector('.dialog-close').onclick=closeDialog;
+  dialog.querySelector('.dialog-close').onclick=()=>dialog.close();
 }
-$('#dialog').addEventListener('click',e=>{
-  if(e.target!==$('#dialog'))return;
+function closeOnBackdrop(e) {
+  if(e.target!==e.currentTarget)return;
   const r=e.target.getBoundingClientRect();
-  if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();
-});
+  if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();
+}
+for (const id of ['#dialog','#related-dialog']) $(id).addEventListener('click',closeOnBackdrop);
 function deckForm(deck,after) {
   if(!deck&&decks.length>=200){toast('Maximum 200 decks per workspace.');return;}
   let commander=null;
@@ -2101,7 +2127,7 @@ function mountPrintings(state, onSelect) {
 function printingState(card) {return {source:card,card,printings:[card],page:0,more:false};}
 
 function showCardDetails(state, focus) {
-  showDialog(`<div class="card-detail"><div id="detail-images" class="detail-images"></div>
+  showDialog(`${state.relatedExample?'<button type="button" class="text-button detail-back" id="detail-back-related">Back to Related functions</button>':''}<div class="card-detail"><div id="detail-images" class="detail-images"></div>
     <div class="detail-information"><div id="detail-facts"></div>
       <section class="printing-browser" aria-label="Card printings"><h3>Sets and printings</h3>${printingControls}<p id="detail-scryfall"></p></section>
       <section class="detail-deck-context" aria-label="Collection and deck"><h3>Collection</h3><p id="detail-ownership"></p>
@@ -2133,11 +2159,14 @@ function showCardDetails(state, focus) {
   $('#detail-add').onclick=()=>deckCardDialog(state.card,{
     deck:view==='deck'||view==='explore'?current():null,zone:state.zone,printings:state,back:()=>showCardDetails(state,'#detail-add'),
   });
+  if(state.relatedExample)$('#detail-back-related').onclick=closeDialog;
   renderCard();
   mountPrintings(state,renderCard);
   if(focus)$(focus).focus();
   $('#dialog').onclose=()=>{
-    if(!$('#dialog').open && state.origin && typeof CSS!=='undefined')document.querySelector(state.origin)?.focus({preventScroll:true});
+    if($('#dialog').open)return;
+    if(state.relatedExample?.isConnected)state.relatedExample.focus({preventScroll:true});
+    else if(state.origin && typeof CSS!=='undefined')document.querySelector(state.origin)?.focus({preventScroll:true});
   };
 }
 

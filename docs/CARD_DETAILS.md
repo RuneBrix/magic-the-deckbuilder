@@ -2,6 +2,8 @@
 
 ## Card details
 
+Related-function examples open the printing shown on the example. Back to Related functions, the close button and Escape return to the example. Opening or closing a card’s details leaves the current query and selected function filters in place.
+
 Inspect from a deck or Explore cards to open the same read-only card details. Deck rows open their stored printing. Collection artwork, captions and text rows instead open Update card in collection for the exact owned lot (#184). Printing/finish/condition changes keep that lot's draft quantity; Update card replaces the original, combining matching lots if necessary. Cancel or a failed save retains the original inventory. The read-only dialog shows full artwork, Oracle text, release facts and stored format legality. A date appears only when Arcana has a recorded successful legality refresh for the displayed data. Choose a printing to update the preview, the Scryfall link and the exact-printing ownership total across finishes and conditions.
 
 The first page of paper printings loads on open. **Load more printings** fetches one page at a time. The current printing stays available during loading and after a failed lookup. Retry uses the same page. Cards without a stored Oracle identity retain their original printing and explain the lookup limit. Responses for closed or replaced dialogs are ignored. **Add this card to collection** opens the collection editor. **Back to card details** restores the viewed printing and returns focus to the collection action.

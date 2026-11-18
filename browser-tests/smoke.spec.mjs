@@ -908,7 +908,9 @@ test('Explore fills available width and keeps selected functions inside their di
   if (testInfo.project.name.startsWith('desktop')) {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.locator('#tracked-deck').selectOption('');
-    expect((await page.locator('.explorer').boundingBox()).width).toBe(1920);
+    // Body width excludes the scrollbar gutter reserved for modal scroll locking.
+    const availableWidth = await page.locator('body').evaluate(body => body.clientWidth);
+    expect((await page.locator('.explorer').boundingBox()).width).toBe(availableWidth);
     const fullColumns = await columns();
     await page.screenshot({ path: testInfo.outputPath('explore-wide.png') });
     await page.locator('#tracked-deck').selectOption('smoke-deck');
@@ -992,7 +994,7 @@ test('function pages and related browsing preserve the search until a filter is 
   await expect(examples.first()).toHaveText('Smoke Card 1');
   await expect.poll(() => examples.locator('img').evaluateAll(images => images.filter(img => img.naturalWidth > 0).length)).toBe(8);
   const rowPositions = await examples.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
-  expect(new Set(rowPositions).size).toBe(2);
+  expect(new Set(rowPositions).size).toBe(phone ? 4 : 2);
   await expect(dialog.getByText(/Direct taggings in the/)).toBeVisible();
   await dialogFits(page);
   await dialog.screenshot({ path: testInfo.outputPath('function-overlay.png') });

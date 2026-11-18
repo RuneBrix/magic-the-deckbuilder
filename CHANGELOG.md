@@ -1,5 +1,11 @@
 # Changelog
 
+## Card and dialog interactions — 2026-11-18
+
+- Show larger Related-function examples that open their exact printing in Card details and return to the same relationship, scroll position and focused example (#241).
+- Keep the page stationary while a modal dialog is open and allow its contents to scroll (#243).
+- Prevent artwork and blank-space drags from selecting page content. Text selection and intentional deck-card moves remain available (#244).
+
 ## Search setup — 2026-11-18
 
 - Show active filters and selected function tags beside their respective collapsed headings (#245).
