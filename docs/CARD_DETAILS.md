@@ -14,6 +14,8 @@ Functions remain private ordered `tags`: the first controls grouping, filtering 
 
 Confirmation adds the entered quantity. Matching printing and finish copies in the chosen zone share an entry. Other printings, finishes and zones keep separate entries. If a primary function is provided for a matching entry, it becomes the first of its stored functions and the remaining assignments are retained. A blank function leaves any existing primary in place. Copying through the deck card menu also carries over the source entry’s stored functions. The deck is limited to 500 copies of a rules card per zone across printings and finishes, and 1,000 entries. Back, Cancel and Escape discard the pending addition.
 
+Detailed additions, cross-deck copies and printing edits persist a staged workspace before applying the change. A failed save retains the original deck and leaves the form available for retry (#226).
+
 ## Changing a deck entry
 
 Choose **Change in-deck card details** in an entry’s options menu. The form identifies the deck, zone, card and quantity. **Save printing and finish** applies to those copies and preserves quantity, zone, personal functions and the latest stored legality. If the same printing and finish already has a separate entry in that zone, choose a different version or use the deck’s quantity controls to combine copies deliberately.
