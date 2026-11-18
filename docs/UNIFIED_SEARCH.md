@@ -70,7 +70,7 @@ Search broadening removes only a representable independent condition (the entire
 
 ## Function discovery
 
-Find a function searches names and aliases and shows the match count beneath the field as you type. An empty field shows curated starting points. Use Page to browse up to 40 matches at a time with direct tagging counts. Related opens recorded relationships and example cards in a dialog. Add filter or Remove filter updates the query using the current matching mode. [Tagging counts and example scope](TAG_TAXONOMY.md).
+Find a function searches names and aliases and shows the match count beneath the field as you type. An empty field shows curated starting points. Use Page to browse up to 40 matches at a time with direct tagging counts. Related opens recorded relationships and example cards in a dialog. Each example opens [card details](CARD_DETAILS.md#card-details). Returning keeps the current relationship, history, example focus and scroll position. Add filter or Remove filter updates the query using the current matching mode. [Tagging counts and example scope](TAG_TAXONOMY.md).
 
 Selected functions, their divider and their all/any choice appear inside Browse by function only when at least one function is selected. Find a function has greater typographic emphasis. Empty lookup omits the starting-point count; About function data holds snapshot provenance and explains direct tagging counts. A valid name with zero catalog matches offers Add as an unlisted function in the same panel. The action adds an `otag:` filter and runs the current query. The panel labels unlisted tags and explains that Scryfall may reject them or return no cards. Catalog results use the canonical tag slug. See [Tag taxonomy](TAG_TAXONOMY.md).
 

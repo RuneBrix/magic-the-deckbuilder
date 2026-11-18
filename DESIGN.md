@@ -23,7 +23,7 @@ Card imagery stays complete and undistorted in discovery, details and previews. 
 
 ## Interaction and verification
 
-Writable fields keep permanent labels; distinguish examples from entered values. Native dialogs, disclosures and popovers retain visible focus, predictable dismissal and focus return. Support reduced motion. Preserve concise loading, empty, error and storage-warning states, and touch/keyboard alternatives to pointer inspection.
+Writable fields keep permanent labels. Examples stay visually distinct from entered values. Native dialogs, disclosures and popovers retain visible focus, predictable dismissal and focus return. Modal dialogs keep the underlying page at its scroll position and scroll their own content. Support reduced motion. Preserve concise loading, empty, error and storage-warning states, and touch/keyboard alternatives to pointer inspection.
 
 Feature contracts own non-obvious preservation and interaction boundaries; read only affected sections through [the source map](docs/CODE_MAP.md). Inspect changed geometry and states in the browser. Historical screenshots and past test counts do not validate a new revision; record current evidence and platform gaps in its PR.
 
