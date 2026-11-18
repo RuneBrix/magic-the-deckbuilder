@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck legality checks — 2026-11-18
+
+- Refresh legality for one saved deck when Arcana opens. Use available card data when switching decks or editing, and offer a retry when a lookup fails (#236).
+- Show Commander manual-review items only when the deck calls for them. The Checks tab explains coverage under About these checks (#237).
+
 ## Card and dialog interactions — 2026-11-18
 
 - Show larger Related-function examples that open their exact printing in Card details and return to the same relationship, scroll position and focused example (#241).

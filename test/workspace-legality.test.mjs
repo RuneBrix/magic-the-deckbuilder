@@ -4,19 +4,20 @@ import vm from 'node:vm';
 import * as core from '../public/core.js';
 import { workspace, editorCard, editorDeck, formValues, chooseWorkspaceFile, startCardDrag, dropCard } from '../test-support/workspace.mjs';
 
-test('automatic refresh schedules only the tracked/open deck, deduplicates printing ids and preserves live edits and printing',async()=>{
+test('startup refreshes the default deck from the library and preserves concurrent edits',async()=>{
   const d=editorDeck();d.cards.push({...structuredClone(d.cards[1]),zone:'sideboard'});
-  const w=workspace({savedDecks:JSON.stringify([d,{...editorDeck(),id:'other'}])});
+  const w=workspace({savedDecks:JSON.stringify([d,{...editorDeck(),id:'other'}]),initialView:null});
   assert.equal(vm.runInContext('legalityStates.size',w.context),1);
+  let release;const request=new Promise(resolve=>release=resolve);const batches=[];
+  w.context.fetch=async(url,opts)=>{batches.push(JSON.parse(opts.body).ids);await request;return {ok:true,json:async()=>({data:d.cards.map(e=>({...e.card,legalities:{commander:'banned'}}))})};};
+  const task=w.timers.find(t=>t.ms===0).fn();
+  vm.runInContext("openDeck('editor');deckTab='checks';render()",w.context);
   assert.match(w.node('#app').innerHTML,/Refreshing legality/);
-  let release;const request=new Promise(resolve=>release=resolve);let names;
-  w.context.fetch=async(url,opts)=>{names=JSON.parse(opts.body).ids;await request;return {ok:true,json:async()=>({data:d.cards.map(e=>({...e.card,legalities:{commander:'banned'}}))})};};
-  const task=vm.runInContext('refresh()',w.context);
   assert.equal(vm.runInContext('refresh()',w.context),task);
   await Promise.resolve();await Promise.resolve();
   vm.runInContext("decks[0].cards[1].qty=7;decks[0].cards[1].tags=['New role'];decks[0].cards[1].zone='command';",w.context);
   release();await task;
-  assert.equal(names.length,2);
+  assert.deepEqual(batches,[['Leader','Ramp spell']]);
   const entry=vm.runInContext('decks[0].cards[1]',w.context);
   assert.equal(entry.qty,7);assert.equal(entry.tags[0],'New role');assert.equal(entry.zone,'command');
   assert.equal(entry.card.id,'Ramp spell');assert.equal(entry.card.legalities.commander,'banned');
@@ -25,8 +26,10 @@ test('automatic refresh schedules only the tracked/open deck, deduplicates print
   assert.match(w.node('#app').innerHTML,/Ramp spell/);
   assert.match(w.node('#app').innerHTML,/Legality refreshed this session/);
   assert.equal(vm.runInContext('legalityStates.size',w.context),1);
-  vm.runInContext("openDeck('other')",w.context);
-  assert.equal(vm.runInContext('legalityStates.size',w.context),2);
+  vm.runInContext("openDeck('other');deckTab='checks';render();view='explore';render();openDeck('editor');deckTab='checks';render()",w.context);
+  assert.equal(vm.runInContext('legalityStates.size',w.context),1);
+  assert.equal(w.timers.filter(t=>t.ms===0).length,1);
+  assert.equal(batches.length,1);
 });
 
 test('failed/partial refresh retains all usable data, exposes retry and cannot claim a fresh pass',async()=>{
@@ -41,7 +44,7 @@ test('failed/partial refresh retains all usable data, exposes retry and cannot c
     const html=w.node('#app').innerHTML;
     assert.match(html,/Legality refresh unavailable/);assert.match(html,/Retry legality refresh/);
     assert.doesNotMatch(html,/Supported checks passed/);
-    assert.match(html,/check-warning/);assert.match(html,/check-info/);
+    assert.match(html,/check-warning/);
   }
 });
 
@@ -57,21 +60,23 @@ test('in-flight refresh never revives removed entries or deleted decks and seria
   assert.equal(vm.runInContext('decks[0].id',w.context),'second');
 });
 
-test('fresh supported Modern checks pass and aged data becomes stale without a false pass',async()=>{
+test('successful Modern checks keep their session result without age-based retries',async()=>{
   const c={...editorCard('Forest','Basic Land — Forest'),cmc:0,oracle_text:'',legalities:{modern:'legal'}};
   const d={id:'modern',name:'Modern',format:'modern',cards:[{card:c,qty:60,tags:[],zone:'main'}]};
   const w=workspace({savedDecks:JSON.stringify([d])});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[c]})});
-  await vm.runInContext('refresh()',w.context);
+  vm.runInContext('globalThis.Date = class extends Date { static now() { return super.now() + elapsed; } }; globalThis.elapsed = 0;',w.context);
+  await w.timers.find(t=>t.ms===0).fn();
   vm.runInContext("view='deck';deckTab='checks';render()",w.context);
   assert.match(w.node('#app').innerHTML,/Supported checks passed/);
   assert.match(w.node('#app').innerHTML,/check-summary check-success/);
   assert.match(w.node('#app').innerHTML,/<h2>Deck legality checks<\/h2>/);
   assert.doesNotMatch(w.node('#app').innerHTML,/Failed checks|Data unavailable|Manual review|None found/);
-  vm.runInContext("legalityStates.get('modern').time-=300_001;render()",w.context);
-  assert.match(w.node('#app').innerHTML,/Legality data is stale/);
-  assert.match(w.node('#app').innerHTML,/Checks incomplete/);
-  assert.match(w.node('#app').innerHTML,/Retry legality refresh/);
+  vm.runInContext("elapsed=300_001;render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Legality refreshed this session/);
+  assert.match(w.node('#app').innerHTML,/check-summary check-success/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/stale|Retry legality refresh/);
+  assert.equal(w.timers.some(t=>t.ms===300_000),false);
 });
 
 test('legality results distinguish stored violations, missing data and unsupported Commander rules',()=>{
@@ -87,8 +92,8 @@ test('legality results distinguish stored violations, missing data and unsupport
   assert.match(html,/Banned spell \(Main deck\): banned in commander according to stored card legality/);
   assert.match(html,/&lt;Unknown&gt; is outside your commander&#39;s color identity \(Leader\)/);
   assert.match(html,/Data unavailable · 1/);
-  assert.match(html,/does not mean the affected cards are banned/);
-  assert.match(html,/Manual review · 1/);
+  assert.match(html,/Missing or unrecognized card data/);
+  assert.doesNotMatch(html,/Manual review ·/);
   assert.match(html,/combined color identity and basic-land types/);
   assert.match(html,/Designated companion/);
   assert.match(html,/Sideboard and Maybeboard are excluded/);
@@ -98,18 +103,22 @@ test('legality results distinguish stored violations, missing data and unsupport
   assert.equal(w.writes.length,0);
 });
 
-test('fresh Commander results keep supported passes separate from manual review',()=>{
+test('Commander shows only deck-specific manual review when supported checks pass',async()=>{
   const d=editorDeck();d.cards[1]={card:editorCard('Forest','Basic Land — Forest'),qty:99,tags:[],zone:'main'};
   const w=workspace({savedDecks:JSON.stringify([d])});
-  vm.runInContext("legalityStates.set('editor',{status:'fresh',time:Date.now(),signature:legalitySignature(decks[0])});view='deck';deckTab='checks';render()",w.context);
-  const html=w.node('#app').innerHTML;
-  assert.match(html,/Supported checks passed · manual review needed/);
-  assert.match(html,/check-summary check-info/);
-  assert.match(html,/Manual review · 1/);
-  assert.doesNotMatch(html,/Failed checks|Data unavailable|check-summary check-success/);
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:d.cards.map(e=>e.card)})});
+  await w.timers.find(t=>t.ms===0).fn();
+  vm.runInContext("view='deck';deckTab='checks';render()",w.context);
+  assert.match(w.node('#app').innerHTML,/check-summary check-success/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Manual review ·|Failed checks|Data unavailable/);
+  assert.match(w.node('#app').innerHTML,/About these checks/);
+  vm.runInContext("decks[0].cards[0].card.oracle_text='Before the game begins, choose a color.';render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Supported checks passed · manual review needed/);
+  assert.match(w.node('#app').innerHTML,/Manual review · 1/);
+  assert.match(w.node('#app').innerHTML,/pregame choice/);
 });
 
-test('startup timer runs bounded collection batches and card-set edits schedule a follow-up',async()=>{
+test('startup batches stay bounded and new cards use their available lookup data',async()=>{
   const d=editorDeck();d.cards=Array.from({length:80},(_,i)=>({card:editorCard('Card '+i),qty:1,tags:[],zone:'main'}));
   const w=workspace({savedDecks:JSON.stringify([d])}), batches=[];
   w.context.fetch=async(url,opts)=>{const names=JSON.parse(opts.body).ids;batches.push(names);return {ok:true,json:async()=>({data:names.map(name=>editorCard(name))})};};
@@ -121,11 +130,16 @@ test('startup timer runs bounded collection batches and card-set edits schedule 
   assert.equal(w.timers.filter(t=>t.ms===0).length,1);
   vm.runInContext("decks[0].cards.push({card:decks[0].cards[0].card,qty:1,tags:[],zone:'sideboard'});render()",w.context);
   assert.equal(w.timers.filter(t=>t.ms===0).length,1);
-  vm.runInContext("decks[0].cards.push({card:{...decks[0].cards[0].card,id:'New',oracle_id:'New',name:'New'},qty:1,tags:[],zone:'main'});render()",w.context);
-  assert.equal(w.timers.filter(t=>t.ms===0).length,2);
+  w.context.newCard=editorCard('New');
+  vm.runInContext("addDeckCopies(decks[0],newCard,1,'main');view='deck';deckTab='checks';render()",w.context);
+  assert.equal(w.timers.filter(t=>t.ms===0).length,1);
+  assert.equal(batches.length,2);
+  assert.equal(vm.runInContext("decks[0].cards.at(-1).card.legalities.commander",w.context),'legal');
+  assert.match(w.node('#app').innerHTML,/Using available card legality data/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Retry legality refresh|Data unavailable/);
 });
 
-test('an import replacing entry objects during refresh keeps newer facts and schedules fresh coverage',async()=>{
+test('an import replacing entry objects during refresh keeps newer facts without a follow-up request',async()=>{
   const d=editorDeck(),w=workspace({savedDecks:JSON.stringify([d])});
   let release;const gate=new Promise(resolve=>release=resolve);
   w.context.fetch=async()=>{await gate;return {ok:true,json:async()=>({data:d.cards.map(e=>({...e.card,legalities:{commander:'banned'}}))})};};
@@ -133,8 +147,9 @@ test('an import replacing entry objects during refresh keeps newer facts and sch
   vm.runInContext("decks[0].cards=structuredClone(decks[0].cards);decks[0].cards[0].card.legalities.commander='restricted';",w.context);
   release();await task;
   assert.equal(vm.runInContext('decks[0].cards[0].card.legalities.commander',w.context),'restricted');
-  assert.equal(vm.runInContext('legalityStates.get(decks[0].id).status',w.context),'refreshing');
-  assert.ok(w.timers.filter(t=>t.ms===0).length>=2);
+  assert.equal(vm.runInContext('legalityStatus(decks[0])',w.context),'stored');
+  assert.equal(w.timers.filter(t=>t.ms===0).length,1);
+  assert.equal(w.writes.length,0);
 });
 
 test('manual bracket assignment is explicit, preserved by duplication/backups and displayed separately from discussion ranges',()=>{
@@ -251,16 +266,23 @@ test('exact-printing refresh skips replaced and removed snapshots and recovers w
   assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'fresh');
 });
 
-test('retry repairs missing format data and a format change requests its own coverage',async()=>{
+test('explicit retry repairs missing data and an in-flight response cannot overwrite a format change',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[]})});await vm.runInContext('refresh()',w.context);
   assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'failed');
-  w.context.fetch=async()=>({ok:true,json:async()=>({data:editorDeck().cards.map(e=>({...e.card,legalities:{commander:'legal',modern:'legal'}}))})});
+  w.context.fetch=async()=>({ok:true,json:async()=>({data:editorDeck().cards.map(e=>({...e.card,legalities:{commander:'legal',modern:'banned'}}))})});
   await vm.runInContext('refresh()',w.context);
-  const timers=w.timers.filter(t=>t.ms===0).length;
+  assert.equal(vm.runInContext("legalityStatus(decks[0])",w.context),'fresh');
+  let release;
+  w.context.fetch=()=>new Promise(resolve=>{release=resolve;});
+  const pending=vm.runInContext('refresh()',w.context);
+  await Promise.resolve();await Promise.resolve();
   vm.runInContext("decks[0].format='modern';render()",w.context);
-  assert.equal(w.timers.filter(t=>t.ms===0).length,timers+1);
-  await vm.runInContext('refresh()',w.context);assert.equal(vm.runInContext("legalityStates.get('editor').status",w.context),'fresh');
+  release({ok:true,json:async()=>({data:editorDeck().cards.map(e=>({...e.card,legalities:{commander:'banned',modern:'legal'}}))})});
+  await pending;
+  assert.equal(vm.runInContext("decks[0].cards[0].card.legalities.modern",w.context),'banned');
+  assert.equal(vm.runInContext("legalityStatus(decks[0])",w.context),'stored');
+  assert.equal(w.timers.filter(t=>t.ms===0).length,1);
 });
 
 test('exact-id refresh retains rules-identity guards including normalized reversible printings',async()=>{

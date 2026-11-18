@@ -468,7 +468,7 @@ export function legalityReport(deck) {
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(entry);
     const status = card.legalities?.[deck.format];
-    if (!status || !['legal','restricted','banned','not_legal'].includes(status) || (status === 'restricted' && deck.format !== 'vintage')) unavailable.push(`${card.name} (${ZONES[zoneFor(entry)]}): legality data unavailable. Refresh card data.`);
+    if (!status || !['legal','restricted','banned','not_legal'].includes(status) || (status === 'restricted' && deck.format !== 'vintage')) unavailable.push(`${card.name} (${ZONES[zoneFor(entry)]}): legality data unavailable.`);
     else if (status !== 'legal' && status !== 'restricted') failed.push(`${card.name} (${ZONES[zoneFor(entry)]}): ${status.replaceAll('_',' ')} in ${deck.format} according to stored card legality.`);
     if (!hasOracle(card)) unavailable.push(`${card.name}: Oracle text unavailable; copy exceptions and special restrictions cannot be fully checked.`);
   }

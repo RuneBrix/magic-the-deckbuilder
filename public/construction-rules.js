@@ -63,7 +63,6 @@ export function commanderRules(commanders, entries, report) {
       }
     }
   }
-  manual.push('Commander coverage is partial: unusual deck-construction exceptions and interchangeable card names need manual review.');
 }
 
 const permanent = card => /\b(Artifact|Battle|Creature|Enchantment|Land|Planeswalker)\b/.test(type(card));

@@ -8,7 +8,7 @@ Checks supports single commanders and two-command configurations using ordinary 
 
 Single eligibility uses the front face: legendary creatures, legendary Vehicles, legendary Spacecraft with stored power/toughness, or explicit “can be your commander” Oracle text. This includes current noncreature eligibility rather than the older creature-only rule. A valid pair combines identities before testing playing cards and the designated companion. Basic land subtypes impose their associated colors even when stored color identity is empty; both faces are inspected. Stored legality, 100 main-plus-command cards, command quantities and copy exceptions retain their existing checks.
 
-Pregame color choices and detected special construction exceptions require manual review; identity checks are withheld for these configurations to avoid reporting an exception as a proven violation. Missing Oracle/eligibility facts remain unavailable. Unusual construction exceptions and interchangeable names are outside this bounded certification; keep the general manual-review notice. Legality refresh updates stored legality, not the rules implementation or all other Oracle facts.
+Pregame color choices and detected special construction exceptions require manual review. Identity checks are withheld for these configurations to avoid reporting an exception as a proven violation. Missing Oracle or eligibility facts remain unavailable. The Checks tab explains limits such as unusual construction exceptions and interchangeable names under **About these checks**. Only deck-specific items count toward manual review (#237). Legality refresh updates stored legality values and their timestamps.
 
 ## Companion
 
