@@ -908,7 +908,9 @@ test('Explore fills available width and keeps selected functions inside their di
   if (testInfo.project.name.startsWith('desktop')) {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.locator('#tracked-deck').selectOption('');
-    expect((await page.locator('.explorer').boundingBox()).width).toBe(1920);
+    // Body width excludes the scrollbar gutter reserved for modal scroll locking.
+    const availableWidth = await page.locator('body').evaluate(body => body.clientWidth);
+    expect((await page.locator('.explorer').boundingBox()).width).toBe(availableWidth);
     const fullColumns = await columns();
     await page.screenshot({ path: testInfo.outputPath('explore-wide.png') });
     await page.locator('#tracked-deck').selectOption('smoke-deck');
