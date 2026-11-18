@@ -23,6 +23,7 @@ test('collection upload recovers from quota failure and persists 1183 rows in Ch
   const byName = new Map(incoming.map(card => [card.name, card]));
   await page.route('**/api/collection', route => {
     const {names} = route.request().postDataJSON();
+    if (!names) return route.fallback();
     return route.fulfill({json:{data:names.map(name => byName.get(name)),not_found:[]}});
   });
   const storage = await page.evaluate(() => {

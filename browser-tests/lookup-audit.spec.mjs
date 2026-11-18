@@ -5,6 +5,12 @@ const name='Dawn, the Patient Keeper of a Very Long Collection Name // Dusk, the
 const foil={...cards[2],name,finishes:['foil'],card_faces:[{name:'Dawn',type_line:'Creature'},{name:'Dusk',type_line:'Creature'}]};
 const etched={...foil,id:cards[3].id,set:'alt',collector_number:'12a',lang:'ja',finishes:['etched']};
 const stored=page=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')));
+function workspaceContents({decks,collection}) {
+  return {collection,decks:decks.map(deck=>({...deck,cards:deck.cards.map(entry=>{
+    const {legalityUpdatedAt,...card}=entry.card;
+    return {...entry,card};
+  })}))};
+}
 
 async function blockWrites(page){
   await page.evaluate(()=>{
@@ -44,11 +50,12 @@ test('manual Collection finish choices, cancel and quota retry preserve exact pr
   await expect(page.locator('#dialog')).not.toBeVisible();
   const saved=await stored(page);expect(saved.decks).toEqual(before.decks);
   expect(saved.collection.at(-1)).toMatchObject({card:etched,qty:2,finish:'etched'});
-  await page.reload();expect(await stored(page)).toEqual(saved);
+  await page.reload();expect(workspaceContents(await stored(page))).toEqual(workspaceContents(saved));
 });
 
 test('reviewed double-faced deck import retries a rejected save once and survives reload',async({page},testInfo)=>{
-  await page.route('**/api/collection',route=>route.fulfill({json:{data:[foil],not_found:[]}}));
+  await page.route('**/api/collection',route=>route.request().postDataJSON().names
+    ? route.fulfill({json:{data:[foil],not_found:[]}}) : route.fallback());
   const before=await stored(page);
   await page.getByRole('button',{name:'Import deck',exact:true}).click();
   await page.getByRole('textbox',{name:'Deck name',exact:true}).fill('Lookup audit');
@@ -65,5 +72,5 @@ test('reviewed double-faced deck import retries a rejected save once and survive
   await expect(page.locator('#dialog')).not.toBeVisible();const saved=await stored(page);
   expect(saved.decks).toHaveLength(before.decks.length+1);expect(saved.collection).toEqual(before.collection);
   expect(saved.decks.at(-1).cards[0]).toMatchObject({card:foil,qty:2,finish:'foil',zone:'maybeboard'});
-  await page.reload();expect(await stored(page)).toEqual(saved);
+  await page.reload();expect(workspaceContents(await stored(page))).toEqual(workspaceContents(saved));
 });

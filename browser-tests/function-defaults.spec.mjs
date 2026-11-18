@@ -6,7 +6,8 @@ const reported=JSON.parse(await readFile(new URL('../test/fixtures/karona-functi
 const resolved=reported.map(({card})=>({...card,image_uris:cards[0].image_uris,legalities:{commander:'legal'}}));
 test.beforeEach(async({page})=>{
   await prepareApp(page);
-  await page.route('**/api/collection',route=>route.fulfill({json:{data:resolved,not_found:[]}}));
+  await page.route('**/api/collection',route=>route.request().postDataJSON().names
+    ? route.fulfill({json:{data:resolved,not_found:[]}}) : route.fallback());
 });
 const saved=page=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')));
 async function review(page){

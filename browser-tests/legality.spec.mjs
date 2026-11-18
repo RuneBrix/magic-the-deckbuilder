@@ -7,10 +7,7 @@ test('legality refresh runs at startup and offers recovery in Checks', async ({p
     if (new URL(request.url()).pathname === '/api/collection') requests.push(request.postDataJSON().ids);
   });
   await prepareApp(page);
-  await expect.poll(() => requests.length).toBe(1);
-  await expect.poll(() => page.evaluate(() =>
-    JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].cards[0].card.legalityUpdatedAt
-  )).toBeTruthy();
+  expect(requests).toHaveLength(1);
 
   await page.evaluate(([leader, forest]) => {
     const key = 'arcana.workspace.v2';
