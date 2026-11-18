@@ -82,7 +82,7 @@ test('collection upload shows a correctable row error after an edition lookup', 
   let releaseLookup;
   await page.route('**/api/search?**',async route=>{
     await new Promise(resolve=>{releaseLookup=resolve;});
-    await route.fulfill({status:404,json:{error:'Raw upstream no match'}});
+    await route.fulfill({status:404,json:{error:'No cards found.'}});
   });
   await page.getByRole('button',{name:'Collection',exact:true}).click();
   await page.getByRole('button',{name:'Upload card list'}).click();

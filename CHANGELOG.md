@@ -1,5 +1,10 @@
 # Changelog
 
+## Card lookup and safe saves — 2026-11-18
+
+- Validate Collection printing pages and supported finish choices; preserve existing finishes until deliberately changed. Keep explicit finish requests separate from omitted-finish defaults and check all fallback pages for ambiguous identities (#226).
+- Keep decks and inventory unchanged when saving staged card additions, printing changes, deck creation/import or refreshed facts fails. Retain retryable forms and distinguish unavailable lookups from ordinary no-match results (#226).
+
 ## Owned printings and text exports — 2026-11-18
 
 - Review and match deck copies to verified owned printings in selected zones, including finish/language changes and partial quantity splits. Preserve unmatched copies, functions and inventory; failed saves retain a retryable review (#175).

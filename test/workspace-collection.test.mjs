@@ -373,7 +373,7 @@ test('CSV set and language constraints reject mismatches and can recover from a 
       return {ok:true,json:async()=>[{code:'exm',name:'Example Set'}]};
     }
     assert.match(new URL(url,'http://localhost').searchParams.get('q'),/set:exm lang:ja/);
-    return {ok:!fail,status:fail?404:200,json:async()=>fail?{error:'Raw upstream no match'}:{data:[right]}};
+    return {ok:!fail,status:fail?404:200,json:async()=>fail?{error:'No cards found.'}:{data:[right]}};
   };
   vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);
   assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.writes.length,0);
@@ -437,7 +437,7 @@ test('upload caps manual work per category after checking the whole file',async(
   formValues(w,{list:'Quantity,Name\n'+[...missing,'1,Found'].join('\n')});
   w.context.fetch=async url=>url==='/api/collection'
     ? {ok:true,json:async()=>({data:[editorCard('Found')]})}
-    : {ok:false,status:404,json:async()=>({error:'No match'})};
+    : {ok:false,status:404,json:async()=>({error:'No cards found.'})};
   vm.runInContext('collectionImport()',w.context);
   await w.node('#collection-import').onsubmit({preventDefault(){}});
   assert.match(w.node('#collection-upload-review').innerHTML,/Card name · 21/);

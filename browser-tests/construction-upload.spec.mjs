@@ -48,7 +48,7 @@ test('collection uploads show additive totals, protect replacement and retain un
 test('collection upload reviews printing choices and missing names before saving',async({page},testInfo)=>{
   const initial=await stored(page);
   await page.route('**/api/collection-sets',route=>route.fulfill({json:[{code:'alt',name:'Alternate Edition'}]}));
-  await page.route('**/api/search?**',route=>route.fulfill({status:404,json:{error:'No match'}}));
+  await page.route('**/api/search?**',route=>route.fulfill({status:404,json:{error:'No cards found.'}}));
   await page.getByRole('button',{name:'Collection',exact:true}).click();
   await page.getByRole('button',{name:'Upload card list',exact:true}).click();
   await page.getByLabel('Card list or CSV').fill('Quantity,Name,Edition Name\n2,Smoke Card 2,Alternate Edition\n1,Unknown Card,Alternate Edition');
