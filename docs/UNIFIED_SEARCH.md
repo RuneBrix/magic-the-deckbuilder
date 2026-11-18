@@ -8,9 +8,11 @@ Selected removable function chips and Combine functions by (Matching all / Match
 
 The primary search bar contains the effective editable query. Typing projects supported conditions into guided controls and selected function chips without replacing the focused input or changing its cursor. Guided text/number input updates the query while typing; changed controls and form submission run the search. Existing matching choices survive selecting a mode before its first value.
 
-Filters starts with Card name and gives each family a separate disclosure. The header summarizes the active filter families and query-only expression count only when present; empty Filters and Browse by function headings have equal height. Search with these filters runs the current query from the header and leaves the disclosure state intact. The filter grid adapts to the space available beside the optional tracker, reserving room around selected chips and complete keyboard focus outlines in scrolling row lists.
+Filters starts with Card name and gives each family a separate disclosure. Its collapsed header summarizes active nonfunction filter families and relevant query-only expressions. Browse by function shows selected tags beside its own collapsed title. Open panels expose the full controls and hide their header summaries. The filter grid adapts to the space available beside the optional tracker, reserving room around selected chips and complete keyboard focus outlines in scrolling row lists.
 
-Typing invalidates pending requests. Previously completed results retain their original query context and are labeled when the query has changed; Search updates them. Pagination continues the displayed result query. Clear search and filters, or removing the final guided restriction, returns to the initial state and invalidates old responses. An explicit Search on a blank bar visibly becomes `game:paper`, preserving deliberate broad searches.
+The Scryfall query and its validation message stay below the navigation while scrolling through setup. The query leaves view with the setup area before the results. Use Search or Enter in the query to submit. An empty or whitespace-only submission leaves displayed results and their context in place without a request. For a deliberate broad search, enter `game:paper`.
+
+Typing invalidates pending requests. Previously completed results retain their original query context and are labeled when the query has changed. Pagination continues the displayed result query. Clear search and filters, or removing the final guided restriction, returns to the initial state and invalidates old responses.
 
 ## Guided expressions
 

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prepareApp } from './fixtures.mjs';
+import { cards, prepareApp } from './fixtures.mjs';
 
 test.beforeEach(async ({ page }) => {
   await prepareApp(page);
@@ -36,6 +36,150 @@ test('empty Explore panels balance their headings and show function selections o
   await page.getByText('About function data', { exact: true }).press('Enter');
   await expect(page.locator('.function-data-help')).toContainText(/Scryfall|snapshot/);
   await page.screenshot({ path: testInfo.outputPath('function-empty-and-help.png') });
+});
+
+test('collapsed Explore headings describe only their own active selections', async ({ page }, testInfo) => {
+  const raw = page.locator('#raw');
+  const filters = page.locator('#filters-heading');
+  const functions = page.locator('#function-tags-heading');
+  const filterSummary = page.locator('#applied-filter-summary');
+  const functionSummary = page.locator('#applied-function-summary');
+  await expect(filters).toHaveAccessibleDescription('');
+  await expect(functions).toHaveAccessibleDescription('');
+  await raw.fill('otag:ramp');
+  await expect(filterSummary).toBeHidden();
+  await expect(functions).toHaveAccessibleDescription(/ramp/i);
+  await raw.fill('t:elf (o:draw OR o:discard mv<=3) usd<5 otag:ramp otag:draw otag:very-long-unlisted-function-name');
+  await expect(filters).toHaveAccessibleName('Filters');
+  await expect(filters).toHaveAccessibleDescription('Types · 2 query-only expressions');
+  await expect(functions).toHaveAccessibleName('Browse by function');
+  await expect(functions).toHaveAccessibleDescription(/ramp.*draw.*very long unlisted function name/i);
+  await expect(filterSummary).toBeVisible();
+  await expect(functionSummary).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('collapsed-search-summaries.png') });
+  await filters.press('Enter');
+  await expect(filters).toHaveAccessibleDescription('');
+  await expect(filterSummary).toBeHidden();
+  await expect(functionSummary).toBeVisible();
+  await expect(page.locator('#filter-heading-oracle')).toContainText('Query only');
+  await functions.press('Space');
+  await expect(functions).toHaveAccessibleDescription('');
+  await expect(functionSummary).toBeHidden();
+  await expect(page.locator('#selected-functions').getByRole('button', { name: 'Remove ramp filter' })).toBeVisible();
+  await filters.press('Enter');
+  await expect(filterSummary).toBeVisible();
+  await expect(functionSummary).toBeHidden();
+  await functions.press('Space');
+  await page.getByRole('button', { name: 'Clear search and filters' }).click();
+  await expect(filterSummary).toBeHidden();
+  await expect(functionSummary).toBeHidden();
+});
+
+test('Explore ignores empty search submits and retains results until clear', async ({ page }) => {
+  const queries = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/search') queries.push(url.searchParams.get('q'));
+  });
+  const raw = page.locator('#raw');
+  const search = page.locator('#search-submit');
+  await expect(page.getByRole('button', { name: 'Search with these filters' })).toHaveCount(0);
+  await search.click();
+  await raw.fill('   ');
+  await raw.press('Enter');
+  await expect(page.locator('#results-area')).toHaveCount(0);
+  await raw.fill('(t:elf');
+  await raw.press('Enter');
+  await expect(page.locator('#query-error')).toContainText('Guided edits are paused');
+  await raw.fill('otag:ramp');
+  await raw.press('Enter');
+  await expect(page.locator('.card-tile')).toHaveCount(3);
+  await raw.fill('');
+  await search.click();
+  await expect(page.locator('.card-tile')).toHaveCount(3);
+  await expect(page.locator('.query-stale')).toContainText('previous query');
+  await page.getByRole('button', { name: 'Clear search and filters' }).click();
+  await search.click();
+  await expect(page.locator('#results-area')).toHaveCount(0);
+  expect(queries).toEqual(['otag:ramp']);
+});
+
+test('Explore pins the query within setup and leaves results and focused controls reachable', async ({ page }, testInfo) => {
+  let finishFirstPage;
+  const firstPage = new Promise(resolve => { finishFirstPage = resolve; });
+  await page.route('**/api/search?*', async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('q') === 'no-matches') {
+      await route.fulfill({ status: 404, json: { error: 'No cards' } });
+      return;
+    }
+    const next = Number(url.searchParams.get('page')) > 1;
+    if (!next) await firstPage;
+    await route.fulfill({ json: { data: next ? cards.slice(24) : cards.slice(0, 24), total_cards: 40, has_more: !next } });
+  });
+  const raw = page.locator('#raw');
+  const queryForm = page.locator('#search-form');
+  const filters = page.locator('#filters-heading');
+  const functions = page.locator('#function-tags-heading');
+  const results = page.locator('#search-output');
+  const geometry = () => page.evaluate(() => ({
+    form: document.querySelector('#search-form').getBoundingClientRect().toJSON(),
+    nav: document.querySelector('.workspace-nav').getBoundingClientRect().bottom,
+    results: document.querySelector('#search-output').getBoundingClientRect().top,
+  }));
+  const assertPinned = async () => {
+    await expect.poll(async () => {
+      const { form, nav } = await geometry();
+      return Math.abs(form.top - nav);
+    }).toBeLessThan(2);
+  };
+  await raw.fill('t:elf otag:ramp otag:draw usd<5');
+  await filters.press('Enter');
+  await functions.press('Enter');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const original = (await geometry()).form.top;
+  await page.evaluate(() => {
+    window.scrollTo(0, document.querySelector('#search-form').getBoundingClientRect().top + scrollY + 150);
+  });
+  await assertPinned();
+  await raw.fill('(t:elf');
+  await expect(queryForm.locator('#query-error')).toContainText('Guided edits are paused');
+  await expect(queryForm.locator('#query-error')).toBeInViewport();
+  await assertPinned();
+  await raw.fill('t:elf otag:ramp otag:draw usd<5');
+  await expect(queryForm.locator('#query-error')).toBeEmpty();
+  await raw.press('Enter');
+  await expect(results.locator('[data-state="loading"]')).toBeVisible();
+  await assertPinned();
+  finishFirstPage();
+  await expect(results.locator('.card-tile')).toHaveCount(24);
+  await assertPinned();
+  await page.screenshot({ path: testInfo.outputPath('sticky-search-setup.png') });
+  await results.locator('.card-tile').last().scrollIntoViewIfNeeded();
+  await expect.poll(async () => (await geometry()).form.bottom).toBeLessThan((await geometry()).nav);
+  await results.getByRole('button', { name: /more/i }).click();
+  await expect(results.locator('.card-tile')).toHaveCount(40);
+  const boundary = await geometry();
+  expect(boundary.form.bottom).toBeLessThanOrEqual(boundary.results + 1);
+
+  await page.evaluate(() => {
+    const setup = document.querySelector('.search-setup');
+    window.scrollTo(0, setup.getBoundingClientRect().top + scrollY + 150);
+  });
+  await assertPinned();
+  await queryForm.locator('.reset-query').focus();
+  await page.keyboard.press('Tab');
+  const notes = page.locator('#query-notes summary');
+  await expect(notes).toBeFocused();
+  await expect.poll(async () => {
+    const { form, nav } = await geometry();
+    return (await notes.boundingBox()).y - Math.max(form.bottom, nav);
+  }).toBeGreaterThanOrEqual(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(async () => Math.abs((await geometry()).form.top - original)).toBeLessThan(2);
+  await raw.fill('no-matches');
+  await raw.press('Enter');
+  await expect(results.locator('[data-state="no-match"]')).toBeVisible();
 });
 
 test('populated guided filters leave room for focus rings and reachable repeated values', async ({ page }, testInfo) => {
@@ -107,6 +251,6 @@ test('guided filters reflow at intermediate widths and enlarged text without cha
   }
   await testInfo.attach('reflow-evidence', { body: JSON.stringify(evidence), contentType: 'application/json' });
   await raw.fill('(t:creature');
-  await expect(page.locator('#query-notes .query-error')).toContainText('Guided edits are paused');
+  await expect(page.locator('#query-error')).toContainText('Guided edits are paused');
   await expect(raw).toHaveValue('(t:creature');
 });
