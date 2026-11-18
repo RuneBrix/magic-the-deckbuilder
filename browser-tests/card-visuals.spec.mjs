@@ -72,7 +72,7 @@ test('finish treatments and ownership markers preserve quotes, inventory and con
   await page.route('https://cards.scryfall.io/visual-*.jpg',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="488" height="680"><rect width="488" height="680" fill="#263c61"/><rect x="15" y="25" width="458" height="55" fill="#f7eed3"/><text x="32" y="63" font-size="28">Synthetic card artwork</text><path d="M30 360 220 100 460 360Z" fill="#71996c"/><rect x="15" y="390" width="458" height="265" fill="#fffdf7"/><text x="30" y="430" font-size="24">Draw a card.</text><text x="30" y="470" font-size="24">A readable rules-text fixture.</text></svg>'}));
   await page.reload();await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
   await page.getByRole('tab',{name:'Checks',exact:true}).click();
-  await expect(page.locator('.freshness')).toContainText('Legality refreshed this session');
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   await page.getByRole('tab',{name:'Cards',exact:true}).click();
   const saved=()=>page.evaluate(()=>localStorage.getItem('arcana.workspace.v2')),before=await saved();
   const card=n=>page.locator('.deck-entry.visual-card').filter({has:page.locator(`.card-art[data-inspect="00000000-0000-4000-8000-${String(n).padStart(12,'0')}"]`)});

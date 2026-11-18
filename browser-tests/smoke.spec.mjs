@@ -124,7 +124,7 @@ test('primary function editing and temporary reverse faces preserve stored card 
   await page.reload();
   await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
   await page.getByRole('tab',{name:'Checks',exact:true}).click();
-  await expect(page.locator('.freshness')).toContainText('Legality refreshed this session');
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   await page.getByRole('tab',{name:'Cards',exact:true}).click();
   const row=page.locator('.visual-card').filter({has:page.getByRole('button',{name:'Inspect Smoke Card 2 in Main deck',exact:true})});
   const flip=row.getByRole('button',{name:'Flip Smoke Card 2',exact:true});
@@ -270,7 +270,7 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await page.reload();
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
-  await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   const saved = await savedDeckData();
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
   const board = page.locator('.stats-view');
@@ -453,7 +453,7 @@ test('ownership compares selected and cheapest printings without changing deck c
   });
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
-  await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   await page.getByRole('tab', { name: 'Ownership & costs', exact: true }).click();
   const before = await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
   const check = page.getByRole('button', { name: 'Check cheapest printings', exact: true });

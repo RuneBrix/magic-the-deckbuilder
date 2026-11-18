@@ -2,8 +2,8 @@
 
 ## Deck legality checks — 2026-11-18
 
-- Refresh legality for one saved deck when Arcana opens. Use available card data when switching decks or editing, and offer a retry when a lookup fails (#236).
-- Show Commander manual-review items only when the deck calls for them. The Checks tab explains coverage under About these checks (#237).
+- Refresh legality for one saved deck at startup and when Checks needs updated card coverage. Offer a retry after a failed lookup (#236).
+- Show a single legality result, with deck-specific Commander manual-review items and brief optional guidance under About these checks (#237).
 
 ## Card and dialog interactions — 2026-11-18
 

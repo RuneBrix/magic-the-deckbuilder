@@ -151,6 +151,7 @@ function render() {
     else {const attribute=[...focused.attributes].find(a=>a.name.startsWith('data-'));if(attribute)focusSelector='['+attribute.name+'="'+CSS.escape(attribute.value)+'"]';}
   }
   const d = current();
+  if(view==='deck' && deckTab==='checks' && d)scheduleLegality(d);
   const statistics = view === 'deck' && d && deckTab === 'stats' ? stats(d, { detailed: true }) : null;
   const previousStatistics = statistics ? $('#deck-statistics') : null;
   $('#app').style.setProperty('--tracker-width', tracker.width+'px');
@@ -472,7 +473,7 @@ function cardTile(c) {
   return `<article class="card-tile"><button class="card-image-button" data-inspect="${esc(c.id)}" aria-label="Inspect ${esc(c.name)}">${image ? `<img src="${esc(safeUrl(image,true))}" alt="${esc(c.name)}" loading="lazy" width="488" height="680">` : `<div class="card-fallback">${esc(c.name)}<p>${esc(oracle(c))}</p></div>`}</button><div class="card-caption"><button data-inspect="${esc(c.id)}" class="card-name">${esc(c.name)}</button><button class="add-button ${copies ? 'added' : ''}" data-add="${esc(c.id)}" aria-label="${esc(addLabel(c))}" title="${esc(addLabel(c))}">${copies ? `<span>${copies}</span>` : icon('plus',17)}</button></div><div class="card-meta"><span>${esc(c.type_line?.split(' — ')[0])}</span><span>${price}</span></div>${current()?`<button class="text-button choose-deck" data-choose-add="${esc(c.id)}" aria-label="Choose another deck for ${esc(c.name)}">Add to…</button>`:''}</article>`;
 }
 function deckPanel(d) {
-  return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Adds default to Main deck.</p>${freshnessNotice(d)}<button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use Add on a result to choose copies for this deck.</p>'}</div>`;
+  return `<div class="panel-title"><span>Deck tracker</span><button class="text-button" data-action="toggle-tracker">Hide tracker</button></div><div class="deck-header"><h2 id="tracker-heading" tabindex="-1">${esc(d.name)}</h2><span class="format-badge">${esc(d.format)}</span>${identitySummary(d)}<p class="tracker-count"><strong>${stats(d).total}</strong> in playing deck · ${zoneCount(d,'sideboard')} sideboard</p><p class="hint">Adds default to Main deck.</p><button class="secondary" data-deck="${esc(d.id)}">Open full deck</button></div><div class="panel-content">${d.cards.length?deckList(d):'<p class="hint">No cards yet. Use Add on a result to choose copies for this deck.</p>'}</div>`;
 }
 function identitySummary(d, compact=false) {
   const colors=deckIdentity(d), names={W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'};
@@ -991,17 +992,23 @@ function bracketPanel(d) {
   return `<section class="bracket-review" id="bracket-discussion" tabindex="-1" aria-label="Commander bracket discussion"><h3>Commander bracket discussion</h3><p><strong>Player assigned:</strong> ${d.bracket?'Bracket '+d.bracket+' · '+BRACKETS[d.bracket]:'Not assigned'}.</p><p class="check-info bracket-suggestion">${esc(suggestion)}</p><p>${report.available?`${report.count} Game Changer ${report.count===1?'copy':'copies'} in Main deck + Command zone${report.stale?' (outdated app data)':''}.`:'Game Changer count unavailable.'} Sideboard and Maybeboard excluded.</p>${report.matches.length?`<ul>${report.matches.map(m=>`<li>${esc(m.name)} · ${m.qty} ${m.qty===1?'copy':'copies'} · ${m.zones.map(z=>ZONES[z]).join(', ')}</li>`).join('')}</ul>`:''}${range&&d.bracket&&d.bracket<range[0]?'<p class="bracket-conflict">Your assigned bracket is below this count-based range. Discuss the deck with your group; thematic exceptions can be agreed.</p>':''}<p class="hint">Game Changer counts are not a power rating or bracket certification. Discuss combos, extra turns, mass land denial, speed, consistency and intended play with your group. Counts do not distinguish Brackets 4 and 5; thematic exceptions are a group decision.</p><h4>About bracket data</h4><p class="hint">Last updated: <time datetime="${esc(COMMANDER_BRACKETS.verifiedAt)}">${esc(COMMANDER_BRACKETS.verifiedAt)}</time> · Developer-maintained.</p><p>This date records the last developer review of the bundled list and guidance. Updates arrive with app versions; there is no live refresh. Card-legality refresh does not update bracket data.</p><p><a href="${COMMANDER_BRACKETS.source}" target="_blank" rel="noreferrer">Current official Commander brackets and Game Changers</a></p></section>`;
 }
 function checksPanel(d, report) {
-  const section = (label, items, status, symbol, explanation) => items.length ? `<section class="check-section check-${status}"><h3>${icon(symbol,18)} ${label} · ${items.length}</h3><p>${explanation}</p><ul>${items.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></section>` : '';
-  const freshness=legalityStatus(d);
-  const incomplete=report.unavailable.length || freshness==='failed' || freshness==='refreshing';
-  const status = report.failed.length ? 'failure' : incomplete ? 'warning' : report.manual.length || freshness==='stored' ? 'info' : 'success';
-  const title = report.failed.length ? 'Deck legality issues found' : incomplete ? 'Checks incomplete' : report.manual.length ? 'Supported checks passed · manual review needed' : freshness==='stored' ? 'Supported checks passed with available data' : 'Supported checks passed';
+  const section = (label, items, status, symbol) => items.length ? `<section class="check-section check-${status}"><h3>${icon(symbol,18)} ${label} · ${items.length}</h3><ul>${items.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></section>` : '';
+  const refreshStatus = legalityStatus(d);
+  let status = 'success', title = 'Supported checks passed';
+  if(refreshStatus==='refreshing') { status='info'; title='Checking card legality…'; }
+  else if(report.failed.length) { status='failure'; title='Deck legality issues found'; }
+  else if(report.unavailable.length) { status='warning'; title='Checks incomplete'; }
+  else if(refreshStatus==='failed') { status='info'; title='Checks based on saved data'; }
+  else if(report.manual.length) { status='info'; title='Manual review needed'; }
+  const recovery = refreshStatus==='failed' && hasLegalityCards(d)
+    ? `<div class="freshness check-info"><p>Couldn’t update card legality.</p><p>${esc(legalityStates.get(d.id).error)}</p><button class="text-button" data-action="refresh">Retry legality refresh</button></div>`
+    : '';
   const companions=d.cards.filter(entry=>zoneFor(entry)==='sideboard' && (companionCapable(entry.card)||entry.companion));
-  const companionControl=`<label>Designated companion<select id="deck-companion"><option value="">None</option>${companions.map(entry=>`<option value="${esc(entryKey(entry))}" ${entry.companion?'selected':''}>${esc(entry.card.name)}</option>`).join('')}</select></label><p class="hint">Choose one card stored in Sideboard / outside game. Designation does not add or move copies. In constructed play it uses a sideboard slot; in Commander it is outside the 100. Companion predicates inspect Main deck, plus Command zone in Commander. Maybeboard and other outside-game cards are excluded.</p>`;
+  const companionControl=`<label>Designated companion<select id="deck-companion"><option value="">None</option>${companions.map(entry=>`<option value="${esc(entryKey(entry))}" ${entry.companion?'selected':''}>${esc(entry.card.name)}</option>`).join('')}</select></label>`;
   const scope = d.format==='commander'
-    ? 'Checks main deck + command zone: 100-card total, commander quantities, copy limits, card legality, supported commander eligibility/pairings, combined color identity and basic-land types. Sideboard and Maybeboard are excluded except the designated companion, whose legality and identity are checked.'
-    : `Checks main deck + sideboard: main deck 60+, sideboard up to 15, combined copy limits and ${esc(formatLabel(d.format))} card legality. A command zone is flagged; Maybeboard is excluded.`;
-  return `<div class="checks"><h2>Deck legality checks</h2><p>Deck construction and card legality are checked together for ${esc(formatLabel(d.format))}.</p><h3 class="check-summary check-${status}">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3><p>${scope}</p>${freshnessNotice(d,{canRefresh:true})}${companionControl}${section('Failed checks',report.failed,'failure','close','These supported rules fail with the stored deck and card data.')}${section('Data unavailable',report.unavailable,'warning','book','Missing or unrecognized card data prevents these checks.')}${section('Manual review',report.manual,'info','book','The app cannot fully check these rules. Verify them yourself before playing.')}<details class="backup-help"><summary>About these checks</summary><p>Results cover the rules listed above. Unusual construction exceptions, interchangeable card names and some companion conditions require independent verification.</p><p>Arcana refreshes one saved deck when the app opens, using the tracked deck when it has cards outside Maybeboard or the first eligible deck otherwise. Results can use cached card data.</p></details>${bracketPanel(d)}</div>`;
+    ? 'Checks cover deck size, commander eligibility and color identity, copy limits, and card legality.'
+    : 'Checks cover deck size, sideboard size, copy limits, and card legality.';
+  return `<div class="checks"><h2>Deck legality checks</h2><h3 class="check-summary check-${status}" aria-live="polite">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3>${recovery}${companionControl}${section('Failed checks',report.failed,'failure','close')}${section('Data unavailable',report.unavailable,'warning','book')}${section('Manual review',report.manual,'info','book')}<details class="backup-help"><summary>About these checks</summary><p>${scope} Special construction rules may need manual review.</p><p>To designate a companion, add it to your Sideboard and select it here. Checks will show any issues with your choice.</p></details>${bracketPanel(d)}</div>`;
 }
 
 function deckPriceTotal(entries, d=current()) {
@@ -2429,41 +2436,36 @@ function restore(){
 const hasLegalityCards = d => d.cards.some(entry=>zoneFor(entry)!=='maybeboard');
 function legalityStatus(d) {
   const state=legalityStates.get(d.id);
-  if(state?.status==='refreshing' || state?.status==='failed' && state.format===d.format)return state.status;
-  if(state?.status==='fresh' && state.format===d.format && d.cards.every(entry=>
+  if(state?.status==='refreshing')return 'refreshing';
+  if(state?.format!==d.format)return 'stored';
+  if(state.status==='failed'){
+    const ids=new Set(d.cards.filter(entry=>zoneFor(entry)!=='maybeboard').map(entry=>entry.card.id));
+    if(ids.size===state.printings.size && [...ids].every(id=>state.printings.has(id)))return 'failed';
+  }
+  if(state.status==='fresh' && d.cards.every(entry=>
     zoneFor(entry)==='maybeboard' || state.printings.has(entry.card.id) && entry.card.legalityUpdatedAt===state.updatedAt))return 'fresh';
   return 'stored';
 }
-function freshnessNotice(d,{canRefresh=false}={}) {
-  if (!hasLegalityCards(d)) return '';
-  const status=legalityStatus(d), messages={
-    refreshing:'Refreshing legality… Editing stays available.',
-    failed:'Legality refresh unavailable. Using the last available data.',
-    fresh:'Legality refreshed this session. Results may use cached data.',
-    stored:'Using available card legality data.',
-  };
-  const tone=status==='fresh'?'success':status==='stored'?'info':'warning';
-  const recovery=status==='failed'
-    ? `<p>${esc(legalityStates.get(d.id).error)}</p><button class="text-button" data-action="refresh">Retry legality refresh</button>`
-    : status==='stored' && canRefresh
-      ? '<details><summary>Legality data options</summary><button class="text-button" data-action="refresh">Refresh legality</button></details>'
-      : '';
-  return `<div class="freshness check-${tone}"><p role="status">${icon(status==='fresh'?'check':'book',16)} ${messages[status]}</p>${recovery}</div>`;
+function scheduleLegality(d) {
+  if(!hasLegalityCards(d) || legalityStatus(d)!=='stored')return;
+  const scheduled={status:'refreshing'};
+  legalityStates.set(d.id,scheduled);
+  setTimeout(()=>legalityStates.get(d.id)===scheduled && refresh(d),0);
 }
 function refresh(d=current()) {
   if (!decks.includes(d) || !hasLegalityCards(d)) return Promise.resolve();
   const previous=legalityStates.get(d.id);
   if (previous?.promise) return previous.promise;
   const entries=d.cards.filter(e=>zoneFor(e)!=='maybeboard').map(e=>({entry:e,card:e.card})), format=d.format;
-  const state={status:'refreshing',format};
+  const state={status:'refreshing',format,printings:new Set(entries.map(({card})=>card.id))};
   legalityStates.set(d.id,state);
   const renderStatus=()=>{
-    if(current()===d && (view==='deck' && deckTab==='checks' || view==='explore' && tracker.visible))render();
+    if(current()===d && view==='deck' && deckTab==='checks')render();
   };
   const task=legalityQueue.then(async()=>{
     try {
       if (!decks.includes(d) || d.format!==format) return;
-      const {cards}=await fetchCollection([...new Set(entries.map(({card})=>card.id))].sort(),'ids');
+      const {cards}=await fetchCollection([...state.printings].sort(),'ids');
       if (!decks.includes(d) || d.format!==format) return;
       const byId=new Map(cards.filter(c=>typeof c?.id==='string').map(c=>[c.id,c]));
       const relevant=entries.filter(({entry,card})=>d.cards.includes(entry) && entry.card===card && zoneFor(entry)!=='maybeboard');
@@ -2503,8 +2505,4 @@ function refresh(d=current()) {
 async function sample(){if(decks.length>=200){toast('Maximum 200 decks per workspace.');return;}toast('Loading a small example from Scryfall…');try{const names=['Tatyova, Benthic Druid','Sol Ring','Arcane Signet','Cultivate',"Kodama's Reach",'Llanowar Elves','Rampant Growth','Growth Spiral','Beast Within','Counterspell','Eternal Witness','Command Tower','Forest','Island'];const {cards,missing}=await fetchCollection(names);if(missing.length)throw new Error('Example cards could not be loaded. Try again.');const d=blankDeck('The garden grows');for(const card of cards)addDeckCopies(d,card,card.name==='Forest'?12:card.name==='Island'?10:1,card.name==='Tatyova, Benthic Druid'?'command':'main');decks.push(d);active=d.id;save();openDeck(d.id);toast('Example loaded — an unfinished Commander deck to build on');}catch(e){toast(e.message);}}
 render();
 const startupLegalityDeck=decks.find(d=>d.id===tracker.id && hasLegalityCards(d)) ?? decks.find(hasLegalityCards);
-if(startupLegalityDeck){
-  const scheduled={status:'refreshing'};
-  legalityStates.set(startupLegalityDeck.id,scheduled);
-  setTimeout(()=>legalityStates.get(startupLegalityDeck.id)===scheduled && refresh(startupLegalityDeck),0);
-}
+if(startupLegalityDeck)scheduleLegality(startupLegalityDeck);

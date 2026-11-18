@@ -85,13 +85,16 @@ test('Checks companion designation persists and keeps unsupported restrictions e
   await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
   await page.getByRole('tab',{name:'Checks',exact:true}).click();
   const select=page.getByLabel('Designated companion');
+  const issue=page.getByText('Zirda, the Dawnwaker: companion predicate is unsupported; review the starting deck manually.',{exact:true});
+  await expect(issue).toBeHidden();
   await select.selectOption({label:'Zirda, the Dawnwaker'});
   await expect(page.getByLabel('Designated companion')).toBeFocused();
-  await expect(page.getByText('Zirda, the Dawnwaker: companion predicate is unsupported; review the starting deck manually.',{exact:true})).toBeVisible();
+  await expect(issue).toBeVisible();
   expect((await stored(page)).decks[0].cards.at(-1).companion).toBe(true);
   await fits(page);await page.screenshot({path:testInfo.outputPath('companion-checks.png'),fullPage:true});
   await page.reload();await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();await page.getByRole('tab',{name:'Checks',exact:true}).click();
   await expect(page.getByLabel('Designated companion')).toHaveValue(/companion/);
   await page.getByLabel('Designated companion').selectOption('');
+  await expect(issue).toBeHidden();
   expect((await stored(page)).decks[0].cards.at(-1).companion).toBeUndefined();
 });

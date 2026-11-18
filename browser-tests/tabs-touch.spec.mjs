@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => prepareApp(page));
 async function openDeck(page) {
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
-  await expect(page.locator('.freshness')).toContainText('Legality refreshed this session');
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   await page.getByRole('tab', { name: 'Cards', exact: true }).click();
 }
 

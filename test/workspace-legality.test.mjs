@@ -12,7 +12,7 @@ test('startup refreshes the default deck from the library and preserves concurre
   w.context.fetch=async(url,opts)=>{batches.push(JSON.parse(opts.body).ids);await request;return {ok:true,json:async()=>({data:d.cards.map(e=>({...e.card,legalities:{commander:'banned'}}))})};};
   const task=w.timers.find(t=>t.ms===0).fn();
   vm.runInContext("openDeck('editor');deckTab='checks';render()",w.context);
-  assert.match(w.node('#app').innerHTML,/Refreshing legality/);
+  assert.match(w.node('#app').innerHTML,/check-summary check-info[^>]*>.*Checking card legality/);
   assert.equal(vm.runInContext('refresh()',w.context),task);
   await Promise.resolve();await Promise.resolve();
   vm.runInContext("decks[0].cards[1].qty=7;decks[0].cards[1].tags=['New role'];decks[0].cards[1].zone='command';",w.context);
@@ -24,12 +24,19 @@ test('startup refreshes the default deck from the library and preserves concurre
   vm.runInContext("view='deck';deckTab='checks';render()",w.context);
   assert.match(w.node('#app').innerHTML,/check-failure/);
   assert.match(w.node('#app').innerHTML,/Ramp spell/);
-  assert.match(w.node('#app').innerHTML,/Legality refreshed this session/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Checking card legality|Retry legality refresh|cache/);
   assert.equal(vm.runInContext('legalityStates.size',w.context),1);
-  vm.runInContext("openDeck('other');deckTab='checks';render();view='explore';render();openDeck('editor');deckTab='checks';render()",w.context);
+  vm.runInContext("openDeck('other');view='explore';render();openDeck('editor');deckTab='checks';render()",w.context);
   assert.equal(vm.runInContext('legalityStates.size',w.context),1);
   assert.equal(w.timers.filter(t=>t.ms===0).length,1);
   assert.equal(batches.length,1);
+  vm.runInContext("openDeck('other');deckTab='checks';render();render()",w.context);
+  assert.match(w.node('#app').innerHTML,/Checking card legality/);
+  assert.equal(w.timers.filter(t=>t.ms===0).length,2);
+  await w.timers.at(-1).fn();
+  assert.deepEqual(batches,[['Leader','Ramp spell'],['Leader','Ramp spell']]);
+  vm.runInContext("deckTab='cards';render();deckTab='checks';render()",w.context);
+  assert.equal(w.timers.filter(t=>t.ms===0).length,2);
 });
 
 test('failed/partial refresh retains all usable data, exposes retry and cannot claim a fresh pass',async()=>{
@@ -42,9 +49,15 @@ test('failed/partial refresh retains all usable data, exposes retry and cannot c
     assert.equal(w.writes.length,0);
     vm.runInContext("view='deck';deckTab='checks';render()",w.context);
     const html=w.node('#app').innerHTML;
-    assert.match(html,/Legality refresh unavailable/);assert.match(html,/Retry legality refresh/);
+    assert.match(html,/Couldn’t update card legality/);assert.match(html,/Retry legality refresh/);
     assert.doesNotMatch(html,/Supported checks passed/);
-    assert.match(html,/check-warning/);
+    assert.match(html,/freshness check-info/);
+    vm.runInContext("deckTab='cards';render();deckTab='checks';render()",w.context);
+    assert.equal(w.timers.filter(t=>t.ms===0).length,1);
+    w.context.newCard=editorCard('New printing');
+    vm.runInContext("deckTab='cards';addDeckCopies(decks[0],newCard,1,'main');render();deckTab='checks';render()",w.context);
+    assert.match(w.node('#app').innerHTML,/Checking card legality/);
+    assert.equal(w.timers.filter(t=>t.ms===0).length,2);
   }
 });
 
@@ -73,9 +86,9 @@ test('successful Modern checks keep their session result without age-based retri
   assert.match(w.node('#app').innerHTML,/<h2>Deck legality checks<\/h2>/);
   assert.doesNotMatch(w.node('#app').innerHTML,/Failed checks|Data unavailable|Manual review|None found/);
   vm.runInContext("elapsed=300_001;render()",w.context);
-  assert.match(w.node('#app').innerHTML,/Legality refreshed this session/);
+  assert.match(w.node('#app').innerHTML,/Supported checks passed/);
   assert.match(w.node('#app').innerHTML,/check-summary check-success/);
-  assert.doesNotMatch(w.node('#app').innerHTML,/stale|Retry legality refresh/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/stale|Retry legality refresh|cache|Legality data options/);
   assert.equal(w.timers.some(t=>t.ms===300_000),false);
 });
 
@@ -87,16 +100,15 @@ test('legality results distinguish stored violations, missing data and unsupport
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   vm.runInContext("view='deck';deckTab='checks';render()",w.context);
   const html=w.node('#app').innerHTML;
-  assert.match(html,/Deck legality issues found/);
+  assert.match(html,/Checking card legality/);
   assert.match(html,/Failed checks · [1-9]/);
   assert.match(html,/Banned spell \(Main deck\): banned in commander according to stored card legality/);
   assert.match(html,/&lt;Unknown&gt; is outside your commander&#39;s color identity \(Leader\)/);
   assert.match(html,/Data unavailable · 1/);
-  assert.match(html,/Missing or unrecognized card data/);
+  assert.match(html,/legality data unavailable/);
   assert.doesNotMatch(html,/Manual review ·/);
-  assert.match(html,/combined color identity and basic-land types/);
   assert.match(html,/Designated companion/);
-  assert.match(html,/Sideboard and Maybeboard are excluded/);
+  assert.match(html,/<summary>About these checks<\/summary>/);
   assert.ok(html.indexOf('Failed checks')<html.indexOf('Commander bracket discussion'));
   assert.doesNotMatch(html,/check-summary check-success|None found|<Unknown>/);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
@@ -113,12 +125,12 @@ test('Commander shows only deck-specific manual review when supported checks pas
   assert.doesNotMatch(w.node('#app').innerHTML,/Manual review ·|Failed checks|Data unavailable/);
   assert.match(w.node('#app').innerHTML,/About these checks/);
   vm.runInContext("decks[0].cards[0].card.oracle_text='Before the game begins, choose a color.';render()",w.context);
-  assert.match(w.node('#app').innerHTML,/Supported checks passed · manual review needed/);
+  assert.match(w.node('#app').innerHTML,/Manual review needed/);
   assert.match(w.node('#app').innerHTML,/Manual review · 1/);
   assert.match(w.node('#app').innerHTML,/pregame choice/);
 });
 
-test('startup batches stay bounded and new cards use their available lookup data',async()=>{
+test('checks refresh newly added printing coverage and keep batches bounded',async()=>{
   const d=editorDeck();d.cards=Array.from({length:80},(_,i)=>({card:editorCard('Card '+i),qty:1,tags:[],zone:'main'}));
   const w=workspace({savedDecks:JSON.stringify([d])}), batches=[];
   w.context.fetch=async(url,opts)=>{const names=JSON.parse(opts.body).ids;batches.push(names);return {ok:true,json:async()=>({data:names.map(name=>editorCard(name))})};};
@@ -126,17 +138,22 @@ test('startup batches stay bounded and new cards use their available lookup data
   assert.deepEqual(batches.map(b=>b.length),[75,5]);
   assert.equal(new Set(batches.flat()).size,80);
   assert.equal(vm.runInContext("legalityStates.get(decks[0].id).status",w.context),'fresh');
-  vm.runInContext("decks[0].cards[0].qty=2;render()",w.context);
+  vm.runInContext("view='deck';deckTab='checks';decks[0].cards[0].qty=2;render()",w.context);
   assert.equal(w.timers.filter(t=>t.ms===0).length,1);
   vm.runInContext("decks[0].cards.push({card:decks[0].cards[0].card,qty:1,tags:[],zone:'sideboard'});render()",w.context);
   assert.equal(w.timers.filter(t=>t.ms===0).length,1);
   w.context.newCard=editorCard('New');
-  vm.runInContext("addDeckCopies(decks[0],newCard,1,'main');view='deck';deckTab='checks';render()",w.context);
+  vm.runInContext("deckTab='cards';addDeckCopies(decks[0],newCard,1,'main');render()",w.context);
   assert.equal(w.timers.filter(t=>t.ms===0).length,1);
   assert.equal(batches.length,2);
   assert.equal(vm.runInContext("decks[0].cards.at(-1).card.legalities.commander",w.context),'legal');
-  assert.match(w.node('#app').innerHTML,/Using available card legality data/);
-  assert.doesNotMatch(w.node('#app').innerHTML,/Retry legality refresh|Data unavailable/);
+  vm.runInContext("deckTab='checks';render();render()",w.context);
+  assert.equal(w.timers.filter(t=>t.ms===0).length,2);
+  assert.match(w.node('#app').innerHTML,/Checking card legality/);
+  await w.timers.at(-1).fn();
+  assert.deepEqual(batches.slice(2).map(b=>b.length),[75,6]);
+  assert.ok(batches.flat().includes('New'));
+  assert.doesNotMatch(w.node('#app').innerHTML,/Checking card legality|Retry legality refresh|Data unavailable/);
 });
 
 test('an import replacing entry objects during refresh keeps newer facts without a follow-up request',async()=>{

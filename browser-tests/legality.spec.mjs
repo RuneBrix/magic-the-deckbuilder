@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { cards, prepareApp } from './fixtures.mjs';
 
-test('legality refresh runs at startup and offers recovery in Checks', async ({page, isMobile}, testInfo) => {
+test('Checks refreshes uncovered decks and offers retry only after failure', async ({page, isMobile}, testInfo) => {
   const requests = [];
   page.on('request', request => {
     if (new URL(request.url()).pathname === '/api/collection') requests.push(request.postDataJSON().ids);
@@ -39,12 +39,15 @@ test('legality refresh runs at startup and offers recovery in Checks', async ({p
   await page.getByRole('button', {name: 'Tracked Woodland', exact: true}).click();
   const checks = page.getByRole('tab', {name: 'Checks', exact: true});
   await checks.press('Enter');
-  const freshness = page.locator('.freshness');
-  await expect(freshness).toContainText('Refreshing legality');
+  const summary = page.locator('.check-summary');
+  await expect(summary).toHaveText('Checking card legality…');
+  await expect(summary).toHaveClass('check-summary check-info');
   failRequest();
   const retry = page.getByRole('button', {name: 'Retry legality refresh'});
   await expect(retry).toBeVisible();
-  await expect(freshness).toContainText('Card lookup is temporarily unavailable');
+  await expect(summary).toHaveText('Checks based on saved data');
+  await expect(summary).toHaveClass('check-summary check-info');
+  await expect(page.locator('.freshness')).toContainText('Card lookup is temporarily unavailable');
   await expect(page.getByRole('heading', {name: /Manual review/})).toHaveCount(0);
   await page.screenshot({path: testInfo.outputPath('legality-retry.png')});
   if (isMobile) {
@@ -54,24 +57,30 @@ test('legality refresh runs at startup and offers recovery in Checks', async ({p
     await expect(retry).toBeFocused();
     await retry.press('Enter');
   }
-  await expect(freshness).toContainText('Legality refreshed this session');
-  await expect(page.getByRole('heading', {name: 'Supported checks passed', exact: true})).toBeVisible();
+  await expect(summary).toHaveText('Supported checks passed');
+  await expect(summary).toHaveClass('check-summary check-success');
   await expect(retry).toHaveCount(0);
+  await expect(page.locator('.checks')).not.toContainText(/cache|Legality data options|Choose one card stored/i);
   await page.screenshot({path: testInfo.outputPath('legality-refreshed.png')});
 
   await page.clock.setFixedTime(new Date(Date.now() + 600_000));
   await page.getByRole('tab', {name: 'Cards', exact: true}).click();
   await checks.click();
-  await expect(freshness).toContainText('Legality refreshed this session');
+  await expect(summary).toHaveText('Supported checks passed');
+  expect(requests).toHaveLength(3);
   await page.getByRole('button', {name: 'Back to library', exact: true}).click();
   await page.getByRole('button', {name: 'Smoke Garden', exact: true}).click();
-  await checks.click();
-  await expect(freshness).toContainText('Using available card legality data');
-  await expect(retry).toHaveCount(0);
-  const options = freshness.getByText('Legality data options');
-  await options.press('Enter');
-  await expect(freshness.getByRole('button', {name: 'Refresh legality', exact: true})).toBeVisible();
-  await expect(page.getByText('About these checks', {exact: true})).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(await page.evaluate(() => innerWidth));
   expect(requests).toHaveLength(3);
+  await checks.click();
+  await expect.poll(() => requests.length).toBe(4);
+  await expect(summary).toHaveText('Deck legality issues found');
+  await expect(retry).toHaveCount(0);
+  const about = page.getByText('About these checks', {exact: true});
+  const scope = page.getByText(/Checks cover deck size, commander eligibility/);
+  await expect(scope).toBeHidden();
+  await about.press('Enter');
+  await expect(scope).toBeVisible();
+  await page.addStyleTag({content: '.checks {font-size: 200%} .checks select {font-size: inherit}'});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(await page.evaluate(() => innerWidth));
+  expect(requests).toHaveLength(4);
 });
