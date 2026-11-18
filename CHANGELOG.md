@@ -1,5 +1,11 @@
 # Changelog
 
+## Search setup — 2026-11-18
+
+- Show active filters and selected function tags beside their respective collapsed headings (#245).
+- Submit from the main Search control or keyboard. Blank submissions preserve displayed results and send no request (#246).
+- Keep the Scryfall query and its validation visible beneath navigation while editing filters, with the sticky area ending before results (#247).
+
 ## Card lookup and safe saves — 2026-11-18
 
 - Validate Collection printing pages and supported finish choices; preserve existing finishes until deliberately changed. Keep explicit finish requests separate from omitted-finish defaults and check all fallback pages for ambiguous identities (#226).

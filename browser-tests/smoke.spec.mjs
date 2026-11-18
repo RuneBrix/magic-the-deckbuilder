@@ -1015,13 +1015,12 @@ test('function pages and related browsing preserve the search until a filter is 
   await expect(page.getByRole('button', { name: 'Remove sweeper filter', exact: true })).toHaveCount(2);
 });
 
-test('Explore panels submit independently and add unlisted functions inline', async ({ page }, testInfo) => {
+test('Explore accepts primary and guided keyboard submission and adds unlisted functions inline', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
   const filters = page.locator('#search-filters'), raw = page.locator('#raw');
-  const submit = page.getByRole('button', { name: 'Search with these filters', exact: true });
   await raw.fill('name:"Sol Ring" usd<5');
   await expect(page.locator('#applied-filter-summary')).toHaveText('Card name · 1 query-only expression');
-  await submit.press('Enter');
+  await page.locator('#search-submit').click();
   await expect(page.locator('.card-tile')).toHaveCount(3);
   await expect(filters).not.toHaveAttribute('open', '');
 
@@ -1033,7 +1032,7 @@ test('Explore panels submit independently and add unlisted functions inline', as
   await nameFilter.locator('summary').press('Enter');
   await expect(name).toHaveValue('Sol Ring');
   await name.fill('Forest');
-  await submit.click();
+  await name.press('Enter');
   await expect(raw).toHaveValue('name:"Forest" usd<5');
   await expect(name).toBeVisible();
   await expect(filters.locator('[data-guided-family="type"] input:visible')).toHaveCount(0);
@@ -1144,6 +1143,8 @@ test('guided clear controls reset only the requested value and return focus', as
   await expect(page.locator('[name="identity-mode"]')).toBeFocused();
   await expect(page.locator('[name="identity-W"]')).not.toBeChecked();
   await expect(raw).toHaveValue('mv<=5 o:"draw" m>={C} usd<5');
+  await expect(page.locator('#applied-filter-summary')).toBeHidden();
+  await page.locator('#filters-heading').press('Enter');
   await expect(page.locator('#applied-filter-summary')).toContainText('Mana values');
   await noPageOverflow(page);
 });
@@ -1226,7 +1227,7 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
   await oracle.locator('[name="oracle-mode-1"]').selectOption('fo');
   await oracle.locator('[name="oracle-0"]').fill('Whenever ~ attacks');
   await oracle.locator('[name="oracle-1"]').fill('flying');
-  await page.getByRole('button',{name:'Search with these filters',exact:true}).click();
+  await oracle.locator('[name="oracle-1"]').press('Enter');
   const expected='(mv>=1 OR mv>=2 OR mv>=6) (o:"Whenever ~ attacks" OR fo:"flying")';
   await expect(page.locator('#raw')).toHaveValue(expected);
   await expect.poll(()=>queries.at(-1)).toBe(expected);

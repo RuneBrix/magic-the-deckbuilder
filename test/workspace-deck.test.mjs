@@ -376,14 +376,16 @@ test('statistics tool board renders existing weighted playing-deck values and es
   assert.equal(w.writes.length,0);
 });
 
-test('navigation height tracks wrapped header dimensions without touching deck storage', () => {
+test('sticky heights track wrapped navigation and the query form without touching deck storage', () => {
   const w=workspace();const sizes=[];
   w.document.documentElement.style={setProperty:(key,value)=>sizes.push([key,value])};
   w.node('.workspace-nav').getBoundingClientRect=()=>({height:124.5});
-  vm.runInContext('updateNavigationHeight()',w.context);
+  vm.runInContext('updateStickyHeights()',w.context);
   w.node('.workspace-nav').getBoundingClientRect=()=>({height:76});
+  w.node('#search-form').offsetHeight=143;
+  w.node('#search-form').parentElement={style:{setProperty:(key,value)=>sizes.push([key,value])}};
   vm.runInContext('render()',w.context);
-  assert.deepEqual(sizes,[['--nav-height','125px'],['--nav-height','76px']]);
+  assert.deepEqual(sizes,[['--nav-height','125px'],['--nav-height','76px'],['--search-form-height','143px']]);
   assert.equal(w.writes.length,0);
 });
 

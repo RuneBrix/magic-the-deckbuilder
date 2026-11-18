@@ -53,7 +53,8 @@ test('search disclosures start closed and preserve the opened state and selected
   assert.match(html, /id="search-filters"[^>]*\bopen\b/);
   assert.match(html, /id="function-tags"[^>]*\bopen\b/);
   assert.match(html, /data-guided-family="oracle" open/);
-  assert.match(html, /id="applied-filter-summary">Oracle phrase · Function tags/);
+  assert.match(html, /id="applied-filter-summary"[^>]*>Oracle phrase<\/span>/);
+  assert.match(html, /id="applied-function-summary"[^>]*>ramp<\/span>/i);
   assert.match(html, /name="oracle-0" value="draw a card"/);
   assert.match(html, /aria-label="Remove ramp filter"/);
   assert.doesNotMatch(html, /data-action="backup"|data-action="restore"/);
@@ -178,13 +179,21 @@ test('typed query projects controls without replacing the focused search input; 
   assert.equal(w.node('#app').innerHTML,shell);
   assert.match(w.node('#guided-controls').innerHTML,/data-remove-chip="instant"/);
   assert.match(w.node('#guided-controls').innerHTML,/data-remove-chip="sorcery"/);
-  assert.equal(w.node('#applied-filter-summary').textContent,'Types · Function tags · 1 query-only expression');
+  assert.equal(w.node('#applied-filter-summary').textContent,'Types · 1 query-only expression');
+  assert.match(w.node('#applied-function-summary').textContent,/ramp.*draw/i);
   assert.match(w.node('#selected-functions').innerHTML,/Remove ramp filter/);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
   await w.node('#app').click({target:{closest:()=>({dataset:{tag:'ramp'}})}});
   assert.doesNotMatch(vm.runInContext('filters.query',w.context),/otag:ramp/);
   assert.match(vm.runInContext('filters.query',w.context),/otag:draw/);
   assert.match(vm.runInContext('filters.query',w.context),/usd<5/);
+});
+
+test('the Filters summary counts mixed query-only clauses without counting function-only clauses',()=>{
+  const w=workspace();
+  const summarize=query=>vm.runInContext(`filters=parseQuery(${JSON.stringify(query)});appliedFiltersSummary()`,w.context);
+  assert.equal(summarize('-otag:ramp'),'');
+  assert.equal(summarize('(otag:ramp OR usd<5) -otag:draw'),'1 query-only expression');
 });
 
 test('typing and clearing invalidate pending requests; incomplete queries are never sent',async()=>{
@@ -240,12 +249,31 @@ test('sequential ANY choices keep their intent after the first operand and an un
   }
 });
 
-test('an explicit blank search exposes its effective broad query in the primary input',async()=>{
-  const w=workspace(),queries=[];
-  w.context.fetch=async url=>{queries.push(new URLSearchParams(String(url).split('?')[1]).get('q'));return {ok:true,json:async()=>({data:[],total_cards:0,has_more:false})};};
+test('empty search submissions send no request and keep the displayed result context',async()=>{
+  const w=workspace(),raw=w.node('#raw'),queries=[];
+  w.context.fetch=async url=>{
+    queries.push(new URLSearchParams(String(url).split('?')[1]).get('q'));
+    return {ok:true,json:async()=>({data:[editorCard('Found')],total_cards:1,has_more:false})};
+  };
+  const submit=()=>w.node('#search-form').submit({preventDefault(){}});
+  const type=value=>{raw.value=value;raw.input({target:raw});};
+  submit();
+  type('   ');
+  submit();
+  assert.deepEqual(queries,[]);
+  type('game:paper');
   await vm.runInContext('search()',w.context);
-  assert.deepEqual(queries,['game:paper']);assert.equal(vm.runInContext('filters.query',w.context),'game:paper');
-  assert.match(w.node('#app').innerHTML,/id="raw"[^>]*value="game:paper"/);
+  type('');
+  submit();
+  assert.deepEqual(queries,['game:paper']);
+  assert.equal(vm.runInContext('resultContext.query',w.context),'game:paper');
+  assert.equal(vm.runInContext('results[0].name',w.context),'Found');
+  assert.match(w.node('#search-output').innerHTML,/results are from the previous query/);
+  vm.runInContext('clearSearch()',w.context);
+  raw.value='';
+  submit();
+  assert.deepEqual(queries,['game:paper']);
+  assert.equal(vm.runInContext('resultContext',w.context),null);
 });
 
 test('tracker visibility and selection preserve the search, editor destination and stored decks',async()=>{

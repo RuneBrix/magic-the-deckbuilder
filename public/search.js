@@ -144,6 +144,10 @@ function affected(node){
   }
   return unique((node.children||[node.child]).filter(Boolean).flatMap(affected));
 }
+function onlyFunctionTags(node) {
+  if(node.kind==='term')return /^[-!]?otag[<>=!:]/i.test(node.text);
+  return (node.children||[node.child]).every(onlyFunctionTags);
+}
 
 export function parseQuery(query='') {
   const result={...defaults(),query,locked:[],opaque:[],parts:[],error:''};
@@ -151,7 +155,7 @@ export function parseQuery(query='') {
     if(query.length>1500)throw Error('Keep the query within 1,500 characters.');
     const parsed=parse(query),root=unwrap(parsed);if(!root)return result;
     const nodes=root.kind==='and'&&!(parsed.kind==='group'&&classify(parsed)?.family==='cost')?root.children:[parsed];
-    result.parts=nodes.map(node=>({text:query.slice(node.start,node.end),or:node.kind==='or',condition:classify(node),affected:affected(node)}));
+    result.parts=nodes.map(node=>({text:query.slice(node.start,node.end),or:node.kind==='or',condition:classify(node),affected:affected(node),onlyFunctionTags:onlyFunctionTags(node)}));
     const groups=new Map();
     for(const part of result.parts){if(part.condition){const key=part.condition.family;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(part.condition);}else result.locked.push(...part.affected);}
     for(const [family,parts] of groups){

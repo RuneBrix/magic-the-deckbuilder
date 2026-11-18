@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, queryFor, relaxationOptions, relaxSearch, stats, collectionReport, parseImport, parseCollectionImport, prepareCollectionUpload, normalizeEdition, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, compactStoredWorkspace, readStoredWorkspace, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, relaxationOptions, relaxSearch, stats, collectionReport, parseImport, parseCollectionImport, prepareCollectionUpload, normalizeEdition, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, compactStoredWorkspace, readStoredWorkspace, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 import { esc, mana, printingLabel, icon, money, currencySymbol } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
@@ -134,10 +134,12 @@ function commitNewDeck(d) {
   decks.push(d);storageError='';updateBackupStatus();
 }
 
-function updateNavigationHeight() {
+function updateStickyHeights() {
   document.documentElement.style?.setProperty('--nav-height',Math.ceil($('.workspace-nav').getBoundingClientRect().height)+'px');
+  const form=$('#search-form');
+  form?.parentElement?.style.setProperty('--search-form-height',form.offsetHeight+'px');
 }
-const navigationObserver=typeof ResizeObserver==='undefined'?null:new ResizeObserver(updateNavigationHeight);
+const stickyObserver=typeof ResizeObserver==='undefined'?null:new ResizeObserver(updateStickyHeights);
 function render() {
   finishCardDrag();
   closeCardActions(false);
@@ -156,22 +158,50 @@ function render() {
   $('#app').classList.toggle('has-tracker', view==='explore' && Boolean(d) && tracker.visible);
   $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-home data-view="decks" aria-label="Arcana home — My decks"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Explore cards</button><button data-view="collection" class="nav-item ${view==='collection'?'selected':''}" ${view==='collection'?'aria-current="page"':''}>Collection</button><button class="nav-item ${view==='settings'?'selected':''}" data-action="settings" ${view==='settings'?'aria-current="page"':''}>Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
   <main>${storageError ? `<div class="storage-warning" role="alert">${esc(storageError)} <button data-action="backup">Export backup</button></div>` : ''}${view === 'decks' ? library() : view === 'deck' ? deckWorkspace(d, statistics, previousStatistics) : view==='collection'?collectionPage(collection,collectionOptions):view==='settings'?settingsPage():explorer()}</main>${view === 'explore' && d && tracker.visible ? `<button class="mobile-deck-jump primary" data-action="jump-deck">View tracker · ${esc(d.name)}</button><aside id="deck-tracker" class="deck-panel" aria-label="Tracked deck: ${esc(d.name)}"><div id="tracker-resize" role="separator" tabindex="0" aria-label="Resize deck tracker" aria-orientation="vertical" aria-controls="deck-tracker" aria-valuemin="280" aria-valuemax="480" aria-valuenow="${tracker.width}" aria-valuetext="${tracker.width} pixels, subject to available space" title="Drag to resize. Left widens; Right narrows; Home and End set limits."></div>${deckPanel(d)}</aside>` : ''}`;
-  updateNavigationHeight();
-  navigationObserver?.disconnect();
-  navigationObserver?.observe($('.workspace-nav'));
+  updateStickyHeights();
+  stickyObserver?.disconnect();
+  stickyObserver?.observe($('.workspace-nav'));
+  const searchForm=document.querySelector('#search-form');
+  if(searchForm)stickyObserver?.observe(searchForm);
   bind();
   if(view==='settings')bindSettings();
   if (statistics) bindStatistics($('#deck-statistics'), statistics);
   if(focusSelector) {const target=document.querySelector(focusSelector)||document.querySelector('.deck-tabs [aria-selected="true"]');target?.focus({preventScroll:true});}
 }
+function queryError() {
+  return filters.error?filters.error+' Guided edits are paused. Edit the query to continue.':'';
+}
 function queryNotes() {
-  return `${filters.error?`<p class="query-error" role="alert">${esc(filters.error)} Guided edits are paused; your query is unchanged.</p>`:''}${filters.opaque.length&&!filters.error?`<details class="query-help"><summary>Query-only expressions · ${filters.opaque.length}</summary><p>These expressions stay verbatim in the search. Complex or unsupported expressions cannot be edited with guided controls${filters.locked.length?'; affected controls are disabled':''}.</p>${filters.opaque.map(text=>`<code>${esc(text)}</code>`).join('')}<p>Guided controls support type groups and exclusions, keyword abilities, function tags, mana comparisons, colors, Oracle phrases, one name and one format. Edit other expressions directly above.</p></details>`:''}`;
+  if(filters.error||!filters.opaque.length)return '';
+  return `<details class="query-help"><summary>Query-only expressions · ${filters.opaque.length}</summary><p>These expressions stay verbatim in the search. Complex or unsupported expressions cannot be edited with guided controls${filters.locked.length?'; affected controls are disabled':''}.</p>${filters.opaque.map(text=>`<code>${esc(text)}</code>`).join('')}<p>Guided controls support type groups and exclusions, keyword abilities, function tags, mana comparisons, colors, Oracle phrases, one name and one format. Edit other expressions directly above.</p></details>`;
+}
+function refreshQueryNotes() {
+  const errorNode=$('#query-error'),message=queryError(),notes=$('#query-notes');
+  if(errorNode.textContent!==message)errorNode.textContent=message;
+  const wasOpen=notes.firstElementChild?.open;
+  notes.innerHTML=queryNotes();
+  if(wasOpen&&notes.firstElementChild)notes.firstElementChild.open=true;
 }
 function appliedFiltersSummary() {
-  if(filters.error)return 'Query incomplete or invalid';
-  const labels=relaxationOptions(filters,current()).map(option=>option.label);
-  if(filters.opaque.length)labels.push(`${filters.opaque.length} query-only ${filters.opaque.length===1?'expression':'expressions'}`);
+  if(filters.error)return '';
+  const labels=relaxationOptions(filters,current()).filter(option=>option.key!=='tags').map(option=>option.label);
+  const opaque=filters.parts.filter(part=>!part.onlyFunctionTags&&(!part.condition||filters.locked.includes(part.condition.family))).length;
+  if(opaque)labels.push(`${opaque} query-only ${opaque===1?'expression':'expressions'}`);
   return labels.join(' · ');
+}
+const appliedFunctionsSummary = () => filters.tags.map(tagName).join(' · ');
+function searchPanelHeading(id,title,summaryId,summary,open) {
+  return `<summary id="${id}" aria-labelledby="${id}-label"${!open&&summary?` aria-describedby="${summaryId}"`:''}><span id="${id}-label" class="search-panel-title">${title}</span><span id="${summaryId}" class="search-panel-summary">${esc(summary)}</span></summary>`;
+}
+function refreshPanelSummary(id,summaryId,summary,open) {
+  const text=$('#'+summaryId),heading=$('#'+id);
+  if(text.textContent!==summary)text.textContent=summary;
+  if(!open&&summary)heading.setAttribute('aria-describedby',summaryId);
+  else heading.removeAttribute('aria-describedby');
+}
+function refreshPanelSummaries() {
+  refreshPanelSummary('filters-heading','applied-filter-summary',appliedFiltersSummary(),$('#search-filters').open);
+  refreshPanelSummary('function-tags-heading','applied-function-summary',appliedFunctionsSummary(),$('#function-tags').open);
 }
 const clearFilterButton = (name, label) => `<button type="button" class="guided-clear" data-clear-filter="${name}" aria-label="Clear ${esc(label)}" title="Clear ${esc(label)}">${icon('close',16)}</button>`;
 const clearable = (name, label, control) => `<div class="guided-entry">${control}${clearFilterButton(name,label)}</div>`;
@@ -247,15 +277,12 @@ function selectedFunctions() {
 }
 function searchPanels() {
   const matches=tagMatches();
-  return `<div class="filters-panel">
-    <details id="search-filters" class="search-disclosure search-panel" ${filtersOpen?'open':''}>
-      <summary id="filters-heading" aria-labelledby="filters-title" aria-describedby="applied-filter-summary"><span id="filters-title" class="search-panel-title">Filters</span><span id="applied-filter-summary">${appliedFiltersSummary()}</span></summary>
-      <div id="guided-controls">${guidedControls()}</div>
-    </details>
-    <button id="search-guided" class="secondary" type="submit" form="guided-form">Search with these filters</button>
-  </div>
+  return `<details id="search-filters" class="search-panel" ${filtersOpen?'open':''}>
+    ${searchPanelHeading('filters-heading','Filters','applied-filter-summary',appliedFiltersSummary(),filtersOpen)}
+    <div id="guided-controls">${guidedControls()}</div>
+  </details>
   <details id="function-tags" class="tag-browser search-panel" ${tagsOpen?'open':''}>
-    <summary id="function-tags-heading"><span class="search-panel-title">Browse by function</span></summary>
+    ${searchPanelHeading('function-tags-heading','Browse by function','applied-function-summary',appliedFunctionsSummary(),tagsOpen)}
     <div class="tag-browser-content">
       <div id="selected-functions">${selectedFunctions()}</div>
       <label class="tag-search-label" for="tag-search">Find a function</label>
@@ -268,7 +295,12 @@ function searchPanels() {
 }
 function explorer() {
   const d=current();
-  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Default destination: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div><form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-notes"><button id="search-submit" class="primary" type="submit">Search ${icon('arrow',16)}</button></div><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form><div id="query-notes">${queryNotes()}</div>${searchPanels()}<div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
+  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Default destination: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div>
+  <div class="search-setup">
+    <form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-error query-notes"><button id="search-submit" class="primary" type="submit">Search ${icon('arrow',16)}</button></div><p id="query-error" class="query-error" role="alert">${esc(queryError())}</p><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form>
+    <div id="query-notes">${queryNotes()}</div>${searchPanels()}
+  </div>
+  <div id="search-output">${searchResults()}${broadeningTools()}</div></div>`;
 }
 function searchResults(){
   if(!searched&&!loading&&!error)return '';
@@ -276,7 +308,7 @@ function searchResults(){
   const status=loading?'Searching Scryfall…':error?(noMatch?'0 cards found':'Search failed'):total.toLocaleString()+(total===1?' card found':' cards found');
   const sortOptions = Object.entries(SEARCH_SORTS).map(([value, { label }]) => `<option value="${value}" ${order===value?'selected':''}>${label}</option>`).join('');
   return `<section id="results-area" aria-labelledby="result-heading" data-state="${loading?'loading':error?(noMatch?'no-match':'error'):searched?'populated':'initial'}"><div class="results-heading"><div><h2 id="result-heading" tabindex="-1">Cards</h2><span id="result-count" role="status" aria-live="polite">${status}</span></div><div class="results-controls"><label>Sort results<select id="sort" aria-label="Sort cards">${sortOptions}</select></label></div></div>
-  ${resultContext&&resultContext.query!==queryFor(filters,current())?'<p class="query-stale" role="status">These results are from the previous query. Press Search to update them.</p>':''}
+  ${resultContext&&resultContext.query!==filters.query.trim()?`<p class="query-stale" role="status">These results are from the previous query.${filters.query.trim()?' Press Search to update them.':''}</p>`:''}
   ${error?`<div class="empty-state" role="alert"><h3>${noMatch?'No cards matched':'Search couldn’t finish'}</h3><p>${esc(error)}</p><div><button class="secondary" data-action="reset">Clear search and filters</button>${!noMatch?'<button class="primary" data-action="retry">Try again</button>':''}</div></div>`:loading&&!results.length?'<div class="loading-state" role="status"><p>Loading cards…</p></div>':`<div class="card-grid" aria-busy="${loading}">${results.slice(0,visibleLimit).map(cardTile).join('')}</div>`}
   ${(more||visibleLimit<results.length)&&!error?`<button class="load-more secondary" data-action="more" ${loading?'disabled':''}>${loading?'Loading…':'Load more cards'}</button>`:''}<footer>Card data and images by <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. Magic: The Gathering © Wizards of the Coast.</footer></section>`;
 }
@@ -418,7 +450,7 @@ function broadeningTools() {
 function broaden(key) {
   readFilters();
   const result = relaxSearch(broadening?.original || filters, current(), key);
-  broadening = result; filters = result.filters; broadeningOpen = true;view='explore';
+  broadening = result; filters = result.filters.query.trim()?result.filters:parseQuery(result.query); broadeningOpen = true;view='explore';
   return search(false, true).then(()=>$('#result-heading')?.focus());
 }
 function restoreSearch() {
@@ -1599,7 +1631,13 @@ function bindGuided(){
   });
   $('#guided-form')?.addEventListener('keydown',e=>{
     const picker=e.target.closest('[data-chip-picker]');
-    if(!picker)return;
+    if(!picker){
+      if(e.key==='Enter'&&!e.isComposing&&e.target.matches('input:not([type]),input[type="text"],input[type="number"]')){
+        e.preventDefault();
+        e.target.form.requestSubmit();
+      }
+      return;
+    }
     const input=picker.querySelector('[data-chip-input]'),list=picker.querySelector('.chip-suggestions');
     if(e.key==='Escape'&&!list.hidden){e.preventDefault();input.focus();list.hidden=true;return;}
     if(e.key==='Enter'&&e.target===input){
@@ -1616,7 +1654,7 @@ function bindGuided(){
   $('#guided-form')?.addEventListener('submit',e=>{e.preventDefault();const family=document.activeElement?.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,true);else search(false,false,true);});
 }
 function refreshSearchTools(){
-  $('#query-notes').innerHTML=queryNotes();$('#applied-filter-summary').textContent=appliedFiltersSummary();$('#guided-controls').innerHTML=guidedControls();refreshFunctionFilters();
+  refreshQueryNotes();refreshPanelSummaries();$('#guided-controls').innerHTML=guidedControls();refreshFunctionFilters();
   refreshSearchOutput();
   bindGuided();
 }
@@ -1628,7 +1666,7 @@ function refreshSearchOutput(){
 }
 function bindSearchOutput(){
   $('#broadening-tools')?.addEventListener('toggle',e=>{if(e.target.isConnected)broadeningOpen=e.target.open;});
-  $('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true,true);});
+  $('#sort')?.addEventListener('change',e=>{readFilters();order=e.target.value;search(false,true,true,filters.query.trim()||resultContext?.query);});
 }
 function resizeTracker(width) {
   tracker.width = Math.round(Math.max(280,Math.min(480,width)));
@@ -1685,10 +1723,10 @@ function bind() {
     }catch(error){toast(error.message);}
     render();$('#deck-currency')?.focus();
   });
-  $('#search-filters')?.addEventListener('toggle',e=>{if(e.target.isConnected)filtersOpen=e.target.open;});
-  $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected)tagsOpen=e.target.open;});
-  $('#search-form')?.addEventListener('submit',e=>{e.preventDefault();readFilters();search();});
-  $('#raw')?.addEventListener('input',e=>{filters=parseQuery(e.target.value);colorTarget='';++requestId;loading=false;error='';broadening=null;if(!filters.query.trim())resetResults();refreshSearchTools();});
+  $('#search-filters')?.addEventListener('toggle',e=>{if(e.target.isConnected){filtersOpen=e.target.open;refreshPanelSummaries();}});
+  $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected){tagsOpen=e.target.open;refreshPanelSummaries();}});
+  $('#search-form')?.addEventListener('submit',e=>{e.preventDefault();readFilters();return search(false,false,true);});
+  $('#raw')?.addEventListener('input',e=>{filters=parseQuery(e.target.value);colorTarget='';++requestId;loading=false;error='';broadening=null;refreshSearchTools();});
   $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagPage=1;refreshTagOptions();});
   bindGuided();bindSearchOutput();
 }
@@ -1841,15 +1879,15 @@ const noCardsFound=error=>error.status===404&&/no cards|0 cards|didn.t match any
 // during its search, including when the response arrives after the next keystroke.
 function renderSearchState(keepForm=false){
   if(!keepForm||view!=='explore'){render();return;}
-  $('#raw').value=filters.query;$('#query-notes').innerHTML=queryNotes();$('#applied-filter-summary').textContent=appliedFiltersSummary();
+  $('#raw').value=filters.query;refreshQueryNotes();refreshPanelSummaries();
   refreshSearchOutput();
 }
-async function search(append=false,keepBroadening=false,keepForm=false) {
+async function search(append=false,keepBroadening=false,keepForm=false,query=filters.query.trim()) {
   if(filters.error){error=filters.error;loading=false;renderSearchState(keepForm);return;}
-  if(!filters.query.trim())filters=parseQuery('game:paper');
-  if(!append && (!keepBroadening || (broadening && queryFor(filters,current())!==broadening.query)))broadening=null;
+  if(!query&&(!append||!resultContext))return;
+  if(!append && (!keepBroadening || (broadening && query!==broadening.query)))broadening=null;
   if(append && visibleLimit < results.length){visibleLimit+=24;renderSearchState(keepForm);return;}
-  const context=append&&resultContext ? resultContext : {query:queryFor(filters,current()),order};
+  const context=append&&resultContext ? resultContext : {query,order};
   const id=++requestId;loading=true;error='';if(!append){page=1;results=[];visibleLimit=24;}else{visibleLimit+=24;}const requestedPage=append?page+1:1;renderSearchState(keepForm);
   try {const data=await api('/api/search?'+new URLSearchParams({q:context.query,page:requestedPage,...SEARCH_SORTS[context.order].params}));if(id!==requestId)return;results=append?[...results,...data.data]:data.data;resultContext=context;total=data.total_cards;more=data.has_more;page=requestedPage;}
   catch(e){if(id!==requestId)return;error=/0 cards|No cards|didn.t match any cards/i.test(e.message)?'No cards matched these filters. A custom tag may be unsupported. Remove a tag, switch to Match any, or broaden your Oracle text.':e.message;more=false;}
