@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck legality checks — 2026-11-18
+
+- Refresh legality for one saved deck at startup and when Checks needs updated card coverage. Offer a retry after a failed lookup (#236).
+- Show a single legality result, with deck-specific Commander manual-review items and brief optional guidance under About these checks (#237).
+
 ## Card and dialog interactions — 2026-11-18
 
 - Show larger Related-function examples that open their exact printing in Card details and return to the same relationship, scroll position and focused example (#241).
@@ -11,6 +16,7 @@
 - Show active filters and selected function tags beside their respective collapsed headings (#245).
 - Submit from the main Search control or keyboard. Blank submissions preserve displayed results and send no request (#246).
 - Keep the Scryfall query and its validation visible beneath navigation while editing filters, with the sticky area ending before results (#247).
+- Keep open filter panels visible when a filter change starts a search.
 
 ## Card lookup and safe saves — 2026-11-18
 

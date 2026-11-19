@@ -235,7 +235,7 @@ footer a{color:inherit}
 .color-stats{display:flex;justify-content:space-between}
 .color-stats>div{display:flex;align-items:center;gap:5px;font-size:12px}
 .color-stats b{font-weight:500}
-.checks>p{font-size:12px;color:var(--muted);margin:8px 0 14px}
+.checks>.check-summary{margin:8px 0 14px}
 .check-issue{font-size:12px;line-height:1.6;padding:11px 0;border-top:1px solid var(--line);color:var(--warning)}
 .welcome-state,.empty-state,.loading-state{padding:60px 22px;text-align:center;display:flex;align-items:center;flex-direction:column;gap:14px}
 .welcome-icon{color:var(--accent);background:var(--soft);padding:18px;border-radius:18px}
@@ -514,7 +514,6 @@ summary span{font-size:12px;color:var(--muted);font-weight:400}
 .curve-column>span{font-size:11px}
 .curve-column>small{font-size:11px}
 .stat-pair{font-size:13px}
-.checks>p{font-size:13px}
 .check-issue{font-size:13px}
 .library-deck-body h2{font-size:25px}
 .library-tools{display:none}
@@ -823,8 +822,6 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .check-section h3 svg,.check-summary svg,.freshness svg{flex-shrink:0}
 .check-section ul{margin:12px 0 0;padding-left:20px;line-height:1.7}
 .check-section li+li{margin-top:8px}
-.check-section>p{margin-top:8px}
-.checks>p,.checks>.freshness{margin-top:16px}
 .check-failure{color:var(--danger);background:var(--danger-bg)}
 .check-warning{color:var(--warning);background:var(--warning-bg)}
 .check-success{color:var(--success);background:var(--success-bg)}

@@ -47,12 +47,12 @@ test('unknown data and companion rules are not mislabeled as confirmed violation
   report=legalityReport(d);assert.deepEqual(report.failed,[]);assert.doesNotMatch(report.manual.join(' '),/companion designation/);
 });
 
-test('legacy commander mapping, main + command size and identity remain explicit and partial',()=>{
+test('legacy commander mapping, main + command size and identity still apply',()=>{
   const leader={card:card('Leader',{type_line:'Legendary Creature'}),qty:1,tags:['Leader'],commander:true};
   const land=entry('Forest',99,'main',{card:card('Forest',{type_line:'Basic Land — Forest',cmc:0})});
   const d={id:'old',name:'Legacy example',format:'commander',cards:[leader,land]};
   assert.equal(zoneFor(leader),'command');assert.equal(zoneCount(d,'command'),1);
-  assert.deepEqual(legalityReport(d).failed,[]);assert.match(legalityReport(d).manual.join(' '),/coverage is partial/);
+  assert.deepEqual(legalityReport(d),{failed:[],unavailable:[],manual:[]});
   d.cards.push(entry('Blue',1,'main',{card:card('Blue',{color_identity:['U']})}));
   assert.match(legalityReport(d).failed.join(' '),/outside your commander/);
   assert.equal(validateBackup([d])[0].cards[0].commander,true);

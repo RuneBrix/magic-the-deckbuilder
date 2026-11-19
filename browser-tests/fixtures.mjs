@@ -44,4 +44,6 @@ export async function prepareApp(page) {
     await route.fulfill({ json: data });
   });
   await page.goto('/');
+  // Let the startup refresh settle before a test snapshots or replaces the fixture workspace.
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('arcana.workspace.v2')).decks[0].cards[0].card.legalityUpdatedAt);
 }

@@ -118,7 +118,8 @@ test('existing unassigned cards can explicitly use a suggestion while other manu
 });
 
 test('text import and unfiltered Explore use the same defaults and retain printing metadata',async({page},testInfo)=>{
-  await page.route('**/api/collection',route=>route.fulfill({json:{data:[beast],not_found:[]}}));
+  await page.route('**/api/collection',route=>route.request().postDataJSON().names
+    ? route.fulfill({json:{data:[beast],not_found:[]}}) : route.fallback());
   await page.route('**/api/search?**',route=>route.fulfill({json:{data:[beast],total_cards:1,has_more:false}}));
   await page.route('**/api/printings?**',route=>route.fulfill({json:{data:[beast],has_more:false}}));
   await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();

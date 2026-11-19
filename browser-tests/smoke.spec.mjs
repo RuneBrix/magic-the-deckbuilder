@@ -23,6 +23,7 @@ test('collection upload recovers from quota failure and persists 1183 rows in Ch
   const byName = new Map(incoming.map(card => [card.name, card]));
   await page.route('**/api/collection', route => {
     const {names} = route.request().postDataJSON();
+    if (!names) return route.fallback();
     return route.fulfill({json:{data:names.map(name => byName.get(name)),not_found:[]}});
   });
   const storage = await page.evaluate(() => {
@@ -123,7 +124,7 @@ test('primary function editing and temporary reverse faces preserve stored card 
   await page.reload();
   await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
   await page.getByRole('tab',{name:'Checks',exact:true}).click();
-  await expect(page.locator('.freshness')).toContainText('Legality refreshed this session');
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   await page.getByRole('tab',{name:'Cards',exact:true}).click();
   const row=page.locator('.visual-card').filter({has:page.getByRole('button',{name:'Inspect Smoke Card 2 in Main deck',exact:true})});
   const flip=row.getByRole('button',{name:'Flip Smoke Card 2',exact:true});
@@ -269,7 +270,7 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await page.reload();
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
-  await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   const saved = await savedDeckData();
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
   const board = page.locator('.stats-view');
@@ -452,7 +453,7 @@ test('ownership compares selected and cheapest printings without changing deck c
   });
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
-  await expect(page.getByText(/Legality refreshed this session/)).toBeVisible();
+  await expect(page.locator('.check-summary')).not.toContainText('Checking card legality');
   await page.getByRole('tab', { name: 'Ownership & costs', exact: true }).click();
   const before = await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
   const check = page.getByRole('button', { name: 'Check cheapest printings', exact: true });
@@ -1315,16 +1316,17 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   await page.getByRole('button', {name:'Explore cards',exact:true}).click();
   const raw=page.locator('#raw');
   await raw.fill('t:elf t:creature -t:artifact keyword:flying mv>=2 mv<=5 c>=G id<=GU o:"draw" otag:ramp usd<5');
-  await page.locator('#search-filters > summary').click();
-  await page.locator('#filter-heading-activation').evaluate(heading=>{
-    // Keep opening and changing the select in the same task so the queued
-    // details toggle event cannot run before the form is rebuilt.
-    heading.click();
-    const activation=heading.parentElement.querySelector('select[name="activation-kind"]');
+  const filtersPanel=page.locator('#search-filters');
+  await filtersPanel.evaluate(panel=>{
+    // Change the filter before either disclosure's queued toggle event runs.
+    panel.querySelector(':scope > summary').click();
+    panel.querySelector('#filter-heading-activation').click();
+    const activation=panel.querySelector('select[name="activation-kind"]');
     activation.value='tap';
     activation.dispatchEvent(new Event('input',{bubbles:true}));
     activation.dispatchEvent(new Event('change',{bubbles:true}));
   });
+  await expect(filtersPanel).toHaveJSProperty('open',true);
   await expect(page.getByLabel('Activation cost includes')).toBeVisible();
   await expect(page.locator('#result-count')).toHaveText('3 cards found');
   await expect(raw).toHaveValue(/t:elf t:creature.*otag:ramp usd<5/);

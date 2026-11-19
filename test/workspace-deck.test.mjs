@@ -15,8 +15,7 @@ test('legacy saved decks get explicit in-memory zones without writing storage',(
   vm.runInContext("view='deck'; deckTab='checks'; render()",w.context);
   assert.match(w.node('#app').innerHTML,/Failed checks/);
   assert.doesNotMatch(w.node('#app').innerHTML,/Data unavailable/);
-  assert.match(w.node('#app').innerHTML,/Manual review/);
-  assert.match(w.node('#app').innerHTML,/coverage is partial/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Manual review ·|coverage is partial/);
 });
 
 test('zone row quantity buttons target only their entry and sideboard does not inflate deck progress',async()=>{
@@ -67,7 +66,7 @@ test('the full deck editor retains its tab and query through page navigation',as
   w.node('#editor-search').input({target:{value:'Ramp'}});
   assert.match(w.node('#editor-card-area').outerHTML,/Ramp spell/);
   assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
-  await click({tab:'checks'});assert.match(w.node('#app').innerHTML,/Manual review/);
+  await click({tab:'checks'});assert.match(w.node('#app').innerHTML,/Deck legality checks/);
   await click({tab:'stats'});assert.match(w.node('#app').innerHTML,/Mana curve/);
   await click({view:'collection'});
   await click({view:'decks'});
@@ -155,7 +154,7 @@ test('startup and reload open My decks, including an empty library, without chan
     assert.match(w.node('#app').innerHTML,/data-view="decks" class="nav-item selected"[^>]*aria-current="page"/);
     assert.match(w.node('#app').innerHTML,savedDecks?/Garden/:/No decks yet/);
     assert.equal(w.writes.length,0);
-    assert.equal(w.timers.length,0); // Library startup must not refresh every stored deck.
+    assert.equal(w.timers.length,savedDecks?1:0);
     const reload=workspace({savedDecks,initialView:null});
     assert.equal(vm.runInContext('view',reload.context),'decks');
   }
