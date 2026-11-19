@@ -16,6 +16,7 @@
 - Show active filters and selected function tags beside their respective collapsed headings (#245).
 - Submit from the main Search control or keyboard. Blank submissions preserve displayed results and send no request (#246).
 - Keep the Scryfall query and its validation visible beneath navigation while editing filters, with the sticky area ending before results (#247).
+- Keep open filter panels visible when a filter change starts a search.
 
 ## Card lookup and safe saves — 2026-11-18
 

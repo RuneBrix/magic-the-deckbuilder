@@ -1911,7 +1911,13 @@ const noCardsFound=error=>error.status===404&&/no cards|0 cards|didn.t match any
 // Input blur may happen while the next row is receiving focus. Keep that form in place
 // during its search, including when the response arrives after the next keystroke.
 function renderSearchState(keepForm=false){
-  if(!keepForm||view!=='explore'){render();return;}
+  if(view!=='explore'){render();return;}
+  if(!keepForm){
+    // Read disclosures before replacing them. Their queued toggle events may still be pending.
+    filtersOpen=$('#search-filters')?.open ?? filtersOpen;
+    tagsOpen=$('#function-tags')?.open ?? tagsOpen;
+    render();return;
+  }
   $('#raw').value=filters.query;refreshQueryNotes();refreshPanelSummaries();
   refreshSearchOutput();
 }
