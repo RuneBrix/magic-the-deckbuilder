@@ -210,7 +210,7 @@ test('deck controls compose live text filtering, grouping and sorting without re
   assert.equal(w.node('#app').innerHTML,shell);assert.equal(w.node('#editor-search'),field);
   assert.match(w.node('#editor-card-area').outerHTML,/Ramp spell/);assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
   w.node('#editor-group').change({target:{value:'role'}});w.node('#editor-order').change({target:{value:'price-desc'}});
-  assert.match(w.node('#app').innerHTML,/<h4>Removal <span>· 2 shown<\/span><\/h4>/);
+  assert.match(w.node('#app').innerHTML,/Removal <span class="deck-group-count">· 2 shown<\/span>/);
   field.input({target:{value:'not in this deck'}});assert.match(w.node('#editor-card-area').outerHTML,/No cards match these filters/);
   await w.node('#app').click({target:{closest:()=>({dataset:{action:'clear-deck-filters'}})}});
   assert.equal(vm.runInContext('editorOptions.search',w.context),'');assert.equal(vm.runInContext('editorOptions.order',w.context),'price-desc');
@@ -261,7 +261,7 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
     else assert.match(w.node('#app').innerHTML,/class="entry-quantity"/);
-    w.node('#editor-group').change({target:{value:'role'}});assert.match(w.node('#app').innerHTML,/<h4>Removal <span>· 2 cards<\/span><\/h4>/);
+    w.node('#editor-group').change({target:{value:'role'}});assert.match(w.node('#app').innerHTML,/Removal <span class="deck-group-count">· 2 cards<\/span>/);
     w.node('#editor-search').input({target:{value:'sorcery ramp'}});assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-inspect="Leader"/);
     assert.match(w.node('#editor-card-area').outerHTML,/Maybeboard · 3 · 3 shown/);
     vm.runInContext("editorOptions.search='';editorOptions.group='none';render()",w.context);assert.doesNotMatch(w.node('#app').innerHTML,/<h4>/);
@@ -282,6 +282,46 @@ test('fixed visual card slots follow visible group entries without changing quan
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 
+test('land groups sort last per zone while cards and all other groups keep their selected order', () => {
+  const d = editorDeck();
+  const cards = [
+    [editorCard('A field', 'Land'), 'lands'],
+    [editorCard('B field', 'Artifact Land'), 'Mana base'],
+    [editorCard('C field // C shelter', 'Land // Creature'), 'Land'],
+    [editorCard('D scout // D field', 'Creature // Land'), 'Draw'],
+    [editorCard('E spell', 'Instant'), 'Lands matter'],
+    [editorCard('F scout', 'Creature'), 'Draw'],
+  ];
+  for (const [index, [card, role]] of cards.entries()) {
+    Object.assign(card, { cmc:index, power:String(index), toughness:String(index), prices:{usd:String(index)} });
+    d.cards.push({ card, qty:index + 1, zone:'main', tags:[role] });
+  }
+  d.cards.push({ card:cards[0][0], qty:1, zone:'sideboard', tags:['lands'] });
+  d.currency = 'USD';
+  const w = workspace({savedDecks:JSON.stringify([d])});
+  const check = (group, order, search = '') => {
+    const entries = core.deckEntries(d, {order, search}).filter(entry => entry.zone === 'main');
+    const nameFor = entry => group === 'role' ? core.primaryRole(entry) : core.category(entry.card);
+    const firstSeen = [...new Set(entries.map(nameFor))];
+    const land = name => /^(land|lands)$/i.test(name);
+    const groups = group === 'none' ? [] : [...firstSeen.filter(name => !land(name)), ...firstSeen.filter(land)];
+    const html = vm.runInContext(`editorOptions=${JSON.stringify({layout:'text-horizontal', group, order, search})};deckList(decks[0],true)`,w.context);
+    const main = html.split('data-drop-zone="main"><h3>')[1].split('data-drop-zone="sideboard"><h3>')[0];
+    const names = markup => [...markup.matchAll(/class="deck-group-name">([^<]+) <span/g)].map(match => match[1]);
+    assert.deepEqual(names(main), groups);
+    const ordered = groups.length ? groups.flatMap(name => entries.filter(entry => nameFor(entry) === name)) : entries;
+    assert.deepEqual([...main.matchAll(/data-inspect="([^"]+)"/g)].map(match => match[1]), ordered.map(entry => entry.card.id));
+    assert.doesNotMatch(html.split('data-drop-zone="main"><h3>')[0], /data-deck-group/);
+    if (!search) assert.deepEqual(names(html.split('data-drop-zone="sideboard"><h3>')[1]), group === 'none' ? [] : [group === 'role' ? 'lands' : 'Land']);
+  };
+  for (const order of ['name','mana','quantity','price','price-desc','power','power-desc','toughness','toughness-desc']) {
+    for (const group of ['type','role','none']) check(group, order);
+  }
+  check('type', 'name', 'Land');
+  check('role', 'name', 'scout');
+  assert.equal(w.writes.length,0);
+});
+
 test('deck prices and preview follow visible quantities, primary functions and stored printing finishes', async () => {
   const d = editorDeck();
   d.currency='USD';
@@ -294,14 +334,15 @@ test('deck prices and preview follow visible quantities, primary functions and s
   const w = workspace({ savedDecks: JSON.stringify([d]) });
   vm.runInContext("openDeck('editor')", w.context);
   const html = () => w.node('#app').innerHTML;
-  assert.match(html(), /Sorcery <span>· 5 cards<\/span><\/h4><p[^>]+>\$2\.20 · 3 copies unpriced/);
+  assert.match(html(), /Sorcery <span class="deck-group-count">· 5 cards<\/span>/);
+  assert.match(html(), /<p class="deck-group-price">\$2\.20 · 3 copies unpriced/);
   assert.match(html(), /Main deck · 5<span[^>]+> · \$2\.20 · 3 copies unpriced/);
   assert.match(html(), /class="stack-card-meta"[^>]*>\$1\.10<\/div>/);
   assert.match(html(), /class="stack-card-meta"[^>]*>Price unavailable<\/div>/);
 
   w.node('#editor-search').input({ target: { value: 'Ramp' } });
   assert.match(w.node('#editor-card-area').outerHTML, /Main deck · 5 · 2 shown<span[^>]+> · \$2\.20 for shown cards/);
-  assert.match(w.node('#editor-card-area').outerHTML, /Sorcery <span>· 2 shown/);
+  assert.match(w.node('#editor-card-area').outerHTML, /Sorcery <span class="deck-group-count">· 2 shown/);
   w.node('#app').focusin({ target: { closest: () => ({ dataset: { previewEntry: key } }) } });
   assert.match(w.node('#deck-card-preview').innerHTML, /Removal<\/span><span>\$1\.10<\/span>/);
   await w.node('#app').click({ target: { closest: () => ({ dataset: { zonePlus: key } }) } });

@@ -91,8 +91,9 @@ test('stack headers align card starts with long functions and partial prices and
     await checkGeometry(view.endsWith('vertical'));
     if (view.endsWith('horizontal')) {
       const header = groups.nth(1).locator('.deck-group-header');
-      const title = await header.locator('h4').boundingBox(), price = await header.locator('p').boundingBox();
-      expect(Math.abs(title.y + title.height - price.y - price.height)).toBeLessThan(8);
+      const title = await header.locator('.deck-group-name').boundingBox();
+      const price = await header.locator('.deck-group-price').boundingBox();
+      expect(Math.abs(title.y + title.height / 2 - price.y - price.height / 2)).toBeLessThan(8);
     }
     if (view === 'visual-vertical') {
       await groups.first().scrollIntoViewIfNeeded();
@@ -100,7 +101,7 @@ test('stack headers align card starts with long functions and partial prices and
     }
   }
   // Enlarge actual text rather than only changing the viewport.
-  await page.addStyleTag({ content: '.deck-group h4{font-size:32px!important}.deck-group h4 span,.deck-group-price{font-size:24px!important}' });
+  await page.addStyleTag({ content: '.deck-group h4{font-size:32px!important}.deck-group-count,.deck-group-price{font-size:24px!important}' });
   await page.locator('#editor-layout').selectOption('visual-vertical');
   await checkGeometry(true);
   await page.locator('#editor-search').fill('no matching card');
