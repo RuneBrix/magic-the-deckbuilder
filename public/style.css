@@ -1004,6 +1004,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 #card-actions h3{padding:10px;font-size:14px;overflow-wrap:anywhere}
 #card-actions button{display:block;width:100%;text-align:left;min-height:40px;padding:10px;font-size:12px;border-radius:2px;overflow-wrap:anywhere}
 #card-actions button span{float:right}
+#card-actions [data-card-action="new-function"] svg{vertical-align:-2px;margin-inline-end:4px}
 #card-actions [aria-checked="true"]{font-weight:600;background:var(--soft)}
 #card-actions [aria-expanded="true"]{background:var(--soft)}
 #card-actions button:hover,#card-actions button:focus-visible{background:var(--soft)}

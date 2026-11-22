@@ -161,8 +161,41 @@ test('primary function editing and temporary reverse faces preserve stored card 
   const entry=page.locator('.text-card').filter({has:page.getByRole('button',{name:'Smoke Card 2',exact:true})});
   await entry.getByRole('button',{name:'Card actions for Smoke Card 2 in Main deck',exact:true}).press('Enter');
   await page.getByRole('menuitem',{name:/Assign card to function/}).press('Enter');
-  await page.getByRole('menuitem',{name:'Add new function…',exact:true}).press('Enter');
-  await page.getByRole('textbox',{name:'Function name',exact:true}).fill('Removal');
+  const functions=page.getByRole('menu',{name:/Functions for Smoke Card 2/});
+  const create=functions.getByRole('menuitem',{name:'Add new function…',exact:true});
+  await expect(functions.locator('button').first()).toBeFocused();
+  await expect(functions.locator('button').first()).toHaveText('Add new function…');
+  await expect(create.locator('svg')).toBeVisible();
+  await expect(functions.getByRole('menuitemradio',{name:'Draw'})).toHaveAttribute('aria-checked','true');
+  await page.keyboard.press('End');
+  await expect(functions.getByRole('menuitemradio',{name:'Unassigned'})).toBeFocused();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Enter');
+  const name=page.getByRole('textbox',{name:'Function name',exact:true});
+  await name.fill('Removal, Draw');
+  await page.getByRole('button',{name:'Create and assign',exact:true}).click();
+  await expect(page.locator('#function-error')).toContainText('commas');
+  await page.keyboard.press('Escape');
+  await expect(entry.getByRole('button',{name:'Card actions for Smoke Card 2 in Main deck',exact:true})).toBeFocused();
+  expect(await stored()).toEqual(original);
+  await page.keyboard.press('Enter');
+  await page.getByRole('menuitem',{name:/Assign card to function/}).press('Enter');
+  await expect(create).toBeFocused();
+  await page.keyboard.press('Enter');
+  await name.fill('Removal');
+  await page.evaluate(()=>{
+    const save=Storage.prototype.setItem;
+    window.allowFunctionWrite=false;
+    Storage.prototype.setItem=function(key,value){
+      if(key==='arcana.workspace.v2'&&!window.allowFunctionWrite)throw new DOMException('Test quota','QuotaExceededError');
+      return save.call(this,key,value);
+    };
+  });
+  await page.getByRole('button',{name:'Create and assign',exact:true}).click();
+  await expect(page.locator('#function-error')).toContainText('Browser storage is full or unavailable');
+  await expect(name).toHaveValue('Removal');
+  expect(await stored()).toEqual(original);
+  await page.evaluate(()=>{window.allowFunctionWrite=true;});
   await page.getByRole('button',{name:'Create and assign',exact:true}).click();
   expect((await stored())[1].tags).toEqual(['Removal','Draw','Legacy secondary']);
   await page.getByRole('button',{name:'Smoke Card 2',exact:true}).click();
@@ -705,6 +738,93 @@ test('card menus keep deletion available by keyboard and touch', async ({ page, 
   await expect(keep).toBeFocused();
   await keep.click();
   await expect(action).toBeVisible();
+});
+
+test('card context menus reuse deck entry and owned lot actions at viewport edges', async ({page,isMobile},testInfo) => {
+  test.skip(isMobile,'Desktop mouse context menu');
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2', workspace=JSON.parse(localStorage.getItem(key));
+    const original=workspace.decks[0].cards[1];
+    workspace.decks[0].cards.push({...original,zone:'sideboard',finish:'foil',qty:5});
+    workspace.collection.push({...workspace.collection[0],finish:'foil',condition:'heavily_played',qty:7});
+    localStorage.setItem(key,JSON.stringify(workspace));
+  });
+  await page.reload();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  const menu=page.locator('#card-actions'), functions=page.locator('#card-submenu');
+  const contents=()=>menu.locator(':scope > button').allTextContents();
+  const inViewport=element=>element.evaluate(node=>{
+    const box=node.getBoundingClientRect();
+    return box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight;
+  });
+  const art=page.getByRole('button',{name:'Inspect Smoke Card 1 in Command zone',exact:true});
+  const action=page.getByRole('button',{name:'Card actions for Smoke Card 1 in Command zone',exact:true});
+  await action.click();
+  const expected=await contents();
+  await page.keyboard.press('Escape');
+  await art.click({button:'right'});
+  await expect(menu).toHaveAccessibleName('Card actions for Smoke Card 1 in Smoke Garden · Command zone');
+  expect(await contents()).toEqual(expected);
+  await page.keyboard.press('Escape');
+  await expect(action).toBeFocused();
+  await art.press('Shift+F10');
+  await expect(menu.getByRole('menuitem',{name:'Open details'})).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(art).toBeFocused();
+  await art.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Add one Smoke Card 1 to Command zone'}).click({button:'right'});
+  await expect(menu).toBeHidden();
+
+  await page.setViewportSize({width:775,height:660});
+  await page.locator('html').evaluate(node=>{node.style.fontSize='200%';});
+  await page.locator('#editor-layout').selectOption('text-vertical');
+  const sideboardAction=page.getByRole('button',{name:/Card actions for Smoke Card 2 in Sideboard.*Foil/});
+  const sideboard=page.locator('.text-card').filter({has:sideboardAction});
+  await sideboard.getByRole('button',{name:'Smoke Card 2',exact:true}).click({button:'right'});
+  await expect(menu).toHaveAccessibleName('Card actions for Smoke Card 2 in Smoke Garden · Sideboard');
+  expect(await inViewport(menu)).toBe(true);
+  await menu.getByRole('menuitem',{name:/Assign card to function/}).press('ArrowRight');
+  await expect(functions.getByRole('menuitem',{name:'Add new function…'})).toBeFocused();
+  expect(await inViewport(functions)).toBe(true);
+  await page.screenshot({path:testInfo.outputPath('card-context-menu.png')});
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(sideboardAction).toBeFocused();
+  const main=page.getByRole('button',{name:'Card actions for Smoke Card 2 in Main deck',exact:true});
+  await main.press('ContextMenu');
+  await expect(menu).toHaveAccessibleName('Card actions for Smoke Card 2 in Smoke Garden · Main deck');
+  await page.keyboard.press('Escape');
+  await expect(main).toBeFocused();
+  const selectionKept=await sideboard.getByRole('button',{name:'Smoke Card 2',exact:true}).evaluate(node=>{
+    const selection=window.getSelection();
+    selection.selectAllChildren(node);
+    const nativeAllowed=node.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2}));
+    selection.removeAllRanges();
+    return nativeAllowed;
+  });
+  expect(selectionKept).toBe(true);
+  await expect(menu).toBeHidden();
+
+  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('smoke-deck');
+  const tracked=page.locator('#deck-tracker').getByRole('button',{name:'Smoke Card 1',exact:true});
+  await tracked.click({button:'right'});
+  await expect(menu).toBeHidden();
+
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  const owned=page.locator('.collection-row[data-owned-row="1"]');
+  const ownedArt=owned.getByRole('button',{name:'Edit owned Smoke Card 2'});
+  await ownedArt.click({button:'right'});
+  await expect(menu.getByRole('menuitem')).toHaveText(['Edit','Remove']);
+  await menu.getByRole('menuitem',{name:'Edit',exact:true}).click();
+  await expect(page.locator('#owned-qty')).toHaveValue('7');
+  await expect(page.locator('#owned-finish')).toHaveValue('foil');
+  await page.keyboard.press('Escape');
+  await page.locator('#collection-view').selectOption('text');
+  await page.locator('tr[data-owned-row="1"]').getByRole('button',{name:'Smoke Card 2'}).click({button:'right'});
+  await expect(menu).toBeHidden();
 });
 
 test('commander minus confirms from the deck and tracker', async ({ page, isMobile }) => {

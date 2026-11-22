@@ -73,6 +73,7 @@ test('function submenu lists the named deck labels, assigns a primary without lo
   const before=vm.runInContext('JSON.stringify(decks)',w.context);
   await click({cardAction:'function-menu'});
   const html=w.node('#card-submenu').innerHTML;
+  assert.match(html,/^<button role="menuitem" data-card-action="new-function"[^>]*><svg/);
   assert.match(html,/data-function="Draw"/);assert.doesNotMatch(html,/data-function="Ramp"/);
   assert.match(html,/data-function="Removal"[^>]*aria-checked="true"/);
   assert.match(html,/role="menuitemradio"/);
@@ -85,6 +86,8 @@ test('function submenu lists the named deck labels, assigns a primary without lo
   vm.runInContext('openCardActions(key,trigger)',w.context);await click({cardAction:'function-menu'});await click({cardAction:'new-function'});
   assert.match(w.node('#dialog').innerHTML,/Add a function|Create and assign/);
   assert.doesNotMatch(w.node('#dialog').innerHTML,/Existing function/);
+  formValues(w,{'new-function':'  '});w.node('#function-form').onsubmit({preventDefault(){}});
+  assert.match(w.node('#function-error').textContent,/Enter a function name/);
   formValues(w,{'new-function':'Graveyard setup'});w.node('#function-form').onsubmit({preventDefault(){}});
   assert.equal(vm.runInContext('decks[0].cards[1].tags.join(",")',w.context),'Graveyard setup,Draw,Removal,Ramp');
   assert.equal(vm.runInContext('decks[1].cards[1].tags[0]',w.context),'Other deck only');
@@ -150,11 +153,12 @@ test('side flyouts remain hover-only after clicks and can switch to another hove
 
 test('function submenu handles empty decks, escapes labels, and rejects stale selections without edits',async()=>{
   const d=editorDeck();d.cards.forEach(e=>e.tags=[]);
+  d.cards[1].card.type_line='Basic Land — Forest';
   const w=workspace({savedDecks:JSON.stringify([d])});vm.runInContext("openDeck('editor')",w.context);
   w.context.key=core.entryKey(d.cards[1]);w.context.trigger={setAttribute(){},getBoundingClientRect(){return {right:500,bottom:600};}};
   vm.runInContext("openCardActions(key,trigger);closeCardSubmenu();showCardSubmenu('function')",w.context);
   assert.doesNotMatch(w.node('#card-submenu').innerHTML,/<p\b/);
-  assert.match(w.node('#card-submenu').innerHTML,/Add new function/);
+  assert.match(w.node('#card-submenu').innerHTML,/data-card-action="new-function".*data-card-action="suggested-function"[^>]*>Use suggested function: Land.*data-card-action="clear-function"/);
   vm.runInContext(`decks[0].cards[0].tags=['<Draw & "ramp">'];closeCardSubmenu();showCardSubmenu('function')`,w.context);
   assert.match(w.node('#card-submenu').innerHTML,/&lt;Draw &amp; &quot;ramp&quot;&gt;/);
   assert.doesNotMatch(w.node('#card-submenu').innerHTML,/<Draw/);
