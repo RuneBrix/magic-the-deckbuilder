@@ -70,7 +70,7 @@ let tagPage = 1;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
 const collapsedDeckGroups = new WeakMap();
-let previewKey = '', previewDeck = '', cardActionTrigger = null;
+let previewKey = '', previewDeck = '', cardActionTrigger = null, cardActionContext = null;
 let cardDrag = null, cardDragPress = null, suppressCardClick = false;
 const legalityStates = new Map();
 let legalityQueue = Promise.resolve();
@@ -1323,7 +1323,9 @@ function closeCardActions(restore=true) {
   const menu=$('#card-actions');
   if(menu.matches?.(':popover-open'))menu.hidePopover();
   cardActionTrigger?.setAttribute('aria-expanded','false');
-  if(restore && cardActionTrigger?.isConnected)cardActionTrigger.focus();
+  const returnFocus=cardActionContext?.focus ?? cardActionTrigger;
+  if(restore && returnFocus?.isConnected)returnFocus.focus({preventScroll:true});
+  cardActionContext=null;
   delete menu.dataset.ownedIndex;
 }
 function positionCardSubmenu() {
@@ -1340,8 +1342,11 @@ function positionCardActions() {
   const menu=$('#card-actions');
   menu.style.width=Math.min(270,Math.floor((innerWidth-32)/2))+'px';
   const anchor=cardActionTrigger.getBoundingClientRect(),{height,width}=menu.getBoundingClientRect();
-  menu.style.left=Math.max(16,Math.min(anchor.right-width,innerWidth-width-16))+'px';
-  menu.style.top=Math.max(16,Math.min(anchor.bottom+6,innerHeight-height-16))+'px';
+  const point=cardActionContext?.point;
+  const left=point?(point.x+width<=innerWidth-16?point.x:point.x-width):anchor.right-width;
+  const top=point?(point.y+height<=innerHeight-16?point.y:point.y-height):anchor.bottom+6;
+  menu.style.left=Math.max(16,Math.min(left,innerWidth-width-16))+'px';
+  menu.style.top=Math.max(16,Math.min(top,innerHeight-height-16))+'px';
   positionCardSubmenu();
 }
 function showCardSubmenu(type,focus=false) {
@@ -1354,7 +1359,10 @@ function showCardSubmenu(type,focus=false) {
     if(type==='function') {
       const functions=[...new Set(d.cards.map(e=>e.tags[0]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
       const suggestion=suggestedFunctions(entry.card)[0];
-      items=(suggestion && entry.tags[0]!==suggestion?action('suggested-function',`Use suggested function: ${esc(suggestion)}`):'')+functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join('')+action('clear-function','Unassigned',`aria-checked="${primaryRole(entry)==='Unassigned'}"`,'menuitemradio')+action('new-function','Add new function…');
+      items=action('new-function',icon('plus',14)+'Add new function…')
+        +(suggestion && entry.tags[0]!==suggestion?action('suggested-function',`Use suggested function: ${esc(suggestion)}`):'')
+        +functions.map(name=>action('assign-function',esc(name),`data-function="${esc(name)}" aria-checked="${primaryRole(entry)===name}"`,'menuitemradio')).join('')
+        +action('clear-function','Unassigned',`aria-checked="${primaryRole(entry)==='Unassigned'}"`,'menuitemradio');
     } else {
       items=Object.entries(ZONES).filter(([z])=>z!==zoneFor(entry)).map(([z,label])=>action('move:'+z,label)).join('');
     }
@@ -1367,33 +1375,50 @@ function showCardSubmenu(type,focus=false) {
   menu.dataset.keyboard=String(focus);
   if(focus)sub.querySelector('button:not(:disabled)')?.focus();
 }
-function renderCardActions() {
-  const menu=$('#card-actions'),d=decks.find(d=>d.id===menu.dataset.deck),entry=d?.cards.find(e=>entryKey(e)===menu.dataset.entry);
-  if(!entry || current()!==d){closeCardActions();return;}
+function openCardActions(key,trigger,context=null) {
+  const d=current(),entry=d?.cards.find(e=>entryKey(e)===key);if(!entry)return false;
+  closeCardActions(false);
+  const menu=$('#card-actions');cardActionTrigger=trigger;cardActionContext=context;
+  menu.dataset.deck=d.id;menu.dataset.entry=key;
   const action=(value,label,attributes='')=>`<button role="menuitem" data-card-action="${value}" ${attributes}>${label}</button>`;
   const submenu='aria-haspopup="menu" aria-expanded="false" aria-controls="card-submenu"';
   menu.setAttribute('aria-label',`Card actions for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
   menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>`+action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>',submenu)+action('move-menu','Move to… <span aria-hidden="true">›</span>',submenu)+action('edit-printing','Change in-deck card details')+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card')+'<div id="card-submenu" popover="manual" role="menu"></div>';
   menu.scrollTop=0;
-  menu.showPopover();positionCardActions();
+  menu.showPopover();positionCardActions();trigger.setAttribute('aria-expanded','true');
   menu.querySelector(':scope > button:not(:disabled)')?.focus();
-}
-function openCardActions(key,trigger) {
-  closeCardActions(false);
-  const d=current(),entry=d?.cards.find(e=>entryKey(e)===key);if(!entry)return;
-  const menu=$('#card-actions');cardActionTrigger=trigger;menu.dataset.deck=d.id;menu.dataset.entry=key;
-  renderCardActions();trigger.setAttribute('aria-expanded','true');
   const {top,left}=trigger.getBoundingClientRect();menu.dataset.anchor=JSON.stringify([top,left]);
+  return true;
 }
-function openOwnedActions(index,trigger) {
+function openOwnedActions(index,trigger,context=null) {
+  const lot=collection[index];if(!lot||view!=='collection')return false;
   closeCardActions(false);
-  const lot=collection[index];if(!lot||view!=='collection')return;
-  const menu=$('#card-actions');cardActionTrigger=trigger;menu.dataset.ownedIndex=String(index);
+  const menu=$('#card-actions');cardActionTrigger=trigger;cardActionContext=context;menu.dataset.ownedIndex=String(index);
   menu.setAttribute('aria-label',`Card actions for owned ${lot.card.name}`);
   menu.innerHTML=`<h3>${esc(lot.card.name)}</h3><button role="menuitem" data-card-action="edit-owned">Edit</button><button role="menuitem" data-card-action="remove">Remove</button><div id="card-submenu" popover="manual" role="menu"></div>`;
   menu.scrollTop=0;menu.showPopover();positionCardActions();trigger.setAttribute('aria-expanded','true');
-  const {top,left}=trigger.getBoundingClientRect();menu.dataset.anchor=JSON.stringify([top,left]);
   menu.querySelector('button')?.focus();
+  const {top,left}=trigger.getBoundingClientRect();menu.dataset.anchor=JSON.stringify([top,left]);
+  return true;
+}
+function openCardContext(e,keyboard=false) {
+  const target=e.target;
+  if(e.defaultPrevented||cardDrag||cardDragPress||e.pointerType==='touch'||target.isContentEditable||
+     target.closest('a,input,textarea,select'))return;
+  const button=target.closest('button');
+  if(button&&!button.matches('[data-inspect],[data-edit-owned],[data-card-menu],[data-owned-menu]'))return;
+  const row=target.closest('[data-preview-entry],.collection-row[data-owned-row]');
+  const trigger=row?.querySelector('[data-card-menu],[data-owned-menu]');
+  if(!trigger)return;
+  if(!keyboard){
+    const selection=window.getSelection();
+    if(selection&&!selection.isCollapsed&&selection.containsNode(target,true))return;
+  }
+  const context=keyboard?{focus:target}:{point:{x:e.clientX,y:e.clientY}};
+  const opened=trigger.dataset.cardMenu
+    ?openCardActions(trigger.dataset.cardMenu,trigger,context)
+    :openOwnedActions(Number(trigger.dataset.ownedMenu),trigger,context);
+  if(opened)e.preventDefault();
 }
 function focusCardEntry(d,key) {
   if(current()!==d || typeof CSS==='undefined')return;
@@ -1402,7 +1427,18 @@ function focusCardEntry(d,key) {
 function assignFunctionDialog(d,key) {
   const entry=d.cards.find(e=>entryKey(e)===key);if(!entry)return;
   showDialog(`<h2>Add a function</h2><p>${esc(entry.card.name)} · ${esc(d.name)} · ${ZONES[zoneFor(entry)]}. Choose the primary function for this card.</p><form id="function-form"><label>Function name<input name="new-function" required maxlength="80" placeholder="e.g. Graveyard setup"></label><p id="function-error" role="alert"></p><button class="primary">Create and assign</button></form>`);
-  $('#function-form').onsubmit=e=>{e.preventDefault();try{const name=String(new FormData(e.target).get('new-function')||'');changeNamedDeck(d,deck=>assignEntryFunction(deck,key,name));$('#dialog').close();focusCardEntry(d,key);toast(`Added ${entry.card.name} to ${name.trim()}`);}catch(error){$('#function-error').textContent=error.message;}};
+  $('#function-form').onsubmit=e=>{
+    e.preventDefault();
+    try{
+      const name=String(new FormData(e.target).get('new-function')||'').trim();
+      if(!name)throw Error('Enter a function name.');
+      const staged=structuredClone(d);
+      assignEntryFunction(staged,key,name);
+      commitDeckSnapshot(d,staged);
+      closeDialog();render();focusCardEntry(d,key);
+      toast(`Added ${entry.card.name} to ${name}`);
+    }catch(error){$('#function-error').textContent=error.message;}
+  };
   $('#function-form input').focus();
 }
 function removeCopiesDialog(d,key) {
@@ -1819,7 +1855,9 @@ function bind() {
 addEventListener('click',e=>{
   for(const menu of document.querySelectorAll('.deck-menu[open]'))if(!menu.contains(e.target))menu.open=false;
 });
+$('#app').addEventListener('contextmenu',e=>openCardContext(e,e.button===0&&!e.ctrlKey));
 $('#app').addEventListener('keydown',e=>{
+  if(e.key==='ContextMenu'||e.key==='F10'&&e.shiftKey){openCardContext(e,true);return;}
   const tab=e.target.closest('.deck-tabs [role="tab"]');
   if(tab && ['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){
     e.preventDefault();

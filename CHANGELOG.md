@@ -1,5 +1,10 @@
 # Changelog
 
+## Card action shortcuts — 2026-11-22
+
+- Right-click deck cards and visual Collection cards to open their existing actions. Use the Menu key or Shift+F10 from a focused card or card-name control (#214).
+- Find Add new function first in the assignment menu. If the save fails, the form keeps the name for retry and the card keeps its current functions (#216).
+
 ## Deck groups — 2026-11-19
 
 - Copy quantities and full card names from a Type or Function group in any deck layout. With a filter active, copy only the shown cards from that group and zone (#212).
