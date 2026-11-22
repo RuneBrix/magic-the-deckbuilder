@@ -54,14 +54,48 @@ test('manual Collection finish choices, cancel and quota retry preserve exact pr
 });
 
 test('reviewed double-faced deck import retries a rejected save once and survives reload',async({page},testInfo)=>{
-  await page.route('**/api/collection',route=>route.request().postDataJSON().names
-    ? route.fulfill({json:{data:[foil],not_found:[]}}) : route.fallback());
+  await testInfo.attach('environment',{body:JSON.stringify({browser:page.context().browser().version(),viewport:page.viewportSize(),appearance:testInfo.project.use.colorScheme,origin:new URL(page.url()).origin}),contentType:'application/json'});
+  await page.route('**/api/collection',route=>{
+    const names=route.request().postDataJSON().names;
+    return names?route.fulfill({json:{data:[],not_found:names.map(name=>({name}))}}):route.fallback();
+  });
+  let unavailable=true;
+  await page.route('**/api/search?*',route=>{
+    const query=new URL(route.request().url()).searchParams.get('q');
+    if(!query.includes(name))return route.fallback();
+    if(unavailable)return route.fulfill({status:502,json:{error:'Synthetic lookup outage'}});
+    return route.fulfill({json:{data:[foil],has_more:false}});
+  });
   const before=await stored(page);
   await page.getByRole('button',{name:'Import deck',exact:true}).click();
   await page.getByRole('textbox',{name:'Deck name',exact:true}).fill('Lookup audit');
-  await page.getByRole('textbox',{name:'Decklist',exact:true}).fill('Maybeboard\n2 '+name);
-  await page.getByRole('button',{name:'Review import',exact:true}).press('Enter');
-  await expect(page.locator('#import-preview')).toContainText(name);expect(await stored(page)).toEqual(before);
+  const list=page.getByRole('textbox',{name:'Decklist',exact:true});
+  const review=page.getByRole('button',{name:'Review import',exact:true});
+  const alert=page.locator('#import-form').getByRole('alert');
+  await list.fill('Maybeboard\n2 '+name+'\n1 Missing card with a long name');
+  await review.press('Enter');
+  await expect(alert).toContainText('Card lookup is unavailable');
+  unavailable=false;
+  await review.press('Enter');
+  await expect(alert).toContainText('Missing card with a long name');
+  await expect(alert).not.toContainText(name);
+  await fits(page);
+  await page.screenshot({path:testInfo.outputPath('import-missing-name.png')});
+  await list.fill('Maybeboard\n2 '+name);
+  await review.press('Enter');
+  const status=page.locator('#import-form').getByRole('status');
+  await expect(status).toHaveText('2 copies ready to import into Lookup audit.');
+  await expect(page.getByRole('button',{name:'Import reviewed cards',exact:true})).toBeFocused();
+  await fits(page);
+  await page.screenshot({path:testInfo.outputPath('import-ready.png')});
+  expect(await stored(page)).toEqual(before);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button',{name:'Import deck',exact:true})).toBeFocused();
+  expect(await stored(page)).toEqual(before);
+  await page.getByRole('button',{name:'Import deck',exact:true}).click();
+  await page.getByRole('textbox',{name:'Deck name',exact:true}).fill('Lookup audit');
+  await list.fill('Maybeboard\n2 '+name);
+  await review.press('Enter');
   await blockWrites(page);await page.getByRole('button',{name:'Import reviewed cards',exact:true}).press('Enter');
   await expect(page.locator('#import-error')).toContainText('Workspace unchanged');expect(await stored(page)).toEqual(before);
   await page.addStyleTag({content:'#dialog p,#dialog label,#dialog button{font-size:24px}'});
@@ -70,6 +104,7 @@ test('reviewed double-faced deck import retries a rejected save once and survive
   await page.evaluate(()=>window.rejectWorkspaceWrite=false);
   await page.getByRole('button',{name:'Import reviewed cards',exact:true}).press('Enter');
   await expect(page.locator('#dialog')).not.toBeVisible();const saved=await stored(page);
+  await expect(page.locator('#toast')).toHaveText('2 copies imported into Lookup audit.');
   expect(saved.decks).toHaveLength(before.decks.length+1);expect(saved.collection).toEqual(before.collection);
   expect(saved.decks.at(-1).cards[0]).toMatchObject({card:foil,qty:2,finish:'foil',zone:'maybeboard'});
   await page.reload();expect(workspaceContents(await stored(page))).toEqual(workspaceContents(saved));

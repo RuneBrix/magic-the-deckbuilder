@@ -508,7 +508,9 @@ export function exportDeckText(deck, { zones=Object.keys(ZONES), headings=true, 
 export function resolveImport(parsed, cards) {
   const entries=[], problems=[];
   for (const p of parsed) {
-    const name=p.name.toLowerCase(), matches=cards.filter(c=>c.name.toLowerCase()===name||c.card_faces?.some(f=>f.name.toLowerCase()===name));
+    const name=p.name.toLowerCase();
+    const fullNames=cards.filter(c=>c.name.toLowerCase()===name);
+    const matches=fullNames.length?fullNames:cards.filter(c=>c.card_faces?.some(f=>f?.name?.toLowerCase()===name));
     const identities=new Set(matches.map(c=>c.oracle_id||c.id));
     if (identities.size!==1) { problems.push({name:p.name,reason:identities.size?'Ambiguous name':'Not found'}); continue; }
     entries.push({card:matches[0],qty:p.qty,tags:[],zone:p.zone||'main'});
