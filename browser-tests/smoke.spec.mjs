@@ -279,7 +279,7 @@ test('deck navigation, sticky header, statistics and ownership fit the viewport'
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
 });
 
-test('statistics breakdowns and draw chances work with long labels, keyboard and empty decks', async ({ page, isMobile }) => {
+test('statistics breakdowns and draw chances work with long labels, keyboard and empty decks', async ({ page, isMobile }, testInfo) => {
   const longFunction = 'Ramp'.repeat(20);
   const tokenId = 'ca8e8a9a-d673-4644-9eec-f4f549307d9b';
   const savedDeckData = () => page.evaluate(() => {
@@ -325,7 +325,7 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   const [costBox, productionBox] = await Promise.all([charts.nth(0).boundingBox(), charts.nth(1).boundingBox()]);
   if (isMobile) expect(productionBox.y).toBeGreaterThan(costBox.y + costBox.height);
   else expect(productionBox.x).toBeGreaterThan(costBox.x + costBox.width);
-  const beast = board.getByRole('link', { name: 'Beast', exact: true });
+  const beast = board.getByRole('link', { name: 'Beast on Scryfall', exact: true });
   await expect(beast).toHaveCount(1);
   await expect(beast).toHaveAttribute('href', `https://scryfall.com/card/${tokenId}`);
   await beast.focus();
@@ -359,6 +359,31 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await expect(page.getByRole('table', { name: 'Draw chances by card type' }).getByRole('row', { name: /Creature/ })).toContainText('100%');
   await noPageOverflow(page);
 
+  const originalViewport = page.viewportSize();
+  const sizes = async () => [
+    (await board.locator('.curve .filled').first().boundingBox()).height,
+    ...await board.locator('.mana-pie').evaluateAll(pies => pies.map(pie => {
+      const { width, height } = pie.getBoundingClientRect();
+      if (Math.abs(width - height) > 1) throw Error('Mana pie must stay circular');
+      return width;
+    })),
+  ];
+  await page.setViewportSize({ width: 720, height: originalViewport.height });
+  const intermediate = await sizes();
+  await noPageOverflow(page);
+  await page.setViewportSize({ width: 1550, height: originalViewport.height });
+  for (const [index, size] of (await sizes()).entries()) expect(size).toBeGreaterThan(intermediate[index] + 25);
+  await expect(board.getByRole('img', { name: /Mana curve for RampRamp.*4 mana: 1/ })).toBeVisible();
+  await noPageOverflow(page);
+  await page.setViewportSize(originalViewport);
+  const enlarged = await page.addStyleTag({ content: '#deck-statistics :is(.curve span,.curve small,.mana-legend){font-size:1.5rem}' });
+  await noPageOverflow(page);
+  await board.locator('#curve-chart').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('statistics-curve.png') });
+  await board.locator('.mana-tool').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('statistics-mana.png') });
+  await enlarged.evaluate(element => element.remove());
+
   await page.getByRole('button', { name: 'Back to library', exact: true }).click();
   await page.getByRole('button', { name: 'Empty Statistics', exact: true }).click();
   await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
@@ -368,6 +393,74 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await expect(drawn).toBeDisabled();
   await noPageOverflow(page);
   expect(await savedDeckData()).toEqual(saved);
+});
+
+test('statistics loads exact token art without applying stale results or rewriting the workspace', async ({ page }, testInfo) => {
+  const [beast, variant, noArt, broken, missing, other] = cards.slice(0, 6).map((card, index) => ({
+    ...card, id: card.id.replace('-4000-', '-4001-'), name: index < 2 ? 'Beast' : ['Clue', 'Map', 'Treasure', 'Food'][index - 2],
+    type_line: 'Token Artifact', image_uris: index === 2 ? {} : { normal: 'https://cards.scryfall.io/token-' + index + '.jpg' },
+  }));
+  await page.route('https://cards.scryfall.io/token-3.jpg', route => route.fulfill({ status: 404 }));
+  const part = card => ({ id: card.id, name: card.name, type_line: card.type_line, component: 'token' });
+  await page.evaluate(({ first, second }) => {
+    const key = 'arcana.workspace.v2';
+    const data = JSON.parse(localStorage.getItem(key));
+    data.decks[0].cards[0].card.all_parts = first;
+    data.decks[0].cards[1].card.all_parts = [first[0]];
+    data.decks.push({ id: 'token-other', name: 'Other Tokens', format: 'modern', cards: [
+      { ...data.decks[0].cards[1], card: { ...data.decks[0].cards[1].card, all_parts: second } },
+    ] });
+    localStorage.setItem(key, JSON.stringify(data));
+  }, { first: [beast, variant, noArt, broken, missing].map(part), second: [other].map(part) });
+  await page.reload();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const ids = [beast, variant, noArt, broken, missing].map(card => card.id);
+  let firstAttempts = 0;
+  await page.route('**/api/collection', async route => {
+    const requested = route.request().postDataJSON().ids ?? [];
+    if (requested.includes(beast.id)) {
+      expect(requested).toEqual(ids);
+      if (!firstAttempts++) await gate;
+      return route.fulfill({ json: { data: [beast, variant, noArt, broken], not_found: [{ id: missing.id }] } });
+    }
+    if (requested.includes(other.id)) return route.fulfill({ status: 502, json: { error: 'Synthetic lookup outage' } });
+    return route.fallback();
+  });
+  const open = async name => {
+    await page.getByRole('button', { name, exact: true }).click();
+    await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
+  };
+  const back = () => page.getByRole('button', { name: 'Back to library', exact: true }).click();
+  const tokens = page.locator('.token-tool');
+  const saved = () => page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
+  await open('Smoke Garden');
+  const before = await saved();
+  await expect.poll(() => firstAttempts).toBe(1);
+  await expect(tokens.getByText('Loading artwork…')).toHaveCount(5);
+  const staleResponse = page.waitForResponse(response => response.url().endsWith('/api/collection') &&
+    response.request().postDataJSON().ids?.includes(beast.id));
+  await back();
+  await open('Other Tokens');
+  await expect(tokens.getByText('Could not load artwork')).toBeVisible();
+  release();
+  await staleResponse;
+  await expect(tokens.getByRole('link', { name: 'Food on Scryfall', exact: true })).toBeVisible();
+  await expect(tokens.locator('[data-token-printing]')).toHaveCount(1);
+
+  await back();
+  await open('Smoke Garden');
+  await expect(tokens.getByRole('link', { name: 'Beast · Smoke Test · #1 · EN on Scryfall', exact: true })).toHaveAttribute('href', 'https://scryfall.com/card/' + beast.id);
+  const variantLink = tokens.getByRole('link', { name: 'Beast · Smoke Test · #2 · EN on Scryfall', exact: true });
+  await variantLink.focus();
+  await expect(variantLink).toBeFocused();
+  await tokens.locator('.token-list').scrollIntoViewIfNeeded();
+  await expect(tokens.getByRole('img', { name: 'Beast', exact: true })).toHaveCount(2);
+  await expect.poll(() => variantLink.getByRole('img').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(tokens.getByText('Artwork unavailable', { exact: true })).toHaveCount(3);
+  await noPageOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath('statistics-tokens.png') });
+  expect(await saved()).toBe(before);
 });
 
 test('deck groups show copy counts and prices, and visual cards keep prices visible', async ({ page, isMobile }, testInfo) => {

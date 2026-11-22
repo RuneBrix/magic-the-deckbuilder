@@ -1,5 +1,10 @@
 # Changelog
 
+## Statistics charts and tokens — 2026-11-23
+
+- Scale the mana curve and both colored-mana charts with the available Statistics panel width (#239).
+- Show artwork and printing information for referenced tokens, with exact-printing links when artwork is unavailable (#240).
+
 ## Deck text import — 2026-11-22
 
 - Resolve full double-faced names with an exact search when the bulk lookup misses them. Prefer a unique full card name over a matching card face (#230).
