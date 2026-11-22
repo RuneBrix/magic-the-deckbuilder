@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck text import — 2026-11-22
+
+- Resolve full double-faced names with an exact search when the bulk lookup misses them. Prefer a unique full card name over a matching card face (#230).
+- Show the copy total and destination before applying a deck import. List only unresolved cards and give specific recovery steps for lookup or save failures (#231).
+
 ## Card action shortcuts — 2026-11-22
 
 - Right-click deck cards and visual Collection cards to open their existing actions. Use the Menu key or Shift+F10 from a focused card or card-name control (#214).

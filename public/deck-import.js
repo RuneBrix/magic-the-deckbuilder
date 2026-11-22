@@ -11,6 +11,7 @@ export function parseImport(text) {
     if (++lineCount > 300) throw Error('Import 1–300 card lines.');
     const match = line.match(/^(\d+)x?\s+(.+?)(?:\s+\([A-Za-z0-9]+\)\s+\S+)?$/);
     if (!match || +match[1] < 1 || +match[1] > 500) throw Error(`Cannot read “${line}”. Use “1 Card Name” per line, with optional Main deck, Sideboard, Command zone or Maybeboard headings.`);
+    if (match[2].length>200) throw Error(`Card names can be up to 200 characters. Check the line starting with “${line.slice(0,40)}…”.`);
     const name=match[2], key=zone+'|'+name.toLowerCase(), previous=entries.get(key);
     entries.set(key,{name,qty:(previous?.qty||0)+Number(match[1]),...(zoned?{zone}:{})});
     if(entries.get(key).qty>500)throw Error('Maximum 500 copies per card in a zone.');

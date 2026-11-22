@@ -22,20 +22,60 @@ test('text deck imports initialize tag-derived and Land defaults with resolved p
   assert.deepEqual(core.readWorkspaceFile(saved).decks[0].cards,saved.decks[0].cards);
 });
 
+test('deck import checks the exact identities omitted by bulk lookup and saves zones and quantities',async()=>{
+  const fullNames=[
+    'Jin-Gitaxias // The Great Synthesis',
+    'Stensian Sanguinist // Exsanguinate',
+    'Clearwater Pathway // Murkwater Pathway',
+  ];
+  const [jin,stensian,pathway]=fullNames.map((name,index)=>({
+    ...editorCard('double-'+index),name,card_faces:name.split(' // ').map(name=>({name})),
+  }));
+  const canonical=editorCard('Exsanguinate','Sorcery');
+  const w=workspace(),requests=[];
+  formValues(w,{name:'Double-faced',format:'commander',list:[
+    'Commander','1 '+jin.name,'Mainboard','2 '+stensian.name,'3 Exsanguinate','Sideboard','4 '+pathway.name,
+  ].join('\n')});
+  w.context.fetch=async(url,options)=>{
+    requests.push(url);
+    if(url==='/api/collection'){
+      assert.deepEqual(JSON.parse(options.body).names,[jin.name,stensian.name,canonical.name,pathway.name]);
+      return {ok:true,json:async()=>({data:[stensian],not_found:fullNames.map(name=>({name}))})};
+    }
+    const query=new URL(url,'http://localhost').searchParams.get('q');
+    assert.equal(query,'!"'+[jin.name,canonical.name,pathway.name].join('" OR !"')+'"');
+    return {ok:true,json:async()=>({data:[canonical,jin,pathway],has_more:false})};
+  };
+  vm.runInContext('importDialog(null)',w.context);
+  const submit=w.node('#import-form').onsubmit,event={preventDefault(){}};
+  await submit(event);
+  assert.equal(requests.length,2);
+  assert.equal(w.writes.length,0);
+  await submit(event);
+  const saved=JSON.parse(w.writes[0][1]);
+  assert.deepEqual(saved.decks[0].cards.map(e=>[e.card.name,e.qty,e.zone]),[
+    [jin.name,1,'command'],[stensian.name,2,'main'],[canonical.name,3,'main'],[pathway.name,4,'sideboard'],
+  ]);
+});
+
 test('library imports create a deck only after successful resolution, and cancelled forms cannot mutate decks',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});formValues(w,{name:'Imported',format:'modern',list:'2 Ramp spell'});
-  w.context.fetch=async()=>({ok:true,json:async()=>({data:[],not_found:[{name:'Ramp spell'}]})});
+  w.context.fetch=async url=>url==='/api/collection'
+    ? {ok:true,json:async()=>({data:[],not_found:[{name:'Ramp spell'}]})}
+    : {ok:false,status:404,json:async()=>({error:'No cards found.'})};
   vm.runInContext('importDialog(null)',w.context);
   const form=w.node('#import-form');
   await form.onsubmit({preventDefault(){},target:form});
-  assert.equal(vm.runInContext('decks.length',w.context),1);assert.match(w.node('#import-error').textContent,/Nothing imported/);
+  assert.equal(vm.runInContext('decks.length',w.context),1);
+  assert.match(w.node('#import-error').innerHTML,/Ramp spell.*No exact match/);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});
   form.isConnected=false;await form.onsubmit({preventDefault(){},target:form});assert.equal(vm.runInContext('decks.length',w.context),1);
   form.isConnected=true;w.node('#dialog').open=false;await form.onsubmit({preventDefault(){},target:form});assert.equal(vm.runInContext('decks.length',w.context),1);
   w.node('#dialog').open=true;
   form.isConnected=true;await form.onsubmit({preventDefault(){},target:form});
   assert.equal(vm.runInContext('decks.length',w.context),1);
-  assert.match(w.node('#import-preview').innerHTML,/Nothing has been imported/);
+  assert.match(w.node('#import-preview').innerHTML,/2 copies ready to import/);
+  assert.doesNotMatch(w.node('#import-preview').innerHTML,/Ramp spell/);
   await form.onsubmit({preventDefault(){},target:form});
   assert.equal(vm.runInContext('decks.length',w.context),2);assert.equal(vm.runInContext('current().cards[0].qty',w.context),2);
   assert.equal(vm.runInContext('decks[0].cards[1].qty',w.context),2);
@@ -71,10 +111,40 @@ test('editing an import invalidates review and in-flight lookup; ambiguity never
   release({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});await task;
   assert.match(w.node('#import-error').textContent,/changed during lookup/);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Ramp spell','Sorcery')]})});
-  await form.onsubmit({preventDefault(){}});assert.match(w.node('#import-preview').innerHTML,/3 Ramp spell/);
-  values.list='Mainboard\n4 Ramp spell';form.oninput();assert.equal(w.node('#import-preview').innerHTML,'');
-  await form.onsubmit({preventDefault(){}});assert.match(w.node('#import-preview').innerHTML,/4 Ramp spell/);
+  await form.onsubmit({preventDefault(){}});assert.match(w.node('#import-preview').innerHTML,/3 copies ready to import/);
+  values.list='Mainboard\n4 Ramp spell';form.oninput();assert.equal(w.node('#import-preview').textContent,'');
+  await form.onsubmit({preventDefault(){}});assert.match(w.node('#import-preview').innerHTML,/4 copies ready to import/);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);
+});
+
+test('deck import review lists only affected names and separates syntax, lookup failures and ambiguity',async()=>{
+  const w=workspace(),values={name:'Import test',format:'commander',list:'Resolved\n1 Missing'};
+  formValues(w,values);
+  const resolved=editorCard('Resolved');
+  const face=name=>({ ...editorCard(name),card_faces:[{name:'Shared'}] });
+  let failure=true,requests=0;
+  w.context.fetch=async url=>{
+    requests++;
+    if(url==='/api/collection')return {ok:true,json:async()=>({data:[resolved]})};
+    const page=new URL(url,'http://localhost').searchParams.get('page');
+    if(page==='2'&&failure)return {ok:false,status:404,json:async()=>({error:'No cards found.'})};
+    return {ok:true,json:async()=>({data:page==='1'?[face('A // Shared')]:[face('B // Shared')],has_more:page==='1'})};
+  };
+  vm.runInContext('importDialog(null)',w.context);
+  const form=w.node('#import-form'),alert=w.node('#import-error'),event={preventDefault(){}};
+  await form.onsubmit(event);
+  assert.match(alert.textContent,/Cannot read “Resolved”/);
+  assert.equal(requests,0);
+  values.list='1 Resolved\n1 Shared\n1 Missing';
+  form.oninput();
+  await form.onsubmit(event);
+  assert.match(alert.textContent,/Card lookup is unavailable/);
+  failure=false;
+  await form.onsubmit(event);
+  assert.match(alert.innerHTML,/Shared.*More than one card matches/);
+  assert.match(alert.innerHTML,/Missing.*No exact match/);
+  assert.doesNotMatch(alert.innerHTML,/Resolved/);
+  assert.equal(w.writes.length,0);
 });
 
 test('portable open stages independent copies and failed writes preserve the complete live workspace',async()=>{

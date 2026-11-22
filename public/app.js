@@ -2361,7 +2361,7 @@ function deckCardDialog(card, {deck,zone='main',source,edit,back,printings}={}) 
   };
 }
 
-async function fetchCollection(values,key='names') {const cards=[],missing=[];for(let i=0;i<values.length;i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[key]:values.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x[key==='ids'?'id':'name']));}return {cards,missing};}
+async function fetchCollection(values,key='names',isCurrent=()=>true) {const cards=[],missing=[];for(let i=0;i<values.length&&isCurrent();i+=75){const data=await api('/api/collection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({[key]:values.slice(i,i+75)})});cards.push(...data.data);missing.push(...(data.not_found||[]).map(x=>x[key==='ids'?'id':'name']));}return {cards,missing};}
 async function refreshPrices(d=current()){
   if(!d)return;
   if(priceStates.get(d)?.status==='refreshing')return;
@@ -2463,38 +2463,102 @@ function matchOwnedDialog(d=current()){
   };
   $('#cancel-owned-match').focus();
 }
-function importDialog(target=current()){
-  showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2><p>Paste Archidekt text using “1 Card Name” and generic Commander, Mainboard, Sideboard or Maybeboard headings. Main deck and Command zone also work. ${target?'Cards will be added to '+esc(target.name)+'.':'A new deck is created only after every card resolves.'}</p><form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><p id="import-error" role="alert"></p><div id="import-preview" aria-live="polite"></div><button class="primary">Review import</button></form>`);
-  const form=$('#import-form'), button=form.querySelector('button');
-  let review=null, revision=0, pending=false, applied=false;
-  form.oninput=()=>{revision++;review=null;$('#import-preview').innerHTML='';button.textContent='Review import';};
-  form.onsubmit=async e=>{e.preventDefault();if(pending||applied)return;pending=true;button.disabled=true;try{
-    const data=new FormData(form), name=target?.name||String(data.get('name')).trim(),format=target?.format||String(data.get('format'));
-    if(!name||name.length>100||!FORMATS.includes(format))throw new Error('Enter a deck name and supported format.');
-    form.querySelector('#import-error').textContent='';
-    if(!review){
-      const parsed=parseImport(data.get('list')), version=revision;
-      button.textContent='Finding cards…';
-      const {cards}=await fetchCollection([...new Set(parsed.map(x=>x.name))]);
-      if(form.isConnected===false||$('#dialog').open===false)return;
-      if(version!==revision)throw new Error('The list changed during lookup. Review it again.');
-      const result=resolveImport(parsed,cards);
-      $('#import-preview').innerHTML=`<h3>Import review</h3><p>${result.entries.reduce((n,x)=>n+x.qty,0)} resolved copies for ${esc(name)}. Nothing has been imported.</p><ul>${result.entries.map(x=>`<li>${x.qty} ${esc(x.card.name)} — ${ZONES[x.zone]}</li>`).join('')}${result.problems.map(x=>`<li>${esc(x.name)} — ${x.reason}. Correct the name and review again.</li>`).join('')}</ul><p>Text imports use name-based printings; set and collector suffixes do not select a printing. Functions and bracket assignments require JSON.</p>`;
-      if(result.problems.length)throw new Error('Nothing imported. Correct the unresolved or ambiguous names above, then review again.');
-      review=result.entries;
-      button.textContent='Import reviewed cards';
-      return;
+async function lookupDeckImport(parsed,isCurrent) {
+  const names=new Map(parsed.map(({name})=>[name.toLowerCase(),name]));
+  const {cards}=await fetchCollection([...names.values()],'names',isCurrent);
+  for(const card of cards)names.delete(card.name.toLowerCase());
+
+  // Bulk lookup can omit full double-faced names or return only a face match.
+  const queries=[];
+  let query='';
+  for(const name of names.values()){
+    const term='!"'+name.replace(/["\\]/g,'\\$&')+'"';
+    if(query.length+4+term.length>1500){queries.push(query);query='';}
+    query=query?query+' OR '+term:term;
+  }
+  if(query)queries.push(query);
+  for(const q of queries){
+    for(let page=1;isCurrent();page++){
+      const params=new URLSearchParams({q,page});
+      const data=await api('/api/search?'+params).catch(error=>{
+        if(page===1&&noCardsFound(error))return {data:[],has_more:false};
+        throw error;
+      });
+      if(!Array.isArray(data.data)||typeof data.has_more!=='boolean')throw Error('Incomplete card lookup.');
+      cards.push(...data.data);
+      if(!data.has_more)break;
+      if(page===1000)throw Error('Incomplete card lookup.');
     }
-    const additions=review;
-    if(form.isConnected===false||$('#dialog').open===false)return;
-    if(target&&!decks.includes(target))throw new Error('The destination deck no longer exists.');
-    if(!target&&decks.length>=200)throw new Error('Maximum 200 decks per workspace.');
-    const destination=target||blankDeck(name,format),staged=structuredClone(destination);
-    for(const {card,qty,zone} of additions)addDeckCopies(staged,card,qty,zone);
-    try{if(target)commitDeckSnapshot(target,staged);else commitNewDeck(staged);}
-    catch(error){throw Error('Nothing imported. Workspace unchanged. '+error.message);}
-    applied=true;$('#dialog').close();openDeck(destination.id);toast(`${additions.reduce((n,e)=>n+e.qty,0)} cards imported`);
-  }catch(error){form.querySelector('#import-error').textContent=error.message;}finally{pending=false;button.disabled=false;button.textContent=review?'Import reviewed cards':'Review import';if(review&&form.isConnected!==false)button.focus();}};
+  }
+  if(isCurrent())return resolveImport(parsed,cards);
+}
+
+function importDialog(target=current()){
+  showDialog(`<h2>${target?'Import cards':'Import a deck'}</h2>${target?`<p>Add cards to <strong>${esc(target.name)}</strong>.</p>`:''}<form id="import-form">${!target?`<label>Deck name<input name="name" required maxlength="100"></label><label>Format<select name="format">${FORMATS.map(f=>`<option>${f}</option>`).join('')}</select></label>`:''}<label>Decklist<textarea name="list" rows="9" required placeholder="1 Sol Ring&#10;1 Command Tower&#10;10 Forest"></textarea></label><details class="import-examples"><summary>Text import format</summary><p>Use “1 Card Name” on each line, with optional Commander, Mainboard, Sideboard or Maybeboard headings. Main deck and Command zone also work.</p><p>Text imports choose printings by name. Use an Arcana JSON file to keep specified printings, functions and bracket assignments.</p></details><div id="import-error" role="alert"></div><div id="import-preview" role="status"></div><button class="primary">Review import</button></form>`);
+  const dialog=$('#dialog'),form=$('#import-form'),button=form.querySelector('button');
+  const errorBox=form.querySelector('#import-error'),status=form.querySelector('#import-preview');
+  const isOpen=()=>form.isConnected&&dialog.open!==false;
+  let review=null,revision=0,pending=false,applied=false;
+  form.oninput=()=>{
+    revision++;
+    review=null;
+    errorBox.textContent='';
+    status.textContent='';
+    button.textContent='Review import';
+  };
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    if(pending||applied||!isOpen())return;
+    pending=true;
+    button.setAttribute('aria-disabled','true');
+    errorBox.textContent='';
+    try{
+      const data=new FormData(form),name=target?.name||String(data.get('name')).trim(),format=target?.format||String(data.get('format'));
+      if(!name||name.length>100||!FORMATS.includes(format))throw Error('Enter a deck name and supported format.');
+      if(!review){
+        const parsed=parseImport(data.get('list')),version=revision;
+        const isCurrent=()=>isOpen()&&version===revision;
+        status.textContent='Finding cards…';
+        let result;
+        try{result=await lookupDeckImport(parsed,isCurrent);}
+        catch(error){
+          if(isCurrent())throw Error(error.status===429
+            ?'Scryfall has paused card lookups. Wait a moment and review again.'
+            :'Card lookup is unavailable. Check your connection and review again.');
+        }
+        if(!isOpen())return;
+        status.textContent='';
+        if(!isCurrent())throw Error('The import changed during lookup. Review it again.');
+        if(result.problems.length){
+          const problems=new Map(result.problems.map(problem=>[problem.name.toLowerCase(),problem]));
+          errorBox.innerHTML=`Review blocked. Check these cards, then review again.<ul>${[...problems.values()].map(({name,reason})=>`<li><strong>${esc(name)}</strong> · ${reason==='Ambiguous name'?'More than one card matches. Use its full card name.':'No exact match. Check the spelling.'}</li>`).join('')}</ul>`;
+          return;
+        }
+        review=result.entries;
+        const copies=count({cards:review});
+        status.innerHTML=`<p class="check-success">${copies} ${copies===1?'copy':'copies'} ready to import into <strong>${esc(name)}</strong>.</p>`;
+        return;
+      }
+      if(target&&!decks.includes(target))throw Error('The destination deck no longer exists.');
+      if(!target&&decks.length>=200)throw Error('Maximum 200 decks per workspace.');
+      const destination=target||blankDeck(name,format),staged=structuredClone(destination);
+      for(const {card,qty,zone} of review)addDeckCopies(staged,card,qty,zone);
+      try{if(target)commitDeckSnapshot(target,staged);else commitNewDeck(staged);}
+      catch{throw Error('Could not save the import. Workspace unchanged. Free up browser storage and try importing again.');}
+      applied=true;
+      const copies=count({cards:review});
+      dialog.close();
+      openDeck(destination.id);
+      toast(`${copies} ${copies===1?'copy':'copies'} imported into ${name}.`);
+    }catch(error){
+      if(!review)status.textContent='';
+      errorBox.textContent=error.message;
+    }finally{
+      pending=false;
+      button.removeAttribute('aria-disabled');
+      button.textContent=review?'Import reviewed cards':'Review import';
+    }
+  };
 }
 function restore(){
   showDialog('<h2>Open a workspace file</h2><p>Choose an Arcana JSON file or legacy backup. Review independent deck copies and any collection replacement before saving. Older deck-only files always keep your current collection.</p><input id="backup-file" type="file" accept="application/json,.json" aria-label="Workspace JSON file"><p id="restore-error" role="alert"></p><div id="restore-preview" aria-live="polite"></div><div class="settings-actions"><button id="restore-apply" class="primary" disabled>Apply reviewed workspace</button><button id="restore-current" class="secondary">Save current workspace copy</button><button id="restore-recovery" class="secondary" hidden>Save pending import copy</button></div>');

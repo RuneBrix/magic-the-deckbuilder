@@ -1042,8 +1042,13 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 
 @media(max-width:600px){.editor-controls>label:first-child{min-width:100%;flex-basis:100%}}
 
-#import-preview{overflow-wrap:anywhere}
-#import-preview ul{padding-left:24px;line-height:1.6}
+#import-form :is(#import-error,#import-preview):empty{position:absolute}
+#import-error,#import-preview{overflow-wrap:anywhere}
+#import-error:not(:empty),#import-preview .check-success{padding:10px 12px;border-radius:5px;font-size:inherit;line-height:1.5}
+#import-error:not(:empty){background:var(--danger-bg)}
+#import-error ul{margin:6px 0 0;padding-inline-start:20px}
+#import-preview .check-success{margin:0}
+#import-form button[aria-disabled=true]{cursor:wait}
 
 #restore-recovery[hidden]{display:none}
 #restore-preview{overflow-wrap:anywhere}
