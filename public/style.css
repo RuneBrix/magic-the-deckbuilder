@@ -915,11 +915,25 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 
 /* Shared deck entries across visual stacks and text views (#41 / #43). */
 .deck-group-list,.deck-group-items{min-width:0}
-.deck-group-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:8px 0 6px;min-width:0}
-.deck-workspace .deck-group h4{min-width:0;margin:0;color:var(--ink);font-size:16px;font-weight:650;overflow-wrap:anywhere}
-.deck-group h4 span,.deck-group-price,.deck-zone-price{font-size:12px;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
-.deck-group h4 span{white-space:nowrap}
+.deck-group-header{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:8px 0 6px;min-width:0}
+.deck-workspace .deck-group h4{min-width:0;margin:0;color:var(--ink);font-size:1rem;font-weight:650}
+.deck-group-controls{display:flex;align-items:center;gap:4px;min-width:0;max-width:100%}
+.deck-group-controls h4 button{display:flex;align-items:center;gap:5px;min-height:36px;padding:4px;text-align:left;font:inherit;max-width:100%}
+.deck-group-controls h4 svg{flex:none}
+.deck-group-controls h4 [aria-expanded=false] svg{transform:rotate(-90deg)}
+.deck-group-controls h4 button:hover{background:var(--soft)}
+.deck-group-name{min-width:0;overflow-wrap:anywhere}
+.deck-group-count,.deck-group-price,.deck-zone-price{font-size:.75rem;font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
+.deck-group-count{white-space:nowrap}
 .deck-group-price{min-width:0;margin:0;overflow-wrap:anywhere}
+.deck-group-actions{width:min(16rem,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);box-shadow:0 8px 24px #0003}
+.deck-group-actions p{margin:0;padding:8px 10px;color:var(--muted);font-size:.75rem;overflow-wrap:anywhere}
+.deck-group-actions button{width:100%;min-height:44px;padding:8px 10px;text-align:left;font-size:.875rem}
+.deck-group-actions button:hover,.deck-group-actions button:focus-visible{background:var(--soft)}
+@supports (position-area:bottom span-left){
+  .deck-group-actions{inset:auto;margin:4px 0;position-area:bottom span-left;position-try-fallbacks:flip-block,flip-inline,flip-block flip-inline}
+}
+@media (pointer:coarse){.deck-group-controls h4 button,.deck-group-controls .card-menu-trigger{min-width:44px;min-height:44px}}
 .deck-group{min-width:0}
 .deck-zones .deck-group{margin:0}
 .deck-workspace .deck-zones{display:flex;flex-direction:column;gap:20px}
@@ -985,6 +999,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .text-horizontal .text-card{width:100%;max-width:100%}
 .text-vertical .deck-group-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:16px 16px;padding:4px}
 .text-vertical .deck-group-items{display:flex;flex-direction:column;gap:4px}
+.deck-zones .deck-group-items[hidden]{display:none}
 #card-actions,#card-submenu{position:fixed;inset:auto;margin:0;padding:6px;max-height:calc(100dvh - 32px);overflow-y:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);box-shadow:0 8px 24px #0003}
 #card-actions h3{padding:10px;font-size:14px;overflow-wrap:anywhere}
 #card-actions button{display:block;width:100%;text-align:left;min-height:40px;padding:10px;font-size:12px;border-radius:2px;overflow-wrap:anywhere}

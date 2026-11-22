@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck groups — 2026-11-19
+
+- Copy quantities and full card names from a Type or Function group in any deck layout. With a filter active, copy only the shown cards from that group and zone (#212).
+- Keep the Land type group and Land or Lands function groups last in each zone (#213).
+- Collapse deck groups independently while keeping their counts, prices and actions available (#232).
+
 ## Deck legality checks — 2026-11-18
 
 - Refresh legality for one saved deck at startup and when Checks needs updated card coverage. Offer a retry after a failed lookup (#236).

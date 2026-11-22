@@ -69,6 +69,7 @@ const TAG_PAGE_SIZE = 40;
 let tagPage = 1;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
+const collapsedDeckGroups = new WeakMap();
 let previewKey = '', previewDeck = '', cardActionTrigger = null;
 let cardDrag = null, cardDragPress = null, suppressCardClick = false;
 const legalityStates = new Map();
@@ -1085,6 +1086,13 @@ function deckEntry(e, atLimit, coverage) {
   const art=`<button class="card-art" data-finish="${esc(finish||'')}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
   return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}${variant||' · '+finishLabel}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e)}`:`${badge}<button class="deck-card-name" aria-label="${esc(e.card.name)}" title="${esc(e.card.name)}${printingTitle}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}<small class="deck-card-variant">${esc(edition)}</small></button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
+function deckGroupName(entry, grouping) {
+  if (grouping === 'role') return primaryRole(entry);
+  return grouping === 'type' ? category(entry.card) : '';
+}
+const deckGroupKey = (zone, grouping, name) => JSON.stringify([zone, grouping, name]);
+const isLandGroup = name => /^lands?$/i.test(name);
+
 function deckList(d, full=false) {
   const filtered = full ? deckEntries(d, editorOptions) : d.cards;
   const filtering = full && Boolean(editorOptions.search.trim());
@@ -1098,11 +1106,12 @@ function deckList(d, full=false) {
     const grouping = full && zone !== 'command' ? editorOptions.group : 'none';
     const groups = new Map();
     for (const entry of entries) {
-      const group = grouping === 'role' ? primaryRole(entry) : grouping === 'type' ? category(entry.card) : '';
+      const group = deckGroupName(entry, grouping);
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group).push(entry);
     }
-    const groupSections = [...groups].map(([group,items]) => {
+    const orderedGroups = [...groups].sort(([a], [b]) => Number(isLandGroup(a)) - Number(isLandGroup(b)));
+    const groupSections = orderedGroups.map(([group,items], index) => {
       const cards = items.map(e => {
         const atLimit=deckCardCopies(d,e.card,zone)>=500;
         if (visual) return `<div class="card-slot">${deckEntry(e,atLimit,ownership.get(entryKey(e)))}</div>`;
@@ -1112,9 +1121,26 @@ function deckList(d, full=false) {
       }).join('');
       const target = grouping === 'role' && items.some(e => e.tags[0] === group)
         ? ` data-drop-zone="${zone}" data-drop-function="${esc(group)}" data-drop-label="Add to ${esc(group)}"` : '';
-      const groupQty = group ? count({ cards: items }) : 0;
-      const summary = group ? `<header class="deck-group-header"><h4>${esc(group)} <span>· ${groupQty} ${filtering ? 'shown' : groupQty === 1 ? 'card' : 'cards'}</span></h4><p class="deck-group-price">${deckPriceTotal(items,d)}</p></header>` : '';
-      return `<section class="deck-group"${target}>${summary}<div class="deck-group-items">${cards}</div></section>`;
+      if (!group) return `<section class="deck-group"><div class="deck-group-items">${cards}</div></section>`;
+      const id = `deck-group-${zone}-${index}`;
+      const key = deckGroupKey(zone, grouping, group);
+      const collapsed = collapsedDeckGroups.get(d)?.has(key) ?? false;
+      const groupQty = count({ cards: items });
+      const scope = `${esc(group)} · ${label}`;
+      return `<section class="deck-group" data-deck-group="${esc(key)}"${target}>
+        <header class="deck-group-header">
+          <div class="deck-group-controls">
+            <h4><button type="button" data-toggle-deck-group aria-expanded="${!collapsed}" aria-controls="${id}-cards">${icon('down',16)}<span class="deck-group-name">${esc(group)} <span class="deck-group-count">· ${groupQty} ${filtering ? 'shown' : groupQty === 1 ? 'card' : 'cards'}</span></span></button></h4>
+            <button type="button" class="card-menu-trigger" aria-label="Group actions for ${scope}" popovertarget="${id}-actions">${icon('more',18)}</button>
+            <div id="${id}-actions" class="deck-group-actions" popover>
+              <p>${scope}</p>
+              <button type="button" data-copy-deck-group autofocus>${filtering ? 'Copy shown cards' : 'Copy cards'}</button>
+            </div>
+          </div>
+          <p class="deck-group-price">${deckPriceTotal(items,d)}</p>
+        </header>
+        <div class="deck-group-items" id="${id}-cards"${collapsed ? ' hidden' : ''}>${cards}</div>
+      </section>`;
     }).join('');
     const shown = filtering ? ` · ${count({ cards: entries })} shown` : '';
     const price = full ? `<span class="deck-zone-price"> · ${deckPriceTotal(entries,d)}${filtering ? ' for shown cards' : ''}</span>` : '';
@@ -1122,6 +1148,33 @@ function deckList(d, full=false) {
     return `<section class="deck-zone"${full ? ` data-drop-zone="${zone}"` : ''}><h3>${label} · ${qty}${shown}${price}</h3><div class="deck-group-list">${groupSections || empty}</div></section>`;
   }).join('');
   return `${full ? '' : `<div class="zone-counts" aria-label="Deck zone counts">${zoneCounts}</div>`}<div class="deck-zones ${full ? esc(editorOptions.layout) : 'tracker-zones'}">${zoneSections}</div>`;
+}
+async function useDeckGroupControl(button) {
+  const deck = current();
+  const group = button.closest('[data-deck-group]');
+  const key = group.dataset.deckGroup;
+  if (button.hasAttribute('data-toggle-deck-group')) {
+    const collapse = button.getAttribute('aria-expanded') === 'true';
+    const groups = collapsedDeckGroups.get(deck) ?? new Set();
+    if (collapse) groups.add(key);
+    else groups.delete(key);
+    collapsedDeckGroups.set(deck, groups);
+    button.setAttribute('aria-expanded', String(!collapse));
+    group.querySelector('.deck-group-items').hidden = collapse;
+    return;
+  }
+  const [zone, grouping, name] = JSON.parse(key);
+  const entries = deckEntries(deck, editorOptions).filter(entry =>
+    zoneFor(entry) === zone && deckGroupName(entry, grouping) === name);
+  group.querySelector('.deck-group-actions').hidePopover();
+  group.querySelector('[popovertarget]').focus({preventScroll:true});
+  try {
+    await navigator.clipboard.writeText(exportDeckText({cards:entries}, {zones:[zone], headings:false}));
+    const copies = count({cards:entries});
+    toast(`Copied ${copies} ${copies === 1 ? 'copy' : 'copies'} from ${name} · ${ZONES[zone]}`);
+  } catch {
+    toast('Could not copy cards. Allow clipboard access in your browser and try again.');
+  }
 }
 function finishCardDrag() {
   cardDragPress=null;
@@ -1808,6 +1861,7 @@ $('#app').addEventListener('click',async e=>{
   const ownedRow=e.target.closest('[data-owned-row]');
   if(ownedRow && !e.target.closest('button,a,input,select,textarea,label')){collectionLotDialog(null,Number(ownedRow.dataset.ownedRow));return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
+  if(button.dataset.toggleDeckGroup!==undefined || button.dataset.copyDeckGroup!==undefined){await useDeckGroupControl(button);return;}
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
   if(button.dataset.clearCategory){clearFilterCategory(button.dataset.clearCategory);return;}

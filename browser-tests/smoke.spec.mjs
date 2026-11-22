@@ -387,6 +387,145 @@ test('deck groups show copy counts and prices, and visual cards keep prices visi
   await noPageOverflow(page);
 });
 
+test('deck group controls keep copy scope, collapse state and focus across all layouts', async ({ page, context, isMobile }, testInfo) => {
+  const longName = 'Elsewhere Observatory // The Long Way Home';
+  const longFunction = 'Explore Further Than the Farthest Boundary of the Plane';
+  const key = 'arcana.workspace.v2';
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.evaluate(({key,longName,longFunction}) => {
+    const data = JSON.parse(localStorage.getItem(key));
+    const deck = data.decks[0];
+    const [command, first, variant, creature, artifact, land] = deck.cards;
+    Object.assign(first.card, {name:longName, layout:'modal_dfc', type_line:'Creature // Land'});
+    first.tags = [longFunction];
+    first.card.prices.eur = null;
+    first.finish = 'regular';
+    Object.assign(variant, {card:{...first.card,id:variant.card.id,collector_number:'12a'}, qty:3, finish:'foil', tags:[longFunction]});
+    creature.card.name = 'Scout of the North';
+    creature.tags = [longFunction];
+    Object.assign(artifact.card, {name:'A Beacon',type_line:'Artifact'});
+    artifact.tags = ['Ramp'];
+    Object.assign(land.card, {name:'A Basin',type_line:'Artifact Land'});
+    land.tags = ['Lands'];
+    land.qty = 500;
+    deck.cards = [command, first, variant, creature, artifact, land, {...first, qty:1, zone:'sideboard'}];
+    data.decks.push({...deck, id:'other-deck', name:'Other Deck'});
+    localStorage.setItem(key, JSON.stringify(data));
+  }, {key,longName,longFunction});
+  await page.reload();
+  await page.getByRole('button', {name:'Smoke Garden',exact:true}).click();
+  const saved = await page.evaluate(key => localStorage.getItem(key), key);
+  const main = page.locator('.deck-zone[data-drop-zone="main"]').first();
+  const sideboard = page.locator('.deck-zone[data-drop-zone="sideboard"]').first();
+  const command = page.locator('.deck-zone[data-drop-zone="command"]').first();
+  const filter = page.locator('#editor-search');
+  const layout = page.locator('#editor-layout');
+  const grouping = page.locator('#editor-group');
+  const toast = page.locator('#toast');
+  const readClipboard = () => page.evaluate(async () => (await navigator.clipboard.readText()).replaceAll('\r\n','\n'));
+  const activate = element => isMobile ? element.tap() : element.press('Enter');
+
+  await expect(command.locator('[data-toggle-deck-group]')).toHaveCount(0);
+  for (const [mode, names] of [['type',['Artifact','Creature','Land']], ['role',['Ramp',longFunction,'Lands']]]) {
+    await grouping.selectOption(mode);
+    const options = main.getByRole('button', {name:`Group actions for ${names[1]} · Main deck`, exact:true});
+    const collapse = main.locator('[data-toggle-deck-group]').nth(1);
+    const price = main.locator('.deck-group-price').nth(1);
+    const copy = main.getByRole('button', {name:'Copy cards',exact:true});
+    for (const view of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']) {
+      await layout.selectOption(view);
+      expect(await main.locator('[data-deck-group]').evaluateAll(groups => groups.map(group => JSON.parse(group.dataset.deckGroup)[2]))).toEqual(names);
+      if (view === 'visual-horizontal') {
+        await activate(main.locator('[data-toggle-deck-group]').first());
+        await activate(collapse);
+        await expect(collapse).toBeFocused();
+        await activate(main.locator('[data-toggle-deck-group]').last());
+        await expect(main.locator('[data-toggle-deck-group][aria-expanded="false"]')).toHaveCount(3);
+        await activate(main.locator('[data-toggle-deck-group]').first());
+        await activate(main.locator('[data-toggle-deck-group]').last());
+      }
+      await expect(collapse).toHaveAttribute('aria-expanded','false');
+      await expect(collapse).toContainText('6 cards');
+      await expect(price).toBeVisible();
+      await expect(sideboard.locator('[data-toggle-deck-group]')).toHaveAttribute('aria-expanded','true');
+      const nextGroup = main.locator('[data-deck-group]').last();
+      await options.scrollIntoViewIfNeeded();
+      const before = await nextGroup.boundingBox();
+      if (!isMobile) await options.hover();
+      await options.focus();
+      expect(await nextGroup.boundingBox()).toEqual(before);
+      await activate(options);
+      await expect(copy).toBeFocused();
+      const menu = main.locator('.deck-group-actions:popover-open');
+      await expect(menu).toContainText(`${names[1]} · Main deck`);
+      const bounds = await menu.boundingBox();
+      const {width,height} = page.viewportSize();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      expect(bounds.y).toBeGreaterThanOrEqual(0);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(height);
+      await activate(copy);
+      await expect(options).toBeFocused();
+      await expect(menu).toHaveCount(0);
+      await expect(toast).toContainText(`Copied 6 copies from ${names[1]} · Main deck`);
+      expect(await readClipboard()).toBe(`5 ${longName}\n1 Scout of the North`);
+      await noPageOverflow(page);
+    }
+  }
+
+  const collapse = main.locator('[data-toggle-deck-group]').nth(1);
+  const options = main.getByRole('button', {name:`Group actions for ${longFunction} · Main deck`,exact:true});
+  await filter.fill('never matches any group');
+  await expect(main.getByText('No cards match these filters.')).toBeVisible();
+  await filter.fill('Elsewhere');
+  const filteredCollapse = main.locator('[data-toggle-deck-group]');
+  await expect(filteredCollapse).toHaveAttribute('aria-expanded','false');
+  await expect(filteredCollapse).toContainText('5 shown');
+  await activate(options);
+  const shown = main.getByRole('button', {name:'Copy shown cards'});
+  await shown.press('Escape');
+  await expect(options).toBeFocused();
+  await activate(options);
+  await activate(shown);
+  await expect.poll(readClipboard).toBe(`5 ${longName}`);
+
+  const sideOptions = sideboard.getByRole('button', {name:`Group actions for ${longFunction} · Sideboard`,exact:true});
+  await activate(sideOptions);
+  await expect(sideboard.locator(':popover-open')).toContainText('Sideboard');
+  await activate(sideboard.getByRole('button', {name:'Copy shown cards'}));
+  await expect.poll(readClipboard).toBe(`1 ${longName}`);
+
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => { throw new DOMException('Denied', 'NotAllowedError'); };
+    document.documentElement.style.fontSize = '200%';
+  });
+  await activate(options);
+  await page.screenshot({path:testInfo.outputPath('deck-group-actions-enlarged.png')});
+  await activate(shown);
+  await expect(toast).toHaveText('Could not copy cards. Allow clipboard access in your browser and try again.');
+  await expect(options).toBeFocused();
+  await noPageOverflow(page);
+  await filter.clear();
+  await expect(collapse).toHaveAttribute('aria-expanded','false');
+  await grouping.selectOption('none');
+  await expect(main.locator('[data-toggle-deck-group]')).toHaveCount(0);
+  await grouping.selectOption('role');
+  await expect(collapse).toHaveAttribute('aria-expanded','false');
+  await page.getByRole('button', {name:'Back to library',exact:true}).click();
+  await page.getByRole('button', {name:'Other Deck',exact:true}).click();
+  await grouping.selectOption('role');
+  await expect(collapse).toHaveAttribute('aria-expanded','true');
+  await page.getByRole('button', {name:'Back to library',exact:true}).click();
+  await page.getByRole('button', {name:'Smoke Garden',exact:true}).click();
+  await grouping.selectOption('role');
+  await expect(collapse).toHaveAttribute('aria-expanded','false');
+  await page.reload();
+  await page.getByRole('button', {name:'Smoke Garden',exact:true}).click();
+  await grouping.selectOption('role');
+  await expect(collapse).toHaveAttribute('aria-expanded','true');
+  expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(saved);
+});
+
 test('ownership zones keep every card visible and retain missing costs across scope changes', async ({ page }) => {
   await page.evaluate(() => {
     const key = 'arcana.workspace.v2';
