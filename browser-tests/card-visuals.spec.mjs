@@ -60,7 +60,11 @@ test('finish treatments and ownership markers preserve quotes, inventory and con
     e[2].finish='regular';e[2].qty=12;e[3].finish='etched';e[3].qty=500;e[3].card.prices.usd_etched='2.00';e[3].card.finishes=['nonfoil','foil','etched'];
     e[4].card={...structuredClone(e[1].card),id:e[4].card.id};e[4].finish='regular';e[4].qty=1;e[4].zone='sideboard';
     delete e[5].card.oracle_id;e[6].zone='maybeboard';
-    data.collection=[{card:{...structuredClone(e[1].card),id:'00000000-0000-4000-8000-000000000900'},finish:'foil',qty:1},{card:structuredClone(e[2].card),finish:'regular',qty:12}];
+    data.collection=[
+      {card:{...structuredClone(e[1].card),id:'00000000-0000-4000-8000-000000000900'},finish:'foil',qty:1},
+      {card:{...structuredClone(e[2].card),id:'00000000-0000-4000-8000-000000000901'},finish:'regular',qty:12},
+      {card:structuredClone(e[0].card),finish:'foil',qty:1},
+    ];
     for(const entry of e)entry.card.image_uris={normal:`https://cards.scryfall.io/visual-${entry.card.collector_number}.jpg`};
     localStorage.setItem(key,JSON.stringify(data));
   });
@@ -76,9 +80,24 @@ test('finish treatments and ownership markers preserve quotes, inventory and con
   await page.getByRole('tab',{name:'Cards',exact:true}).click();
   const saved=()=>page.evaluate(()=>localStorage.getItem('arcana.workspace.v2')),before=await saved();
   const card=n=>page.locator('.deck-entry.visual-card').filter({has:page.locator(`.card-art[data-inspect="00000000-0000-4000-8000-${String(n).padStart(12,'0')}"]`)});
-  for(const [n,state] of [[1,'missing'],[2,'partial'],[3,'owned'],[4,'missing'],[5,'missing'],[6,'unavailable'],[7,'excluded']])await expect(card(n).locator('.entry-quantity')).toHaveAttribute('data-ownership',state);
-  await expect(card(2).locator('.entry-quantity')).toHaveAccessibleName('2 copies · 1 of 2 copies covered by collection; 1 missing');
-  await expect(card(4).locator('.quantity-number')).toHaveText('500');
+  const toggle=page.getByRole('checkbox',{name:'Show ownership'});
+  const badge=n=>card(n).locator('.entry-quantity');
+  const badgeStyles=()=>badge(2).evaluate(el=>({bg:getComputedStyle(el).backgroundColor,clip:getComputedStyle(el).clipPath,width:el.offsetWidth,height:el.offsetHeight}));
+  await expect(toggle).not.toBeChecked();
+  const neutral=await badgeStyles();
+  expect(neutral.clip).toBe('none');
+  if(isMobile)await toggle.tap();else await toggle.press('Space');
+  await expect(toggle).toBeChecked();
+  if(!isMobile)await expect(toggle).toBeFocused();
+  const colored=await badgeStyles();
+  expect(colored.bg).not.toBe(neutral.bg);
+  expect([colored.width,colored.height]).toEqual([neutral.width,neutral.height]);
+  for(const [n,state] of [[1,'owned'],[2,'partial'],[3,'alternate'],[4,'missing'],[5,'missing'],[6,'unavailable'],[7,'excluded']])await expect(badge(n)).toHaveAttribute('data-ownership',state);
+  await expect(badge(2)).toHaveAccessibleName('2 copies · 1 of 2 owned (1 in other printings, 1 missing)');
+  await expect(card(3).locator('.card-art')).toHaveAccessibleDescription('12 of 12 owned (12 in other printings)');
+  await expect(badge(4)).toHaveText('500');
+  expect((await badge(4).boundingBox()).width).toBeGreaterThan((await badge(1).boundingBox()).width);
+  await expect(card(4).locator('[data-zone-plus]')).toBeDisabled();
   await expect(card(2).locator('.stack-card-meta')).toHaveText('$3.00');
   await expect(card(4).locator('.stack-card-meta')).toHaveText('$2.00');
   for(const layout of ['visual-horizontal','visual-vertical']) {
@@ -92,17 +111,22 @@ test('finish treatments and ownership markers preserve quotes, inventory and con
   for(const theme of ['light','dark'])for(const palette of ['green','blue','white','orange','rose','teal','sepia']) {
     await page.evaluate(({theme,palette})=>Object.assign(document.documentElement.dataset,{theme,palette}),{theme,palette});
     await card(2).focus();
-    const contrast=await card(2).locator('.quantity-number').evaluate(el=>{
+    const contrast=await page.locator('.deck-entry.visual-card .entry-quantity').evaluateAll(badges=>badges.map(el=>{
       const style=getComputedStyle(el),lum=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(c=>Number(c)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
       const values=[lum(style.color),lum(style.backgroundColor)].sort((a,b)=>b-a);return (values[0]+.05)/(values[1]+.05);
-    });
-    expect(contrast).toBeGreaterThanOrEqual(4.5);
+    }));
+    expect(Math.min(...contrast)).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({path:testInfo.outputPath(`finishes-${theme}-${palette}.png`)});
   }
   await page.emulateMedia({reducedMotion:'reduce'});
   expect(await card(2).locator('.card-art').evaluate(el=>getComputedStyle(el,'::after').animationName)).toBe('none');
+  await page.locator('#editor-search').fill('Smoke Card 2');
+  await expect(badge(5)).toHaveAttribute('data-ownership','missing');
+  await toggle.uncheck();
+  await expect(page.locator('[data-ownership]')).toHaveCount(0);
+  await expect(card(2).locator('.card-art')).not.toHaveAttribute('aria-description');
   expect(await saved()).toBe(before);
   await page.getByRole('button',{name:'Collection',exact:true}).click();
-  await expect(page.locator('.collection-art[data-finish="foil"]')).toHaveCount(1);
+  await expect(page.locator('.collection-art[data-finish="foil"]')).toHaveCount(2);
   expect(await saved()).toBe(before);
 });

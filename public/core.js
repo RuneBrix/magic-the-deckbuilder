@@ -593,13 +593,27 @@ export function storedEuroPrice(entry) {
   return deckPrintingPrice(entry.card,entry.finish,'EUR');
 }
 
+function takeOwnedCopies(printings, id, demand) {
+  const available=printings.get(id)??0;
+  const used=Math.min(demand,available);
+  if(used===available)printings.delete(id);
+  else printings.set(id,available-used);
+  return used;
+}
+
 export function collectionReport(deck, collection) {
   validateBackup([deck]);validateCollection(collection);
   const mode=deck.ownershipMatch||'rules', zones=deck.budgetZones??DEFAULT_BUDGET_ZONES;
   const entries=[...deck.cards].sort((a,b)=>BUDGET_ZONE_ORDER.indexOf(zoneFor(a))-BUDGET_ZONE_ORDER.indexOf(zoneFor(b))||a.card.id.localeCompare(b.card.id));
   const matchKey=card=>mode==='printing'?card.id:rulesIdentity(card);
   const available=new Map();
-  for(const lot of collection){const key=matchKey(lot.card);if(key)available.set(key,(available.get(key)||0)+lot.qty);}
+  for(const lot of [...collection].sort((a,b)=>a.card.id.localeCompare(b.card.id))){
+    const key=matchKey(lot.card);
+    if(!key)continue;
+    if(!available.has(key))available.set(key,new Map());
+    const printings=available.get(key),id=lot.card.id;
+    printings.set(id,(printings.get(id)??0)+lot.qty);
+  }
   let demand=0,owned=0,missing=0,fullCents=0,missingCents=0,fullUnpriced=0,missingUnpriced=0,basicCopies=0;
   const rows=entries.map(entry=>{
     const key=matchKey(entry.card),zone=zoneFor(entry),included=zones.includes(zone);
@@ -607,12 +621,21 @@ export function collectionReport(deck, collection) {
     const costExcluded=isBasicLand(entry.card);
     const row={entry,zone,included,costExcluded,demand:entry.qty,unitCents,finish,identityResolved:Boolean(key)};
     if(!included)return {...row,owned:null,missing:null};
-    const have=available.get(key)||0,used=Math.min(entry.qty,have),needed=entry.qty-used;
-    if(key)available.set(key,have-used);
+    const printings=available.get(key);
+    let exactOwned=0,otherOwned=0;
+    if(printings){
+      exactOwned=takeOwnedCopies(printings,entry.card.id,entry.qty);
+      for(const id of printings.keys()){
+        const remainder=entry.qty-exactOwned-otherOwned;
+        if(!remainder)break;
+        otherOwned+=takeOwnedCopies(printings,id,remainder);
+      }
+    }
+    const used=exactOwned+otherOwned,needed=entry.qty-used;
     demand+=entry.qty;owned+=used;missing+=needed;
     if(costExcluded)basicCopies+=entry.qty;
     else if(unitCents===null){fullUnpriced+=entry.qty;missingUnpriced+=needed;}else{fullCents+=unitCents*entry.qty;missingCents+=unitCents*needed;}
-    return {...row,owned:used,missing:needed};
+    return {...row,owned:used,exactOwned,otherOwned,missing:needed};
   });
   return {mode,zones,rows,demand,owned,missing,fullCents,missingCents,fullUnpriced,missingUnpriced,basicCopies};
 }

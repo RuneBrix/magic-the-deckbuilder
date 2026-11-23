@@ -42,8 +42,12 @@ test('collection planning allocates deterministically and keeps unknown EUR pric
     {card:unknown,qty:2,tags:[],zone:'sideboard'},
     {card:{...priced,id:'maybe'},qty:4,tags:[],zone:'maybeboard'},
   ]};
-  const report=collectionReport(planned,[{card:{...priced,id:'owned-print'},finish:'regular',qty:3}]);
+  const mixedInventory=[{card:{...priced,id:'owned-print'},finish:'regular',qty:2},{card:priced,finish:'foil',qty:1}];
+  const report=collectionReport(planned,mixedInventory);
   assert.deepEqual(report.rows.map(row=>[row.zone,row.included,row.owned,row.missing]),[['main',true,2,0],['sideboard',true,1,1],['maybeboard',false,null,null]]);
+  assert.deepEqual(report.rows.slice(0,2).map(row=>[row.exactOwned,row.otherOwned]),[[1,1],[0,1]]);
+  const exact=collectionReport({...planned,ownershipMatch:'printing'},mixedInventory);
+  assert.deepEqual(exact.rows.slice(0,2).map(row=>[row.owned,row.exactOwned,row.otherOwned,row.missing]),[[1,1,0,1],[0,0,0,2]]);
   assert.equal(report.demand,4);assert.equal(report.owned,3);assert.equal(report.missing,1);assert.equal(report.fullCents,250);assert.equal(report.fullUnpriced,2);assert.equal(report.missingUnpriced,1);
   const scoped={...planned,budgetZones:['sideboard','maybeboard']};
   const inventory=[{card:priced,finish:'regular',qty:3}];

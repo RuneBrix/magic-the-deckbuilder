@@ -42,10 +42,11 @@ test('deck currency and basic-land exclusions stay consistent across costs, Card
   await page.route('**/api/search?**',route=>route.fulfill({json:{data:cards.slice(0,2).map(card=>({...card,games:['paper']})),has_more:false}}));
   await page.getByRole('button',{name:'Check cheapest printings',exact:true}).click();
   await expect(page.getByRole('button',{name:'Check cheapest printings',exact:true})).toBeVisible();
-  await expect(costs.getByRole('row').filter({hasText:'Cheapest printings estimate'})).toContainText('$751.50');
-  await expect(costs.getByRole('row').filter({hasText:'Cheapest printings estimate'})).toContainText('1 unpriced copy');
+  const cheapest=costs.getByRole('row').filter({hasText:'Cheapest printings for missing copies'});
+  await expect(cheapest).toContainText('$747.00');
+  await expect(cheapest).toContainText('1 unpriced copy');
   await currency.selectOption('EUR');
-  await expect(costs.getByRole('row').filter({hasText:'Cheapest printings estimate'})).toContainText('—');
+  await expect(cheapest).toContainText('—');
   await currency.selectOption('USD');
   await page.screenshot({path:testInfo.outputPath('currency-costs.png'),fullPage:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);

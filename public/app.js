@@ -69,6 +69,7 @@ const TAG_PAGE_SIZE = 40;
 let tagPage = 1;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
+let showDeckOwnership = false;
 const collapsedDeckGroups = new WeakMap();
 let previewKey = '', previewDeck = '', cardActionTrigger = null, cardActionContext = null;
 let cardDrag = null, cardDragPress = null, suppressCardClick = false;
@@ -909,7 +910,7 @@ function deckWorkspace(d, statistics, previousStatistics) {
   const s=statistics ?? stats(d), report=legalityReport(d);
   const tabs=[['cards','Cards'],['stats','Statistics'],['planning','Ownership & costs'],['checks','Checks']];
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><button class="text-button library-back" data-home data-view="decks">${icon('arrow',16)} Back to library</button><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions">${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual cards'],['visual-vertical','Vertical visual cards'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price '+currencySymbol(deckCurrency(d))+' (low first)'],['price-desc','Price '+currencySymbol(deckCurrency(d))+' (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button></div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><button class="text-button library-back" data-home data-view="decks">${icon('arrow',16)} Back to library</button><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions">${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual cards'],['visual-vertical','Vertical visual cards'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price '+currencySymbol(deckCurrency(d))+' (low first)'],['price-desc','Price '+currencySymbol(deckCurrency(d))+' (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button>${editorOptions.layout.startsWith('visual')?`<label class="deck-ownership-toggle"><input id="show-deck-ownership" type="checkbox" ${showDeckOwnership?'checked':''}> Show ownership</label>`:''}</div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
 }
 function quickAddMarkup(d) {
   return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p id="quick-add-status" class="hint" role="status"></p></section>`;
@@ -1032,13 +1033,21 @@ function stackCardMeta({card,finish}) {
   const price=cents === null ? 'Price unavailable' : money(cents,currency);
   return `<div class="stack-card-meta" aria-label="${esc('Price: '+price)}" title="${esc(price)}">${esc(price)}</div>`;
 }
-function entryBadge(e, visual, coverage) {
+function ownershipBadge(row) {
+  if(row.owned===null)return {state:'excluded',description:'Outside ownership scope'};
+  if(!row.identityResolved)return {state:'unavailable',description:'Ownership unavailable: card identity missing'};
+  const state=row.missing ? (row.owned?'partial':'missing') : row.otherOwned?'alternate':'owned';
+  const breakdown=[
+    row.exactOwned ? `${row.exactOwned} in the stored printing` : '',
+    row.otherOwned ? `${row.otherOwned} in other printings` : '',
+    row.missing ? `${row.missing} missing` : '',
+  ].filter(Boolean).join(', ');
+  return {state,description:`${row.owned} of ${row.demand} owned (${breakdown})`};
+}
+function entryBadge(e, visual, ownership) {
   const copies=`${e.qty} ${e.qty===1?'copy':'copies'}`;
   if(!visual)return `<span class="entry-quantity" aria-label="${copies}">${e.qty}</span>`;
-  const owned=coverage?.owned;
-  const state=owned==null?'excluded':coverage.identityResolved===false?'unavailable':owned===0?'missing':owned===e.qty?'owned':'partial';
-  const description=owned==null?'Ownership not assessed: zone outside ownership scope':state==='unavailable'?'Ownership unavailable: card identity missing':`${owned} of ${e.qty} ${e.qty===1?'copy':'copies'} covered by collection${coverage.missing?`; ${coverage.missing} missing`:''}`;
-  return `<span class="entry-quantity${e.qty>=100?' three-digits':''}" role="img" data-ownership="${state}" aria-label="${copies} · ${description}" title="${description}"><svg class="ownership-marker" viewBox="0 0 40 40" aria-hidden="true"><path class="ownership-shape" d="M7 1H38L1 38V7Q1 1 7 1Z"/>${state==='partial'?'<path class="ownership-fill" d="M7 1H23L1 23V7Q1 1 7 1Z"/>':''}</svg><span class="quantity-number">${e.qty}</span></span>`;
+  return `<span class="entry-quantity" role="img"${ownership?` data-ownership="${ownership.state}"`:''} aria-label="${copies}${ownership?` · ${esc(ownership.description)}`:''}">${e.qty}</span>`;
 }
 function faceAttributes(card, enabled=true) {
   const front=safeUrl(imageFor(card),true), back=safeUrl(card.card_faces?.[1]?.image_uris?.normal,true);
@@ -1083,8 +1092,9 @@ function deckEntry(e, atLimit, coverage) {
   const minus=`<button data-zone-minus="${esc(key)}" aria-label="Remove one ${esc(e.card.name)} from ${zone}">${icon('minus',14)}</button>`,plus=`<button data-zone-plus="${esc(key)}" aria-label="Add one ${esc(e.card.name)} to ${zone}" ${atLimit?'disabled':''}>${icon('plus',14)}</button>`;
   const quantity=`<div class="card-quantity">${visual?plus+minus:minus+plus}</div>`;
   const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}${variant}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
-  const badge=entryBadge(e,visual,coverage);
-  const art=`<button class="card-art" data-finish="${esc(finish||'')}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}">${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
+  const ownership=coverage ? ownershipBadge(coverage) : null;
+  const badge=entryBadge(e,visual,ownership);
+  const art=`<button class="card-art" data-finish="${esc(finish||'')}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}"${ownership?` title="${esc(ownership.description)}" aria-description="${esc(ownership.description)}"`:''}>${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
   return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}${variant||' · '+finishLabel}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e)}`:`${badge}<button class="deck-card-name" aria-label="${esc(e.card.name)}" title="${esc(e.card.name)}${printingTitle}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}<small class="deck-card-variant">${esc(edition)}</small></button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckGroupName(entry, grouping) {
@@ -1098,7 +1108,7 @@ function deckList(d, full=false) {
   const filtered = full ? deckEntries(d, editorOptions) : d.cards;
   const filtering = full && Boolean(editorOptions.search.trim());
   const visual = full && editorOptions.layout.startsWith('visual');
-  const ownership=visual?new Map(collectionReport(d,collection).rows.map(row=>[entryKey(row.entry),row])):null;
+  const ownership=visual && showDeckOwnership ? new Map(collectionReport(d,collection).rows.map(row=>[entryKey(row.entry),row])) : null;
   const zones = ['command', 'main', 'sideboard', 'maybeboard'].map(zone => [zone, ZONES[zone], zoneCount(d, zone)]);
   const zoneCounts = zones.map(([,label,qty]) => `<span>${label}: ${qty}</span>`).join('');
   const zoneSections = zones.map(([zone,label,qty]) => {
@@ -1115,7 +1125,7 @@ function deckList(d, full=false) {
     const groupSections = orderedGroups.map(([group,items], index) => {
       const cards = items.map(e => {
         const atLimit=deckCardCopies(d,e.card,zone)>=500;
-        if (visual) return `<div class="card-slot">${deckEntry(e,atLimit,ownership.get(entryKey(e)))}</div>`;
+        if (visual) return `<div class="card-slot">${deckEntry(e,atLimit,ownership?.get(entryKey(e)))}</div>`;
         if (full) return deckEntry(e,atLimit);
         const key = esc(entryKey(e)), name = esc(e.card.name);
         return `<div class="deck-row"><span class="qty">${e.qty}</span><span class="deck-name-wrap"><button class="deck-card-name" data-inspect="${esc(e.card.id)}" data-entry="${key}">${name}</button></span><div class="row-actions"><button data-zone-minus="${key}" aria-label="Remove one ${name} from ${label}">−</button><button data-zone-plus="${key}" aria-label="Add one ${name} to ${label}" ${atLimit?'disabled':''}>+</button></div></div>`;
@@ -1823,6 +1833,10 @@ function bind() {
   $('#assigned-bracket')?.addEventListener('change',e=>{const d=current();if(!d || d.format!=='commander')return;const value=Number(e.target.value);if(e.target.value && !Object.hasOwn(BRACKETS,value))return;if(e.target.value)d.bracket=value;else delete d.bracket;d.updated=new Date().toISOString();save();render();$('#assigned-bracket')?.focus();});
   for(const key of ['layout','group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
   $('#editor-search')?.addEventListener('input',e=>{editorOptions.search=e.target.value;const d=current();if(view==='deck' && d)$('#editor-card-area').outerHTML=deckCards(d);});
+  $('#show-deck-ownership')?.addEventListener('change',e=>{
+    showDeckOwnership=e.target.checked;
+    $('#editor-card-area').outerHTML=deckCards(current());
+  });
   for(const button of document.querySelectorAll('[data-cost-sort]'))button.addEventListener('click',()=>{
     const d=current();if(!d)return;
     const key=button.dataset.costSort,previous=costSorts.get(d)??{key:'card',direction:'asc'};
