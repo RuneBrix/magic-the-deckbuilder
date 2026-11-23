@@ -24,24 +24,45 @@ export const TAGS = [
   ['protection', 'Protection', 'Keep your threats safe'],
 ];
 export const tagById = new Map(TAG_CATALOG.tags.map(t => [t.id, t]));
-// More specific interaction functions precede broad resource/value functions.
-const FUNCTION_PRECEDENCE = ['sweeper','counterspell','removal','ramp','draw','tutor','reanimate','sacrifice-outlet','protection','flicker','repeatable-token-generator','lifegain'];
-// Broader families fill gaps only when no existing supported function matches.
-const FUNCTION_FALLBACKS = [['pillowfort','Protection'],['cost-reducer','Ramp'],['card-advantage','Card advantage'],['combat-manipulation','Combat control'],['untapper','Untap']];
+const FUNCTION_LABELS = new Map([...TAGS.map(([id,label])=>[id,label]),
+  ['pillowfort','Protection'],['cost-reducer','Ramp'],['card-advantage','Card advantage'],['combat-manipulation','Combat control'],['untapper','Untap']]);
+const DESCRIPTIVE_TAGS = new Set(['activated-ability','card-names','cycle','draft-signpost','flavors-of-vanilla','triggered-ability','type-errata']);
+const COLOR_EFFECT_TAG = /^(white|blue|black|red|green|colorless)-effect$/;
 export function functionMemberships(card) {
-  return (TAG_CATALOG.memberships?.[card.oracle_id?.toLowerCase()] ?? []).map(index => TAG_CATALOG.tags[index]);
+  const identity = typeof card.oracle_id === 'string' && card.oracle_id.toLowerCase();
+  const memberships = TAG_CATALOG.memberships ?? {};
+  return Object.hasOwn(memberships, identity) ? memberships[identity].map(index => TAG_CATALOG.tags[index]) : [];
+}
+export function broadFunctionTags(memberships, tags = tagById) {
+  const scores = new Map();
+  for (const id of new Set(memberships)) {
+    if (!tags.has(id)) continue;
+    const pending = new Map([[id, 0]]), roots = new Map();
+    // Insertion order visits parents breadth-first and counts each root once per direct tag.
+    for (const [ancestor, distance] of pending) {
+      const parents = tags.get(ancestor).parents.filter(parent => tags.has(parent) && !COLOR_EFFECT_TAG.test(parent));
+      if (!parents.length) roots.set(ancestor, distance);
+      for (const parent of parents) if (!pending.has(parent)) pending.set(parent, distance + 1);
+    }
+    if (!roots.size) roots.set(id, 0);
+    for (const [root, distance] of roots) {
+      const score = scores.get(root) ?? { id: root, support: Number(FUNCTION_LABELS.has(root)), depth: 0 };
+      score.support++;
+      score.depth = Math.max(score.depth, distance);
+      scores.set(root, score);
+    }
+  }
+  const descriptive = id => DESCRIPTIVE_TAGS.has(id) || COLOR_EFFECT_TAG.test(id);
+  return [...scores.values()].sort((a,b) => Number(descriptive(a.id)) - Number(descriptive(b.id))
+    || b.support - a.support || b.depth - a.depth || a.id.localeCompare(b.id, 'en')).map(({id})=>id);
 }
 export function suggestedFunctions(card) {
   if ((!card.layout || card.layout==='normal') && !card.card_faces?.length && !card.type_line?.includes('//') && isLand(card)) return ['Land'];
-  const supported = new Set(), pending = functionMemberships(card).map(tag => tag.id);
-  while (pending.length) {
-    const id = pending.pop();
-    if (supported.has(id)) continue;
-    supported.add(id);
-    pending.push(...(tagById.get(id)?.parents ?? []));
-  }
-  const functions=FUNCTION_PRECEDENCE.filter(id => supported.has(id)).map(id => TAGS.find(([slug]) => slug===id)[1]);
-  return functions.length?functions:FUNCTION_FALLBACKS.filter(([id])=>supported.has(id)).map(([,label])=>label);
+  const labels = broadFunctionTags(functionMemberships(card).map(({id})=>id)).map(id => {
+    const name = id.replaceAll('-', ' ');
+    return FUNCTION_LABELS.get(id) ?? name[0].toUpperCase() + name.slice(1);
+  });
+  return [...new Set(labels)];
 }
 export function unassignedFunctionSuggestions(deck) {
   return deck.cards.filter(entry=>entry.tags.length===0).flatMap(entry=>{
@@ -116,6 +137,21 @@ export function assignEntryFunction(deck, key, name) {
   entry.tags=[name,...entry.tags.filter(t=>t && t!==name)];
   return entry;
 }
+export const isReservedFunctionGroup = name => /^(unassigned|lands?)$/i.test(name.trim());
+export function renameFunctionGroup(deck, zone, previous, name) {
+  name = typeof name === 'string' ? name.trim() : '';
+  if (!name || name.length > 80 || name.includes(',')) throw Error('Enter a function name of up to 80 characters, without commas.');
+  if (isReservedFunctionGroup(previous) || isReservedFunctionGroup(name)) throw Error('Land, Lands and Unassigned are reserved group names.');
+  if (name === previous) throw Error('Enter a different function name.');
+  const inZone = deck.cards.filter(entry => zoneFor(entry) === zone);
+  const group = inZone.filter(entry => entry.tags[0] === previous);
+  if (!group.length || zone === 'command') throw Error('This function group is no longer available.');
+  if (inZone.some(entry => entry.tags[0] !== previous && entry.tags[0]?.trim().toLowerCase() === name.toLowerCase())) {
+    throw Error('That function group already exists in this zone. Choose a different name.');
+  }
+  for (const entry of group) entry.tags = [name, ...entry.tags.slice(1).filter(tag => tag !== name)];
+  return name;
+}
 export function copyEntryToDeck(source, key, target, qty, zone, selection) {
   if(source===target || source.id===target.id)throw Error('Choose another deck.');
   const entry=source.cards.find(e=>entryKey(e)===key);
@@ -134,7 +170,7 @@ export function addDeckCopies(deck, card, qty, zone, finish, primary='', inherit
   const found=matchingEntry(deck,candidate);
   if(!found && deck.cards.length>=1000)throw Error('Maximum 1000 card entries per deck. Nothing added.');
   const memberships=[...new Set([...(found?.tags ?? []),...inheritedTags])];
-  if(!memberships.length)memberships.push(...suggestedFunctions(card).slice(0,1));
+  if(!found && !memberships.length)memberships.push(...suggestedFunctions(card).slice(0,1));
   const tags=primary.trim()?[primary.trim(),...memberships.filter(tag=>tag && tag!==primary.trim())]:memberships;
   if(found){
     found.qty+=qty;found.tags=tags;

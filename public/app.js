@@ -4,6 +4,7 @@ import { collectionPage, CONDITION_LABELS, collectionChoices } from './collectio
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
 import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, functionMemberships, suggestedFunctions, unassignedFunctionSuggestions, ownedPrintingPlan } from './core.js';
+import { isReservedFunctionGroup, renameFunctionGroup } from './core.js';
 import { cheapestPrintings, refreshPriceQuotes, cheapestDeckPlan } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -1146,6 +1147,7 @@ function deckList(d, full=false) {
             <div id="${id}-actions" class="deck-group-actions" popover>
               <p>${scope}</p>
               <button type="button" data-copy-deck-group autofocus>${filtering ? 'Copy shown cards' : 'Copy cards'}</button>
+              ${grouping === 'role' && !isReservedFunctionGroup(group) ? '<button type="button" data-rename-deck-group>Rename function group…</button>' : ''}
             </div>
           </div>
           <p class="deck-group-price">${deckPriceTotal(items,d)}</p>
@@ -1175,10 +1177,14 @@ async function useDeckGroupControl(button) {
     return;
   }
   const [zone, grouping, name] = JSON.parse(key);
-  const entries = deckEntries(deck, editorOptions).filter(entry =>
-    zoneFor(entry) === zone && deckGroupName(entry, grouping) === name);
   group.querySelector('.deck-group-actions').hidePopover();
   group.querySelector('[popovertarget]').focus({preventScroll:true});
+  if (button.hasAttribute('data-rename-deck-group')) {
+    renameFunctionGroupDialog(deck, zone, name);
+    return;
+  }
+  const entries = deckEntries(deck, editorOptions).filter(entry =>
+    zoneFor(entry) === zone && deckGroupName(entry, grouping) === name);
   try {
     await navigator.clipboard.writeText(exportDeckText({cards:entries}, {zones:[zone], headings:false}));
     const copies = count({cards:entries});
@@ -1186,6 +1192,48 @@ async function useDeckGroupControl(button) {
   } catch {
     toast('Could not copy cards. Allow clipboard access in your browser and try again.');
   }
+}
+function renameFunctionGroupDialog(deck, zone, name) {
+  const members = () => deck.cards.filter(entry => zoneFor(entry) === zone && entry.tags[0] === name);
+  const signature = entries => JSON.stringify(entries.map(entry => [entryKey(entry), entry.qty]));
+  const entries = members();
+  const reviewed = signature(entries);
+  const copies = count({cards:entries});
+  const hiddenScope = editorOptions.search.trim() ? ', including cards hidden by the filter' : '';
+  showDialog(`<h2>Rename function group</h2>
+    <p>${ZONES[zone]} · ${copies} ${copies === 1 ? 'copy' : 'copies'} in the whole group${hiddenScope}.</p>
+    <form id="rename-function-group-form">
+      <label>Function name<input name="name" required maxlength="80" value="${esc(name)}" autofocus></label>
+      <p id="rename-function-group-error" class="query-error" role="alert" hidden></p>
+      <div class="settings-actions"><button class="primary">Rename group</button>
+      <button id="rename-function-group-cancel" type="button" class="secondary">Cancel</button></div>
+    </form>`);
+  $('#rename-function-group-cancel').onclick = closeDialog;
+  $('#rename-function-group-form input').select();
+  $('#rename-function-group-form').onsubmit = event => {
+    event.preventDefault();
+    if ($('#dialog').open === false) return;
+    try {
+      if (current() !== deck || signature(members()) !== reviewed) {
+        throw Error('This group changed. Close the dialog and open Rename function group again.');
+      }
+      const staged = structuredClone(deck);
+      const renamed = renameFunctionGroup(staged, zone, name, new FormData(event.target).get('name'));
+      commitDeckSnapshot(deck, staged);
+      const groups = collapsedDeckGroups.get(deck);
+      const newKey = deckGroupKey(zone, 'role', renamed);
+      if (groups?.delete(deckGroupKey(zone, 'role', name))) groups.add(newKey);
+      closeDialog();
+      render();
+      const trigger = $(`[data-deck-group="${CSS.escape(newKey)}"] [popovertarget]`) ?? $('#editor-search');
+      trigger?.focus();
+      toast(`Renamed ${name} to ${renamed} in ${ZONES[zone]}.`);
+    } catch (error) {
+      const feedback = $('#rename-function-group-error');
+      feedback.hidden = false;
+      feedback.textContent = error.message;
+    }
+  };
 }
 function finishCardDrag() {
   cardDragPress=null;
@@ -1914,7 +1962,7 @@ $('#app').addEventListener('click',async e=>{
   const ownedRow=e.target.closest('[data-owned-row]');
   if(ownedRow && !e.target.closest('button,a,input,select,textarea,label')){collectionLotDialog(null,Number(ownedRow.dataset.ownedRow));return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
-  if(button.dataset.toggleDeckGroup!==undefined || button.dataset.copyDeckGroup!==undefined){await useDeckGroupControl(button);return;}
+  if(button.dataset.toggleDeckGroup!==undefined || button.dataset.copyDeckGroup!==undefined || button.dataset.renameDeckGroup!==undefined){await useDeckGroupControl(button);return;}
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
   if(button.dataset.clearCategory){clearFilterCategory(button.dataset.clearCategory);return;}

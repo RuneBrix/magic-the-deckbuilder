@@ -105,3 +105,113 @@ test('existing missing functions require review, preserve manual choices and sur
   await expect(dialog).toContainText('1 unassigned card entry (1 copy)');
   await dialog.getByRole('button',{name:'Cancel',exact:true}).press('Enter');
 });
+
+test('a scoped function group rename preserves variants and future Ramp defaults', async ({page,isMobile},testInfo) => {
+  const strongBack=resolved.find(card=>card.name==='Strong Back');
+  await page.route('**/api/search?**',route=>new URL(route.request().url()).searchParams.get('q')?.includes('Strong Back')
+    ? route.fulfill({json:{data:[strongBack],total_cards:1,has_more:false}}) : route.fallback());
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key));
+    const [command,visible,variant,hidden,other,land]=data.decks[0].cards;
+    visible.card.name='Visible rock';
+    visible.tags=['Ramp','Draw'];
+    visible.finish='regular';
+    Object.assign(variant,{card:{...visible.card,id:variant.card.id,collector_number:'2a'},qty:3,finish:'foil',tags:['Ramp']});
+    hidden.tags=['Ramp'];
+    hidden.qty=500;
+    other.tags=['Interaction'];
+    land.tags=['Lands'];
+    data.decks[0].cards=[command,visible,variant,hidden,other,{...visible,zone:'sideboard'}, {...land,zone:'maybeboard'}];
+    data.decks.push({...data.decks[0],id:'another-deck',name:'Another deck'});
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.reload();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  const groupBy=page.locator('#editor-group');
+  const options=page.getByRole('button',{name:'Group actions for Ramp · Main deck',exact:true});
+  const rename=page.getByRole('button',{name:'Rename function group…',exact:true});
+  const dialog=page.getByRole('dialog',{name:'Rename function group',exact:true});
+  const name=dialog.getByRole('textbox',{name:'Function name'});
+  const save=dialog.getByRole('button',{name:'Rename group',exact:true});
+  const filter=page.getByRole('searchbox',{name:'Filter cards'});
+  const activate=element=>isMobile ? element.tap() : element.press('Enter');
+  const before=await saved(page);
+
+  await activate(page.getByRole('button',{name:'Group actions for Creature · Main deck',exact:true}));
+  await expect(rename).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await groupBy.selectOption('role');
+  await activate(page.getByRole('button',{name:'Group actions for Lands · Maybeboard',exact:true}));
+  await expect(rename).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']){
+    await page.locator('#editor-layout').selectOption(layout);
+    await activate(options);
+    if(!isMobile){
+      await expect(page.getByRole('button',{name:'Copy cards',exact:true})).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(rename).toBeFocused();
+    }
+    await activate(rename);
+    await expect(name).toBeFocused();
+    await expect(name).toHaveValue('Ramp');
+    if(isMobile) await activate(dialog.getByRole('button',{name:'Cancel',exact:true}));
+    else await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(options).toBeFocused();
+  }
+  expect(await saved(page)).toEqual(before);
+
+  await filter.fill('Visible rock');
+  await activate(options);
+  await activate(rename);
+  await expect(dialog).toContainText('505 copies in the whole group, including cards hidden by the filter.');
+  await name.fill(' interaction ');
+  await activate(save);
+  await expect(dialog.getByRole('alert')).toContainText('already exists in this zone');
+  await name.fill('Mana rock');
+  await page.evaluate(()=>{
+    document.documentElement.style.fontSize='200%';
+    const persist=Storage.prototype.setItem;
+    window.restoreRenameStorage=()=>Storage.prototype.setItem=persist;
+    Storage.prototype.setItem=function(key,value){
+      if(key==='arcana.workspace.v2')throw new DOMException('Quota exceeded','QuotaExceededError');
+      return persist.call(this,key,value);
+    };
+  });
+  await activate(save);
+  await expect(dialog.getByRole('alert')).toContainText('Browser storage is full or unavailable');
+  await expect(name).toHaveValue('Mana rock');
+  expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+  await dialog.screenshot({path:testInfo.outputPath('rename-group-save-error.png')});
+  expect(await saved(page)).toEqual(before);
+  await page.evaluate(()=>window.restoreRenameStorage());
+  await activate(save);
+  await expect(dialog).toBeHidden();
+  const renamed=page.getByRole('button',{name:'Group actions for Mana rock · Main deck',exact:true});
+  await expect(renamed).toBeFocused();
+  await page.evaluate(()=>document.documentElement.style.fontSize='');
+  await filter.fill('');
+  const after=await saved(page);
+  expect(after.decks[0].cards).toEqual(before.decks[0].cards.map((entry,index)=>index>=1 && index<=3
+    ? {...entry,tags:['Mana rock',...entry.tags.slice(1)]} : entry));
+  expect(after.decks[1]).toEqual(before.decks[1]);
+  expect(after.collection).toEqual(before.collection);
+
+  await page.getByLabel('Deck actions for Smoke Garden',{exact:true}).click();
+  await page.getByRole('button',{name:'Import cards',exact:true}).click();
+  await page.getByRole('textbox',{name:'Decklist',exact:true}).fill('1 Inquisitive Glimmer');
+  await page.getByRole('button',{name:'Review import',exact:true}).click();
+  await page.getByRole('button',{name:'Import reviewed cards',exact:true}).click();
+  await page.getByRole('combobox',{name:'Quick add card'}).fill('Strong Back');
+  await activate(page.getByRole('option',{name:'Strong Back',exact:true}));
+  await expect(renamed).toBeVisible();
+  await expect(options).toBeVisible();
+  await expect(page.getByRole('button',{name:'Group actions for Ramp · Sideboard',exact:true})).toBeVisible();
+  await page.reload();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  const persisted=(await saved(page)).decks[0].cards;
+  expect(persisted.filter(entry=>entry.zone==='main' && entry.tags[0]==='Mana rock').map(entry=>entry.qty)).toEqual([2,3,500]);
+  expect(persisted.filter(entry=>entry.zone==='main' && entry.tags[0]==='Ramp').map(entry=>entry.card.name)).toEqual(['Inquisitive Glimmer','Strong Back']);
+});
