@@ -166,7 +166,8 @@ function render() {
   if(searchForm)stickyObserver?.observe(searchForm);
   bind();
   if(view==='settings')bindSettings();
-  if (statistics) bindStatistics($('#deck-statistics'), statistics);
+  if (statistics) bindStatistics($('#deck-statistics'), statistics,
+    async (ids, isCurrent) => (await fetchCollection(ids, 'ids', isCurrent)).cards);
   if(focusSelector) {const target=document.querySelector(focusSelector)||document.querySelector('.deck-tabs [aria-selected="true"]');target?.focus({preventScroll:true});}
 }
 function queryError() {

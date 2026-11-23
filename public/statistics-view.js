@@ -1,5 +1,5 @@
-import { drawProbability } from './core.js';
-import { esc, mana } from './view-utils.js';
+import { drawProbability, imageFor, safeUrl } from './core.js';
+import { esc, mana, printingLabel } from './view-utils.js';
 
 const breakdowns = {
   all: 'All nonlands', color: 'Color', type: 'Card type', function: 'Primary function',
@@ -30,7 +30,7 @@ function groupOptions(groups, by, selected) {
 function curve(values, label = 'Mana curve') {
   const max = Math.max(1, ...values);
   const bucket = i => i === 7 ? '7+' : i;
-  return `<div class="curve" role="img" aria-label="${esc(label)}: ${values.map((n, i) => `${bucket(i)} mana: ${n}`).join(', ')}">${values.map((n, i) => `<div class="curve-column"><span>${n || ''}</span><div style="height:${n ? Math.max(4, n / max * 54) : 2}px" class="${n ? 'filled' : ''}"></div><small>${bucket(i)}</small></div>`).join('')}</div>`;
+  return `<div class="curve" role="img" aria-label="${esc(label)}: ${values.map((n, i) => `${bucket(i)} mana: ${n}`).join(', ')}">${values.map((n, i) => `<div class="curve-column"><span>${n || ''}</span><div${n ? ` class="filled" style="--bar-fraction:${n / max}"` : ''}></div><small>${bucket(i)}</small></div>`).join('')}</div>`;
 }
 
 function curveChart(s, by, groups, selected) {
@@ -65,10 +65,49 @@ function manaPie(title, { colors, unavailable }, empty) {
 function tokenPanel({ references, unavailable }, scope) {
   const tokens = [...references].sort(([, a], [, b]) => a.name.localeCompare(b.name, 'en') || a.type.localeCompare(b.type, 'en'));
   return `<section class="stat-tool token-tool"><h3>Referenced tokens</h3>
-    <p class="hint">Scryfall token references for ${scope}. Open a token to see its exact printing and art. Gameplay may create additional tokens.</p>
-    ${tokens.length ? `<ul class="token-list">${tokens.map(([id, token]) => `<li><a href="https://scryfall.com/card/${id}" target="_blank" rel="noreferrer">${esc(token.name)}</a><span>${esc(token.type)}</span></li>`).join('')}</ul>` : `<p>${unavailable ? 'No token references in the available data.' : 'No referenced tokens.'}</p>`}
+    <p class="hint">Scryfall token references for ${scope}. Gameplay may create additional tokens.</p>
+    ${tokens.length ? `<ul class="token-list">${tokens.map(([id, token]) => `<li data-token-printing="${id}">
+      <a href="https://scryfall.com/card/${id}" target="_blank" rel="noreferrer" aria-label="${esc(token.name)} on Scryfall">
+        <span class="token-art">Loading artwork…</span>
+        <strong class="token-name">${esc(token.name)}</strong>
+        <span class="token-printing"></span>
+      </a>
+      <span>${esc(token.type)}</span>
+    </li>`).join('')}</ul>` : `<p>${unavailable ? 'No token references in the available data.' : 'No referenced tokens.'}</p>`}
     ${unavailable ? `<p class="hint">Token reference data unavailable for ${unavailable} ${unavailable === 1 ? 'copy' : 'copies'}.</p>` : ''}
   </section>`;
+}
+
+async function bindTokenArtwork(root, loadPrintings) {
+  const tiles = [...root.querySelectorAll('[data-token-printing]')];
+  if (!tiles.length) return;
+  const ids = tiles.map(tile => tile.dataset.tokenPrinting);
+  let printings;
+  try {
+    printings = await loadPrintings(ids, () => root.isConnected);
+  } catch {
+    if (root.isConnected) for (const tile of tiles) tile.querySelector('.token-art').textContent = 'Could not load artwork';
+    return;
+  }
+  if (!root.isConnected) return;
+  const byId = new Map(printings.map(card => [card.id, card]));
+  for (const tile of tiles) {
+    const printing = byId.get(tile.dataset.tokenPrinting);
+    const art = tile.querySelector('.token-art');
+    const name = tile.querySelector('.token-name').textContent;
+    if (printing) {
+      const label = printingLabel(printing);
+      tile.querySelector('.token-printing').textContent = label;
+      tile.querySelector('a').setAttribute('aria-label', `${name} · ${label} on Scryfall`);
+    }
+    const src = printing && !['missing', 'placeholder'].includes(printing.image_status) && safeUrl(imageFor(printing), true);
+    if (!src) {
+      art.textContent = 'Artwork unavailable';
+      continue;
+    }
+    art.innerHTML = `<img src="${esc(src)}" alt="${esc(name)}" width="488" height="680" loading="lazy">`;
+    art.querySelector('img').addEventListener('error', () => { art.textContent = 'Artwork unavailable'; }, { once: true });
+  }
 }
 
 export function statPanel(s, deck, previous) {
@@ -130,7 +169,7 @@ function chanceLabel(chance) {
   return percent.format(chance);
 }
 
-export function bindStatistics(root, s) {
+export function bindStatistics(root, s, loadTokenPrintings) {
   const find = id => root.querySelector('#' + id);
   const by = find('curve-breakdown'), group = find('curve-group');
   const draws = find('draw-count'), matches = find('draw-matches');
@@ -172,4 +211,5 @@ export function bindStatistics(root, s) {
     }
   });
   updateDraw();
+  void bindTokenArtwork(root, loadTokenPrintings);
 }
