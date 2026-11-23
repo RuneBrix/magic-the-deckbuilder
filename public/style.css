@@ -738,6 +738,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 @media (pointer:coarse){.tag-choice .tag-option,.tag-browse{min-height:44px}}
 #related-dialog{width:720px}
 #related-dialog:has(~ #dialog:modal)::backdrop{background:transparent}
+#dialog:has(~ #tag-search-confirmation:modal)::backdrop{background:transparent}
 .detail-back{min-height:44px;margin-bottom:12px;padding-right:34px}
 .function-discovery h3{margin-top:14px;font-size:20px;text-transform:capitalize;overflow-wrap:anywhere}
 .function-discovery h4,.tag-relations label{font-size:13px;font-weight:700}
@@ -840,7 +841,12 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .detail-legality h3{font:600 12px/1.4 "Public Sans",sans-serif;margin:18px 0 8px}
 .detail-legality .legality-badges span{font-size:10px}
 .detail-legality .is-unknown{background:var(--soft);color:var(--muted)}
-.printing-browser,.detail-deck-context{border-top:1px solid var(--line);margin-top:18px;padding-top:15px}
+.detail-tags,.printing-browser,.detail-deck-context{border-top:1px solid var(--line);margin-top:18px;padding-top:15px}
+.detail-tags>summary{font-weight:600;min-height:36px}
+.detail-tags>summary,.detail-tags button,.detail-tags p,#tag-search-warning{font-size:.8125rem}
+.detail-tags ul{list-style:none;padding:0;margin-bottom:0}
+.detail-tags li{max-width:100%}
+@media(max-width:600px){.detail-tags>summary,#tag-search-confirmation .settings-actions button{min-height:44px}}
 .printing-browser h3,.detail-deck-context h3{font-family:Newsreader,serif;font-size:21px;font-weight:500;margin-bottom:12px}
 .printing-browser label,.deck-card-printings label{display:block;margin:0 0 7px}
 .printing-browser select,.deck-card-printings select{width:100%;min-width:0;background:var(--ground);color:var(--ink);border:1px solid var(--line);padding:10px;border-radius:3px;text-transform:none}

@@ -134,7 +134,7 @@ test('text import and unfiltered Explore use the same defaults and retain printi
   expect([entry.qty,entry.finish,entry.tags[0]]).toEqual([1,'regular','Removal']);
   await page.locator('#editor-layout').selectOption('text-vertical');
   await expect(page.locator('.deck-entry').filter({has:page.locator(`[data-inspect="${beast.id}"]`)}).locator('.deck-card-variant')).toHaveText('TST · #1');
-  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('button',{name:'Search cards',exact:true}).click();
   await page.locator('#raw').fill('Beast Within');
   await page.locator('#search-form').getByRole('button',{name:'Search',exact:true}).click();
   await page.locator(`[data-add="${beast.id}"]`).click();

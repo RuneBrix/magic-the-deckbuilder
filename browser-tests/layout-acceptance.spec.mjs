@@ -79,7 +79,7 @@ test('optional zones transition in every layout and tracker without changing oth
     }
   }
   expect(await savedCards(page)).toEqual(original);
-  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('button',{name:'Search cards',exact:true}).click();
   await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('smoke-deck');
   const tracker=page.locator('#deck-tracker');
   for(const zone of ['Sideboard','Maybeboard']){
@@ -96,7 +96,7 @@ test('optional zones transition in every layout and tracker without changing oth
     await expect(heading).toHaveCount(0);
   }
   expect(await savedCards(page)).toEqual(original);
-  await stickyNavigation(page,'Explore cards');
+  await stickyNavigation(page,'Search cards');
   await page.screenshot({path:testInfo.outputPath('optional-zones-tracker.png')});
 });
 
@@ -149,7 +149,7 @@ test('sticky navigation keeps long surfaces, focus, overlays and trackers reacha
   await expect(discussion).toBeFocused();
   expect(await discussion.evaluate(el=>el.getBoundingClientRect().top>=document.querySelector('.workspace-nav').getBoundingClientRect().bottom)).toBe(true);
   await page.getByRole('tab',{name:'Cards',exact:true}).click();
-  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('button',{name:'Search cards',exact:true}).click();
   await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('smoke-deck');
   await page.route('**/api/search?**',route=>route.fulfill({json:{data:cards,total_cards:cards.length,has_more:false}}));
   await page.locator('#raw').fill('Smoke');
@@ -164,7 +164,7 @@ test('sticky navigation keeps long surfaces, focus, overlays and trackers reacha
     const bottom=await page.locator('.workspace-nav').evaluate(el=>el.getBoundingClientRect().bottom);
     expect(top).toBeCloseTo(bottom,0);
   }
-  await stickyNavigation(page,'Explore cards');
+  await stickyNavigation(page,'Search cards');
   await page.screenshot({path:testInfo.outputPath('navigation-tracker.png')});
   if(isMobile){
     const lastCopyControl=page.locator('#deck-tracker [data-zone-plus]').last();
@@ -178,6 +178,6 @@ test('sticky navigation keeps long surfaces, focus, overlays and trackers reacha
   // Measure the wrapped header after a real resize rather than relying on a fixed CSS height.
   await page.setViewportSize({width:isMobile?540:760,height:720});
   await page.evaluate(()=>scrollTo(0,500));
-  await stickyNavigation(page,'Explore cards');
+  await stickyNavigation(page,'Search cards');
   await expect.poll(()=>page.evaluate(()=>Math.abs(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-height'))-document.querySelector('.workspace-nav').getBoundingClientRect().height))).toBeLessThan(1);
 });

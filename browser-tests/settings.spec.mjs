@@ -30,15 +30,15 @@ async function checkColors(page) {
 
 test('Settings returns to every workflow and keeps deck, search and collection state',async({page})=>{
   const original=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.workspace.v2')).collection);
-  for(const name of ['My decks','Explore cards','Collection']) {
+  for(const name of ['My decks','Search cards','Collection']) {
     await page.getByRole('button',{name,exact:true}).click();
-    if(name==='Explore cards')await page.locator('#raw').fill('t:creature');
+    if(name==='Search cards')await page.locator('#raw').fill('t:creature');
     await settings(page).press('Enter');
     await expect(page.locator('#settings-title')).toBeFocused();
     await expect(settings(page)).toHaveAttribute('aria-current','page');
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await page.getByRole('button',{name:'Back to '+name,exact:true}).click();
-    if(name==='Explore cards')await expect(page.locator('#raw')).toHaveValue('t:creature');
+    if(name==='Search cards')await expect(page.locator('#raw')).toHaveValue('t:creature');
     await expect(settings(page)).toBeFocused();
   }
   await page.getByRole('button',{name:'My decks',exact:true}).click();

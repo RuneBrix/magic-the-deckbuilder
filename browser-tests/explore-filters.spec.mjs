@@ -3,7 +3,7 @@ import { cards, prepareApp } from './fixtures.mjs';
 
 test.beforeEach(async ({ page }) => {
   await prepareApp(page);
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
 });
 
 test('empty Explore panels balance their headings and show function selections only when present', async ({ page }, testInfo) => {

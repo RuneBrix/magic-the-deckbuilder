@@ -3,7 +3,7 @@ import { esc, mana, printingLabel, icon, money, currencySymbol } from './view-ut
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
-import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, suggestedFunctions, unassignedFunctionSuggestions, ownedPrintingPlan } from './core.js';
+import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, functionMemberships, suggestedFunctions, unassignedFunctionSuggestions, ownedPrintingPlan } from './core.js';
 import { cheapestPrintings, refreshPriceQuotes, cheapestDeckPlan } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -157,7 +157,7 @@ function render() {
   const previousStatistics = statistics ? $('#deck-statistics') : null;
   $('#app').style.setProperty('--tracker-width', tracker.width+'px');
   $('#app').classList.toggle('has-tracker', view==='explore' && Boolean(d) && tracker.visible);
-  $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-home data-view="decks" aria-label="Arcana home — My decks"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Explore cards</button><button data-view="collection" class="nav-item ${view==='collection'?'selected':''}" ${view==='collection'?'aria-current="page"':''}>Collection</button><button class="nav-item ${view==='settings'?'selected':''}" data-action="settings" ${view==='settings'?'aria-current="page"':''}>Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
+  $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-home data-view="decks" aria-label="Arcana home — My decks"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Search cards</button><button data-view="collection" class="nav-item ${view==='collection'?'selected':''}" ${view==='collection'?'aria-current="page"':''}>Collection</button><button class="nav-item ${view==='settings'?'selected':''}" data-action="settings" ${view==='settings'?'aria-current="page"':''}>Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
   <main>${storageError ? `<div class="storage-warning" role="alert">${esc(storageError)} <button data-action="backup">Export backup</button></div>` : ''}${view === 'decks' ? library() : view === 'deck' ? deckWorkspace(d, statistics, previousStatistics) : view==='collection'?collectionPage(collection,collectionOptions):view==='settings'?settingsPage():explorer()}</main>${view === 'explore' && d && tracker.visible ? `<button class="mobile-deck-jump primary" data-action="jump-deck">View tracker · ${esc(d.name)}</button><aside id="deck-tracker" class="deck-panel" aria-label="Tracked deck: ${esc(d.name)}"><div id="tracker-resize" role="separator" tabindex="0" aria-label="Resize deck tracker" aria-orientation="vertical" aria-controls="deck-tracker" aria-valuemin="280" aria-valuemax="480" aria-valuenow="${tracker.width}" aria-valuetext="${tracker.width} pixels, subject to available space" title="Drag to resize. Left widens; Right narrows; Home and End set limits."></div>${deckPanel(d)}</aside>` : ''}`;
   updateStickyHeights();
   stickyObserver?.disconnect();
@@ -297,7 +297,7 @@ function searchPanels() {
 }
 function explorer() {
   const d=current();
-  return `<div class="explorer"><div class="page-heading"><div><h1>Explore cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Default destination: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div>
+  return `<div class="explorer"><div class="page-heading"><div><h1>Search cards</h1><p>Search by name, rules text, types or function.</p></div></div><div class="exploration-target"><label for="tracked-deck">Track deck<select id="tracked-deck" ${d?'':'aria-describedby="tracker-hint"'}><option value="">No tracked deck</option>${decks.map(deck=>`<option value="${esc(deck.id)}" ${deck.id===tracker.id?'selected':''}>${esc(deck.name)}</option>`).join('')}</select></label>${d?`<span>Default destination: <strong>${esc(d.name)}</strong> · Main deck</span><button id="toggle-tracker" class="text-button" data-action="toggle-tracker" aria-expanded="${tracker.visible}" aria-controls="deck-tracker">${tracker.visible?'Hide':'Show'} tracker</button>`:'<p id="tracker-hint">Browse freely. Choose a destination when adding a card.</p>'}</div>
   <div class="search-setup">
     <form id="search-form"><label class="search-label" for="raw">Scryfall query</label><div class="search-box">${icon('search',22)}<input id="raw" name="raw" aria-label="Search cards or use Scryfall syntax" placeholder="Card name or Scryfall query…" value="${esc(filters.query)}" maxlength="1500" aria-describedby="query-error query-notes"><button id="search-submit" class="primary" type="submit">Search ${icon('arrow',16)}</button></div><p id="query-error" class="query-error" role="alert">${esc(queryError())}</p><button type="button" class="text-button reset-query" data-action="reset">Clear search and filters</button></form>
     <div id="query-notes">${queryNotes()}</div>${searchPanels()}
@@ -1600,9 +1600,9 @@ function clearSearch(){
   tagPage=1;
   resetResults();
 }
-function resetExplore(){
+function resetExplore({keepTracker=false}={}){
   clearSearch();
-  tracker.id='';
+  if(!keepTracker)tracker.id='';
   filtersOpen=tagsOpen=broadeningOpen=false;
   openFilterFamilies.clear();
   page=1;
@@ -1997,7 +1997,7 @@ $('#app').addEventListener('click',async e=>{
   if(action==='add-owned')collectionLotDialog();
   if(action==='import-collection')collectionImport();
   if(action==='clear-collection')clearCollection();
-  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Welcome to Arcana, a place to turn card ideas into decks and keep track of the cards you own.</p><p>Start in <strong>My decks</strong>: create a deck or import a decklist, then add cards and arrange them by type or function. Statistics and Checks help you review your build.</p><p>Use <strong>Explore cards</strong> to find your next card by name, rules text or function. Open a card for a closer look, choose a printing and add it to your deck.</p><p>In <strong>Collection</strong>, record the copies you own or upload a card list. A deck’s Ownership &amp; costs shows what you have and what is missing.</p><p>Make Arcana your own in <strong>Settings</strong>. Save a workspace copy there to keep your decks and collection together or take them to another device.</p>`);
+  if(action==='help')showDialog(`<h2>A little guide to Arcana</h2><p>Welcome to Arcana, a place to turn card ideas into decks and keep track of the cards you own.</p><p>Start in <strong>My decks</strong>: create a deck or import a decklist, then add cards and arrange them by type or function. Statistics and Checks help you review your build.</p><p>Use <strong>Search cards</strong> to find your next card by name, rules text or function. Open a card for a closer look, choose a printing and add it to your deck.</p><p>In <strong>Collection</strong>, record the copies you own or upload a card list. A deck’s Ownership &amp; costs shows what you have and what is missing.</p><p>Make Arcana your own in <strong>Settings</strong>. Save a workspace copy there to keep your decks and collection together or take them to another device.</p>`);
 });
 async function api(url, options) { const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw Object.assign(new Error(data.error || 'Request failed.'),{status:r.status,retryAfter:data.retryAfter});return data; }
 const noCardsFound=error=>error.status===404&&/no cards|0 cards|didn.t match any cards/i.test(error.message);
@@ -2053,7 +2053,7 @@ function closeOnBackdrop(e) {
   const r=e.target.getBoundingClientRect();
   if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();
 }
-for (const id of ['#dialog','#related-dialog']) $(id).addEventListener('click',closeOnBackdrop);
+for (const id of ['#dialog','#related-dialog','#tag-search-confirmation']) $(id).addEventListener('click',closeOnBackdrop);
 function deckForm(deck,after) {
   if(!deck&&decks.length>=200){toast('Maximum 200 decks per workspace.');return;}
   let commander=null;
@@ -2170,7 +2170,7 @@ function settings() {
   view='settings';render();globalThis.scrollTo?.(0,0);$('#settings-title').focus();
 }
 function settingsPage() {
-  const destination=settingsReturn==='deck' ? current()?.name||'My decks' : ({decks:'My decks',explore:'Explore cards',collection:'Collection'})[settingsReturn]||'My decks';
+  const destination=settingsReturn==='deck' ? current()?.name||'My decks' : ({decks:'My decks',explore:'Search cards',collection:'Collection'})[settingsReturn]||'My decks';
   return `<div class="settings-page"><button class="text-button settings-back" data-action="settings-back">Back to ${esc(destination)}</button><header class="page-heading"><h1 id="settings-title" tabindex="-1">Settings</h1></header><section aria-labelledby="appearance-title"><h2 id="appearance-title">Appearance</h2><div class="appearance-controls"><label class="theme-setting">Appearance<select id="theme">${[['light','Light'],['dark','Dark']].map(([v,l])=>`<option value="${v}" ${appearance()===v?'selected':''}>${l}</option>`).join('')}</select></label><label class="theme-setting">Palette<select id="palette">${PALETTES.map(([v,l])=>`<option value="${v}" ${palettes[appearance()]===v?'selected':''}>${l}</option>`).join('')}</select></label></div></section><section class="workspace-files"><h2>Portable workspace files</h2><p>Browser autosave keeps decks, collection and planning settings on this address and device. It does not update downloaded files.</p><p id="backup-status" role="status"></p><p id="backup-download-error" role="alert"></p><p>A file request starts a browser download; check Downloads to confirm it finished. If you cancel or cannot find it, request another copy.</p><div class="settings-actions"><button class="secondary" id="settings-backup">${icon('download',16)} Save workspace copy</button><button class="secondary" id="settings-restore">${icon('upload',16)} Open workspace file…</button></div><details class="backup-help"><summary>Move files and recover decks</summary><p>Save a complete JSON copy, then move it to your other device and use Open workspace file. Opening adds independent deck copies. A complete version 2 file also lets you explicitly keep or replace the current collection; collections are never silently combined.</p><p>An older file restores only deck snapshots and leaves the current collection unchanged. If browser saving fails, keep this page open and save a workspace copy before leaving.</p><p>Once Arcana is running, editing stored cards and opening or saving JSON work offline. Search, text imports, printing lookups, uncached images, legality and price refresh need internet. No account or cloud sync is used; external file-sync conflicts remain yours to resolve.</p></details></section></div>`;
 }
 function syncAppearanceControls() {
@@ -2232,6 +2232,44 @@ function mountPrintings(state, onSelect) {
 
 function printingState(card) {return {source:card,card,printings:[card],page:0,more:false};}
 
+function cardSourceTags(card) {
+  const tags=functionMemberships(card);
+  return `<details class="detail-tags" id="detail-tags">
+    <summary>Scryfall tags${tags.length?` · ${tags.length}`:''}</summary>
+    <p>Direct Oracle tags from the ${esc(TAG_CATALOG.updated.slice(0,10))} snapshot.</p>
+    ${tags.length?`<ul class="filter-chips" role="list">${tags.map(({id})=>`<li><button type="button" class="secondary" data-detail-tag="${esc(id)}" aria-label="Search cards tagged ${esc(tagName(id))}">${esc(tagName(id))}</button></li>`).join('')}</ul>`
+      :`<p>${card.oracle_id?'No direct tags recorded for this card in the snapshot.':'The saved card has no Oracle ID. Find it in Search cards to check for tags.'}</p>`}
+  </details>`;
+}
+
+function searchFromCardTag(trigger) {
+  const id=trigger.dataset.detailTag;
+  const start=()=>{
+    $('#dialog').onclose=null;
+    closeDialog();
+    const related=$('#related-dialog');
+    if(related.open)related.close();
+    resetExplore({keepTracker:true});
+    view='explore';
+    filters=parseQuery('otag:'+id);
+    render();
+    globalThis.scrollTo?.(0,0);
+    $('#raw').focus();
+    search(false,false,true);
+  };
+  const draft=view==='explore'?($('#raw')?.value ?? filters.query):filters.query;
+  if(!draft.trim()&&!tagSearch.trim()&&!loading&&!searched&&!resultContext){start();return;}
+
+  const dialog=$('#tag-search-confirmation');
+  showDialog(`<h2>Replace your current search?</h2><p id="tag-search-warning">Searching for <strong>${esc(tagName(id))}</strong> will clear your current query, filters and results.</p>
+    <div class="settings-actions"><button type="button" class="secondary" id="cancel-tag-search" autofocus>Cancel</button><button type="button" class="primary" id="confirm-tag-search">Search by tag</button></div>`,dialog);
+  $('#cancel-tag-search').onclick=()=>dialog.close();
+  $('#confirm-tag-search').onclick=()=>{dialog.close();start();};
+  dialog.onclose=()=>{
+    if(!dialog.open && $('#dialog').open)trigger.focus({preventScroll:true});
+  };
+}
+
 function showCardDetails(state, focus) {
   showDialog(`${state.relatedExample?'<button type="button" class="text-button detail-back" id="detail-back-related">Back to Related functions</button>':''}<div class="card-detail"><div id="detail-images" class="detail-images"></div>
     <div class="detail-information"><div id="detail-facts"></div>
@@ -2239,6 +2277,7 @@ function showCardDetails(state, focus) {
       <section class="detail-deck-context" aria-label="Collection and deck"><h3>Collection</h3><p id="detail-ownership"></p>
         <button class="secondary" id="detail-add-owned">Add this card to collection</button>
         <h3>Deck</h3><button class="primary" id="detail-add">Add card to deck</button></section>
+      ${cardSourceTags(state.source)}
     </div></div>`);
   function renderCard() {
     const c=state.card;
@@ -2261,6 +2300,10 @@ function showCardDetails(state, focus) {
     $('#detail-ownership').textContent=owned?`${owned} ${owned===1?'copy':'copies'} owned of this printing.`:'No copies owned of this printing.';
     $('#dialog').setAttribute('aria-label',c.name+' — Card details');
   }
+  $('#detail-tags').onclick=e=>{
+    const trigger=e.target.closest('[data-detail-tag]');
+    if(trigger)searchFromCardTag(trigger);
+  };
   $('#detail-add-owned').onclick=()=>collectionLotDialog(state.card,null,()=>showCardDetails(state,'#detail-add-owned'));
   $('#detail-add').onclick=()=>deckCardDialog(state.card,{
     deck:view==='deck'||view==='explore'?current():null,zone:state.zone,printings:state,back:()=>showCardDetails(state,'#detail-add'),

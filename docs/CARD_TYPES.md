@@ -11,7 +11,7 @@ Deck grouping, typed filters, free-text type/subtype matching, primary type stat
 - Typed filtering recognizes every applicable deck-facing type, while Statistics counts only the primary group. Those counts therefore sum to the included card total rather than double-counting multitype cards. Existing quantity weighting and zone exclusions remain intact.
 - Land totals and the nonland mana-value average use the same face policy. Bala Ged Recovery is a front-face Sorcery rather than a land merely because its back is Bala Ged Sanctuary.
 
-Invasion of Alara is Battle rather than its reverse-face Sorcery. Backup Plan is explicitly Conspiracy. Bonecrusher Giant remains Creature rather than Stomp's Instant type. Fire // Ice remains Instant. Type/subtype text search uses the selected type line; this does not change the unified Scryfall search language in Explore. Details still display the complete stored facts for both faces.
+Invasion of Alara is Battle rather than its reverse-face Sorcery. Backup Plan is explicitly Conspiracy. Bonecrusher Giant remains Creature rather than Stomp's Instant type. Fire // Ice remains Instant. Type/subtype text search uses the selected type line; this does not change the unified Scryfall search language in Search cards. Details still display the complete stored facts for both faces.
 
 ## Temporary face viewing (#97)
 

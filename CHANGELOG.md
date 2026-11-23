@@ -1,5 +1,10 @@
 # Changelog
 
+## Search cards and sourced tags — 2026-11-23
+
+- Open **Search cards** from the main navigation, with the same search, tracker and deck navigation behavior (#218).
+- Browse direct Scryfall Oracle tags in card details. Start a search from a tag, with confirmation before replacing the current query, filters and results (#217).
+
 ## Statistics charts and tokens — 2026-11-23
 
 - Scale the mana curve and both colored-mana charts with the available Statistics panel width (#239).
