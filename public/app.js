@@ -4,7 +4,7 @@ import { collectionPage, CONDITION_LABELS, collectionChoices } from './collectio
 import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
 import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, functionMemberships, suggestedFunctions, unassignedFunctionSuggestions, ownedPrintingPlan } from './core.js';
-import { isReservedFunctionGroup, renameFunctionGroup } from './core.js';
+import { isReservedFunctionGroup, renameFunctionGroup, deckExport, DECK_EXPORT_FIELDS, EXPORT_SECTIONS } from './core.js';
 import { cheapestPrintings, refreshPriceQuotes, cheapestDeckPlan } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -1146,8 +1146,11 @@ function deckList(d, full=false) {
             <button type="button" class="card-menu-trigger" aria-label="Group actions for ${scope}" popovertarget="${id}-actions">${icon('more',18)}</button>
             <div id="${id}-actions" class="deck-group-actions" popover>
               <p>${scope}</p>
-              <button type="button" data-copy-deck-group autofocus>${filtering ? 'Copy shown cards' : 'Copy cards'}</button>
-              ${grouping === 'role' && !isReservedFunctionGroup(group) ? '<button type="button" data-rename-deck-group>Rename function group…</button>' : ''}
+              <button type="button" data-deck-group-action="copy" autofocus>${filtering ? 'Copy shown cards' : 'Copy cards'}</button>
+              ${grouping === 'role' && !isReservedFunctionGroup(group) ? '<button type="button" data-deck-group-action="rename">Rename function group…</button>' : ''}
+              <button type="button" data-deck-group-action="export">${filtering ? 'Export shown cards…' : 'Export group…'}</button>
+              <button type="button" data-deck-group-action="grid">${filtering ? 'View shown cards as grid' : 'View group as grid'}</button>
+              <button type="button" class="danger" data-deck-group-action="remove">Remove group cards…</button>
             </div>
           </div>
           <p class="deck-group-price">${deckPriceTotal(items,d)}</p>
@@ -1177,14 +1180,21 @@ async function useDeckGroupControl(button) {
     return;
   }
   const [zone, grouping, name] = JSON.parse(key);
+  const action = button.dataset.deckGroupAction;
   group.querySelector('.deck-group-actions').hidePopover();
   group.querySelector('[popovertarget]').focus({preventScroll:true});
-  if (button.hasAttribute('data-rename-deck-group')) {
+  if (action === 'rename') {
     renameFunctionGroupDialog(deck, zone, name);
     return;
   }
-  const entries = deckEntries(deck, editorOptions).filter(entry =>
-    zoneFor(entry) === zone && deckGroupName(entry, grouping) === name);
+  const matches = entry => zoneFor(entry) === zone && deckGroupName(entry, grouping) === name;
+  const options = {...editorOptions};
+  const shown = () => deckEntries(deck, options).filter(matches);
+  const whole = () => deck.cards.filter(matches);
+  const entries = shown(), filtered = Boolean(options.search.trim());
+  if (action === 'export') return exportDialog(deck,{zone,grouping,name,entries,filtered});
+  if (action === 'grid') return deckGroupGrid(zone,name,entries,filtered);
+  if (action === 'remove') return removeDeckGroupDialog(deck,key,shown,whole);
   try {
     await navigator.clipboard.writeText(exportDeckText({cards:entries}, {zones:[zone], headings:false}));
     const copies = count({cards:entries});
@@ -1192,6 +1202,63 @@ async function useDeckGroupControl(button) {
   } catch {
     toast('Could not copy cards. Allow clipboard access in your browser and try again.');
   }
+}
+function deckGroupGrid(zone, name, entries, filtered) {
+  const copies = count({cards:entries});
+  showDialog(`<h2>${esc(name)} card grid</h2><p>${ZONES[zone]} · ${copies} ${copies === 1 ? 'copy' : 'copies'}${filtered ? ' matching the filter' : ''}</p>
+    <div class="deck-group-grid">${entries.map(({card,qty,finish}) => {
+      const image = safeUrl(imageFor(card),true);
+      const faces = faceAttributes(card);
+      const printing = [printingLabel(card),{regular:'Nonfoil',foil:'Foil',etched:'Etched'}[finish]].filter(Boolean).join(' · ');
+      return `<figure${faces}>${faces ? flipControl(card) : ''}
+        <div class="card-art">${image ? `<img src="${esc(image)}" alt="${esc(card.name)}" loading="lazy" draggable="false" width="488" height="680">` : `<span class="entry-art-fallback">Artwork unavailable</span>`}</div>
+        <figcaption>${qty} × ${esc(card.name)}<small>${esc(printing)}</small></figcaption>
+      </figure>`;
+    }).join('')}</div>`);
+  for (const flip of $('#dialog').querySelectorAll('[data-flip-card]')) {
+    flip.onclick = () => showCardFace(flip.closest('figure'),flip.getAttribute('aria-pressed') !== 'true');
+  }
+}
+function removeDeckGroupDialog(deck, key, shown, whole) {
+  const [zone,,name] = JSON.parse(key);
+  const shownEntries = shown(), wholeEntries = whole();
+  const shownCount = count({cards:shownEntries}), wholeCount = count({cards:wholeEntries});
+  const copyLabel = qty => `${qty} ${qty === 1 ? 'copy' : 'copies'}`;
+  const signature = entries => JSON.stringify(entries.map(entry => [entryKey(entry),entry.card.id,entry.qty]));
+  const shownSignature = signature(shownEntries), wholeSignature = signature(wholeEntries);
+  showDialog(`<h2>Remove group cards?</h2><p class="group-remove-target">${esc(name)} · ${ZONES[zone]} · ${esc(deck.name)}</p>
+    ${shownCount === wholeCount ? `<p>Remove ${copyLabel(wholeCount)} from the whole group.</p>` : `<label>Cards to remove<select id="group-remove-scope">
+      <option value="shown">Shown cards (${copyLabel(shownCount)})</option>
+      <option value="whole">Whole group (${copyLabel(wholeCount)})</option>
+    </select></label>`}
+    <div class="workspace-actions"><button id="keep-group-cards" class="secondary" autofocus>Keep cards</button>
+    <button id="remove-group-cards" class="danger">Remove ${copyLabel(shownCount)}</button></div>
+    <p id="remove-group-error" class="query-error" role="alert" hidden></p>`);
+  const scope = $('#group-remove-scope');
+  const button = $('#remove-group-cards');
+  $('#keep-group-cards').onclick = closeDialog;
+  if (scope) scope.onchange = () => { button.textContent = `Remove ${copyLabel(scope.value === 'whole' ? wholeCount : shownCount)}`; };
+  button.onclick = () => {
+    const all = !scope || scope.value === 'whole';
+    try {
+      const currentEntries = all ? whole() : shown();
+      if (current() !== deck || signature(currentEntries) !== (all ? wholeSignature : shownSignature)) {
+        throw Error('This group changed. Close this dialog and review the group again.');
+      }
+      const removed = new Set(currentEntries);
+      const staged = {...deck,cards:deck.cards.filter(entry => !removed.has(entry))};
+      commitDeckSnapshot(deck,staged);
+      closeDialog();
+      render();
+      const trigger = $(`[data-deck-group="${CSS.escape(key)}"] [popovertarget]`) ?? $('#editor-search');
+      trigger?.focus();
+      toast(`Removed ${copyLabel(all ? wholeCount : shownCount)} from ${name} · ${ZONES[zone]}.`);
+    } catch (error) {
+      const feedback = $('#remove-group-error');
+      feedback.hidden = false;
+      feedback.textContent = error.message;
+    }
+  };
 }
 function renameFunctionGroupDialog(deck, zone, name) {
   const members = () => deck.cards.filter(entry => zoneFor(entry) === zone && entry.tags[0] === name);
@@ -1632,19 +1699,58 @@ function deleteDeck(deck) {
   $('#confirm-delete').onclick=()=>{decks=decks.filter(d=>d.id!==deck.id);if(rememberedDeck===deck.id)rememberedDeck='';if(active===deck.id){active=decks[0]?.id;if(view==='deck')view='decks';}if(tracker.id===deck.id){tracker.id='';saveTracker();}save();$('#dialog').close();render();$('#library-title')?.focus();toast('Deck deleted');};
   $('#cancel-delete').focus();
 }
-function exportDialog(deck) {
-  showDialog(`<h2>Export ${esc(deck.name)}</h2><form id="export-options"><fieldset class="planning-scope"><legend>Include zones</legend><div>${Object.entries(ZONES).map(([zone,label])=>`<label><input type="checkbox" id="export-zone-${zone}" checked> ${label}</label>`).join('')}</div></fieldset><label class="export-check"><input type="checkbox" id="export-missing"> Only copies missing from Collection</label><div class="export-format"><label class="export-check"><input type="checkbox" id="export-headings" checked> Zone headings</label><label class="export-check"><input type="checkbox" id="export-quantities" checked> Quantities</label></div><p id="export-status" role="status"></p><label>Text decklist<textarea id="export-preview" rows="7" readonly></textarea></label><button class="primary" id="export-text" type="button">Download text decklist</button></form><details class="planning-help"><summary>Text format and ownership</summary><p>Missing copies use this deck’s ownership matching and allocate Collection copies across the selected export zones. Text includes only the selected names, quantities and headings. Printing details, functions, companion designation and brackets require JSON.</p></details><div class="export-backup"><button class="text-button" id="export-json">Complete JSON backup</button></div>`);
-  const options=()=>({zones:Object.keys(ZONES).filter(zone=>$('#export-zone-'+zone).checked),headings:$('#export-headings').checked,quantities:$('#export-quantities').checked,missingOnly:$('#export-missing').checked,collection});
-  const update=()=>{
-    const selected=options(),text=exportDeckText(deck,selected);
-    $('#export-preview').value=text;$('#export-text').disabled=!text;
-    $('#export-status').textContent=!selected.zones.length?'Select at least one zone.':!text?(selected.missingOnly?'No missing copies in the selected zones.':'No cards in the selected zones.'):`${selected.missingOnly?'Missing copies':'All copies'} · ${selected.zones.map(zone=>ZONES[zone]).join(', ')}`;
+function exportDialog(deck, group) {
+  const grouping = group?.grouping ?? (view === 'deck' && current() === deck ? editorOptions.group : 'type');
+  const categoryKind = grouping === 'role' ? 'role' : 'type';
+  const categories = [...new Set(deck.cards.map(entry => deckGroupName(entry,categoryKind)))].sort((a,b) => a.localeCompare(b,'en'));
+  const title = group?.name ?? deck.name;
+  const copies = group ? count({cards:group.entries}) : 0;
+  showDialog(`<h2>Export ${esc(title)}</h2>${group ? `<p>${ZONES[group.zone]} · ${copies} ${copies === 1 ? 'copy' : 'copies'} ${group.filtered ? 'matching the filter' : 'in the whole group'}</p>` : ''}
+    <form id="export-options">
+      ${group ? '' : `<fieldset class="planning-scope"><legend>Include zones</legend><div>${Object.entries(ZONES).map(([zone,label]) => `<label><input type="checkbox" name="zone" value="${zone}" checked> ${label}</label>`).join('')}</div></fieldset>`}
+      <div class="export-selectors">
+        <label>Format<select id="export-file-format" autofocus><option value="txt"${group ? '' : ' selected'}>Text (.txt)</option><option value="csv"${group ? ' selected' : ''}>CSV (.csv)</option></select></label>
+        <label>Collection status<select id="export-ownership"><option value="all">All copies</option><option value="owned">Owned copies</option><option value="missing">Missing copies</option></select></label>
+        <label>Section headings<select id="export-section"><option value="none">None</option>${Object.entries(EXPORT_SECTIONS).map(([key,label]) => `<option value="${key}"${key === 'zone' && !group ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+        <label>Sort rows<select id="export-sort"><option value="stored">${group ? 'Group order' : 'Deck order'}</option><option value="name">Card name (A–Z)</option><option value="quantity">Most copies first</option></select></label>
+        ${group ? '' : `<label>Categories by ${EXPORT_SECTIONS[categoryKind].toLowerCase()}<select id="export-category-mode"><option value="all">All categories</option><option value="include">Include selected</option><option value="exclude">Exclude selected</option></select></label>`}
+      </div>
+      ${group ? '' : `<fieldset class="planning-scope" id="export-categories" hidden><legend>Select categories</legend><div>${categories.map((label,i) => `<label><input type="checkbox" name="category" value="${i}"> ${esc(label)}</label>`).join('') || '<p class="hint">No categories in this deck.</p>'}</div></fieldset>`}
+      <details class="planning-help export-fields"><summary>Fields to export</summary><fieldset class="planning-scope" aria-label="Fields to export"><div>${Object.entries(DECK_EXPORT_FIELDS).map(([key,label]) => `<label><input type="checkbox" name="field" value="${key}"${group || key === 'name' || key === 'quantity' ? ' checked' : ''}> ${label}</label>`).join('')}</div></fieldset></details>
+      <div><label>Example row<textarea id="export-preview" rows="3" readonly></textarea></label>
+      <p id="export-status" role="status"></p></div>
+      <div class="workspace-actions"><button class="primary" id="export-download" type="button">Download ${group ? 'CSV' : 'TXT'}</button>${group ? '' : '<button class="text-button" id="export-json" type="button">Complete JSON backup</button>'}</div>
+    </form>
+    <details class="planning-help"><summary>Format and ownership help</summary><p>Sections set the outer order. Sorting applies within each section. CSV puts the section in its first column.</p><p>Owned and missing copies use this deck’s ownership matching across the selected cards and zones. Use complete JSON for recovery. The decklist importer reads plain text with card names, quantities and zone headings.</p></details>`);
+  const form = $('#export-options');
+  const checked = name => [...form.querySelectorAll(`input[name="${name}"]:checked`)].map(input => input.value);
+  const categoryMode = group ? null : $('#export-category-mode');
+  const format = $('#export-file-format');
+  const downloadButton = $('#export-download');
+  let output;
+  const update = () => {
+    const zones = group ? [group.zone] : checked('zone');
+    const selections = checked('category').map(index => categories[index]);
+    const fields = checked('field'), ownership = $('#export-ownership').value;
+    if (categoryMode) $('#export-categories').hidden = categoryMode.value === 'all';
+    output = deckExport(deck, {zones,entries:group?.entries,categoryKind,categoryMode:categoryMode?.value ?? 'all',categories:selections,
+      section:$('#export-section').value,sort:$('#export-sort').value,format:format.value,fields,ownership,collection});
+    $('#export-preview').value = output.example;
+    downloadButton.disabled = !output.text;
+    downloadButton.textContent = format.value === 'csv' ? 'Download CSV' : 'Download TXT';
+    const status = $('#export-status');
+    status.textContent = output.text ? '' : !zones.length ? 'Select at least one zone.' : !fields.length ? 'Select at least one field.' :
+      categoryMode?.value === 'include' && !selections.length ? 'Select at least one category to include.' :
+      ownership === 'missing' ? 'No missing copies match this selection.' : ownership === 'owned' ? 'No owned copies match this selection.' : 'No cards match this selection.';
   };
-  $('#export-options').onchange=update;
-  $('#export-options').onsubmit=e=>e.preventDefault();
-  $('#export-json').onclick=()=>saveWorkspaceCopy([deck],deck.name+'.json');
-  $('#export-text').onclick=()=>{const text=exportDeckText(deck,options());if(text)download(deck.name+'.txt',text,'text/plain');};
-  update();$('#export-text').focus();
+  form.onchange = update;
+  form.onsubmit = event => event.preventDefault();
+  if (!group) $('#export-json').onclick = () => saveWorkspaceCopy([deck],deck.name+'.json');
+  downloadButton.onclick = () => {
+    update();
+    if (output.text) download(`${group ? `${deck.name} - ${title}` : title}.${format.value}`,output.text,format.value === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8');
+  };
+  update();
 }
 
 function readFilters() {
@@ -1962,7 +2068,7 @@ $('#app').addEventListener('click',async e=>{
   const ownedRow=e.target.closest('[data-owned-row]');
   if(ownedRow && !e.target.closest('button,a,input,select,textarea,label')){collectionLotDialog(null,Number(ownedRow.dataset.ownedRow));return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
-  if(button.dataset.toggleDeckGroup!==undefined || button.dataset.copyDeckGroup!==undefined || button.dataset.renameDeckGroup!==undefined){await useDeckGroupControl(button);return;}
+  if(button.dataset.toggleDeckGroup!==undefined || button.dataset.deckGroupAction){await useDeckGroupControl(button);return;}
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
   if(button.dataset.clearCategory){clearFilterCategory(button.dataset.clearCategory);return;}

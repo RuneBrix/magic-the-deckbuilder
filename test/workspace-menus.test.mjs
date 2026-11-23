@@ -46,6 +46,33 @@ test('menu actions target their named deck and close before a dialog; cancel del
   assert.doesNotThrow(()=>core.validateBackup(JSON.parse(vm.runInContext('JSON.stringify(decks)',w.context))));
 });
 
+test('whole-group removal rejects changed quantities and commits only the reviewed zone on reopening', () => {
+  const d=editorDeck();
+  d.cards.push({card:editorCard('Hidden card','Sorcery'),qty:3,tags:['Removal'],zone:'main'},
+    {...d.cards[1],zone:'sideboard'});
+  const w=workspace({savedDecks:JSON.stringify([d])});
+  w.context.CSS={escape:value=>value};
+  vm.runInContext("openDeck('editor')",w.context);
+  const open=()=>vm.runInContext(`{
+    const deck=current();
+    const group=()=>deck.cards.filter(entry=>zoneFor(entry)==='main' && primaryRole(entry)==='Removal');
+    removeDeckGroupDialog(deck,deckGroupKey('main','role','Removal'),()=>group().slice(0,1),group);
+  }`,w.context);
+  open();
+  w.node('#group-remove-scope').value='whole';
+  w.node('#group-remove-scope').onchange();
+  assert.equal(w.node('#remove-group-cards').textContent,'Remove 5 copies');
+  vm.runInContext("current().cards.find(entry=>entry.card.name==='Hidden card').qty=4",w.context);
+  w.node('#remove-group-cards').onclick();
+  assert.match(w.node('#remove-group-error').textContent,/group changed/);
+  assert.equal(w.writes.length,0);
+  open();
+  w.node('#remove-group-cards').onclick();
+  assert.equal(w.writes.length,1);
+  assert.deepEqual(JSON.parse(w.writes[0][1]).decks[0].cards.map(entry=>[entry.card.name,entry.zone,entry.qty]),
+    [['Leader','command',1],['Ramp spell','sideboard',2]]);
+});
+
 test('card action menu scopes moves and details to the chosen entry and supports keyboard dismissal', async () => {
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("openDeck('editor')",w.context);
   const key=core.entryKey(editorDeck().cards[1]);w.context.key=key;let returned=false;

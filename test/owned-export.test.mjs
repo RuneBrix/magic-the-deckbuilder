@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ownedPrintingPlan, exportDeckText, collectionReport, workspaceFile, readWorkspaceFile } from '../public/core.js';
+import { ownedPrintingPlan, exportDeckText, deckExport, collectionReport, workspaceFile, readWorkspaceFile } from '../public/core.js';
 
 const card=(id,extra={})=>({id,oracle_id:'rules',name:'Fire // Ice',type_line:'Instant',cmc:2,color_identity:['U','R'],finishes:['nonfoil','foil'],lang:'en',...extra});
 const entry=(id,qty,zone='main',extra={})=>({card:card(id),qty,zone,tags:['Manual','Other'],finish:'regular',...extra});
@@ -73,4 +73,37 @@ test('text export selects independent zones, headings and quantities while shari
   assert.equal(exportDeckText({...d,ownershipMatch:'printing'},{headings:false,missingOnly:true,collection:inventory}), '8 Fire // Ice');
   assert.equal(exportDeckText(d,{zones:[]}), '');assert.equal(JSON.stringify(d),before);
   assert.deepEqual(readWorkspaceFile(workspaceFile([d],inventory)).decks[0],d);
+});
+
+test('CSV and metadata text preserve distinguishing values and preview their actual first row',()=>{
+  const title='Name, "with quotes" // Other face\nContinued';
+  const unusual={name:title,set:'abc',collector_number:'17a'};
+  const d=deck([entry('z',4,'main',{card:card('z',unusual),finish:'foil'}),
+    entry('a',2,'main',{card:card('a',{...unusual,collector_number:'17b'})}),
+    entry('c',5,'main',{card:card('c',{name:'Alpha',oracle_id:'alpha'}),tags:['Other']})]);
+  const fields=['quantity','name','set','number','finish'];
+  const csv=deckExport(d,{fields,format:'csv',section:'role',sort:'quantity'});
+  const first='Function,Quantity,Card name,Set,Collector number,Finish\r\nManual,4,"Name, ""with quotes"" // Other face\nContinued",ABC,17a,foil';
+  assert.equal(csv.example,first);
+  assert.equal(csv.text,first+'\r\nManual,2,"Name, ""with quotes"" // Other face\nContinued",ABC,17b,nonfoil\r\nOther,5,Alpha,,,nonfoil');
+  const txt=deckExport(d,{fields,section:'none',sort:'name'});
+  assert.equal(txt.example,'Quantity\tCard name\tSet\tCollector number\tFinish\n5\tAlpha\t\t\tnonfoil');
+  assert.match(txt.text,/4\t"Name, ""with quotes"" \/\/ Other face\nContinued"\tABC\t17a\tfoil/);
+  assert.equal(deckExport(d,{section:'none',fields:['quantity'],sort:'quantity'}).text,'6\n5');
+  assert.equal(deckExport(d,{section:'none',fields:[]}).example,'');
+});
+
+test('category and group scopes apply before shared ownership allocation',()=>{
+  const d=deck([entry('a',4),entry('b',3,'main',{tags:['Second']}),entry('b',1,'sideboard',{tags:['Second']}),
+    entry('solo',1,'command',{card:card('solo',{name:'Leader',oracle_id:'leader',type_line:'Legendary Creature'})})]);
+  const collection=[{card:card('a'),qty:2,finish:'regular'}];
+  const before=JSON.stringify({d,collection});
+  const byRole={categoryKind:'role',categories:['Manual'],collection,ownership:'owned'};
+  assert.equal(deckExport(d,{...byRole,categoryMode:'include',section:'role'}).text,'Manual\n2 Fire // Ice');
+  assert.equal(deckExport(d,{...byRole,categoryMode:'exclude',section:'role'}).text,'Second\n2 Fire // Ice');
+  assert.equal(deckExport(d,{entries:[d.cards[2]],zones:['sideboard'],collection,ownership:'missing'}).text,'');
+  const types=deckExport(d,{categoryMode:'include',categories:['Creature','Instant'],section:'type',sort:'name'});
+  assert.equal(types.text,'Creature\n1 Leader\n\nInstant\n8 Fire // Ice');
+  assert.equal(types.example,'Creature\n1 Leader');
+  assert.equal(JSON.stringify({d,collection}),before);
 });

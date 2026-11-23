@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck and group export — 2026-11-23
+
+- Export decks as TXT or CSV with zone, category and ownership selections, optional printing metadata, sorting and a one-row example. Complete JSON remains available (#238).
+- Export group metadata, open an artwork grid, or remove copies from a Type or Function group. Removal confirms the zone, copy count and filter scope before saving (#233).
+
 ## Deck functions — 2026-11-23
 
 - Initialize new cards' functions from broad families in the bundled Oracle Tags snapshot. Families beyond the original suggestions can now supply a default, and existing entries keep their stored assignments (#210).
