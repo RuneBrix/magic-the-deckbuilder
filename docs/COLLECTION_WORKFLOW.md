@@ -56,6 +56,10 @@ Delete entire collection is available in the Collection header. It offers a work
 
 Collection data lives in browser localStorage for the exact app origin (normally http://localhost:3000), in the `arcana.workspace.v2` working copy. This same value contains decks and may use a compact representation after a quota error. Delete collection through the app to retain decks. It belongs to the current browser profile, not a file in the repository; exported workspace JSON files are separate snapshots. localhost and 127.0.0.1 use separate browser storage.
 
+### Add selected deck cards
+
+**Add to Collection** from deck Select mode copies the reviewed quantities into lots with condition unrecorded. The stored printing ID includes its language. The review uses the entry's saved finish, or nonfoil or the sole available finish for an older entry. An older entry with no finish metadata defaults to nonfoil. Choose a finish in the deck's card details when available metadata leaves the choice ambiguous or the saved finish unavailable. Matching printing and finish lots with condition unrecorded combine, and their original added date is retained. The whole addition saves together while the deck keeps its copies. [#215](https://github.com/RuneBrix/magic-the-deckbuilder/issues/215)
+
 <a id="ownership-and-budget"></a>
 
 ## Ownership and costs
