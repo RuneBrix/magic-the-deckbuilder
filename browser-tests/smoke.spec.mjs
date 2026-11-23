@@ -734,14 +734,15 @@ test('ownership compares selected and cheapest printings without changing deck c
   await expect(cancel).toHaveCount(0);
   await expect(check).toBeFocused();
   const row = page.getByRole('row').filter({ hasText: 'Smoke Card 2' });
-  await expect(row.getByRole('cell').nth(1)).toContainText(/2[.,]25/);
-  await expect(row.getByRole('cell').nth(3)).toContainText(/0[.,]33.*TST/);
+  await expect(row.getByRole('cell').nth(2)).toHaveText('2/2');
+  await expect(row.getByRole('cell').nth(3)).toContainText(/2[.,]25/);
+  await expect(row.getByRole('cell').nth(4)).toContainText(/0[.,]33.*TST/);
   await expect(page.getByRole('link', { name: 'Cardmarket' })).toHaveAttribute('href', /idProduct=41&isFoil=Y$/);
-  const cheapestTotal = page.locator('.planning-summary tr').filter({ hasText: 'Cheapest printings estimate' });
-  await expect(cheapestTotal).toContainText(/1[.,]16/);
+  const cheapestTotal = page.locator('.planning-summary tr').filter({ hasText: 'Cheapest printings for missing copies' });
+  await expect(cheapestTotal).toContainText(/0[.,]50/);
   expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(before);
   await page.getByRole('checkbox', { name: 'Maybeboard' }).check();
-  await expect(cheapestTotal).toContainText(/1[.,]41/);
+  await expect(cheapestTotal).toContainText(/0[.,]75/);
   await noPageOverflow(page);
   await page.screenshot({ path: testInfo.outputPath('budget-comparison.png') });
 });
@@ -948,24 +949,39 @@ test('commander minus confirms from the deck and tracker', async ({ page, isMobi
   expect((await storedDeck()).cards.map(entry=>entry.card.id)).toEqual(original.cards.slice(1).map(entry=>entry.card.id));
 });
 
-test('visual card controls use opaque high-contrast surfaces in all palettes', async ({ page, isMobile }) => {
+test('visual card controls retain contrast over light and dark art in all palettes', async ({ page, isMobile }) => {
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.mouse.move(1,1);
   const controls = page.getByRole('article', { name: /Smoke Card 1 · Command zone/ }).locator('.card-side-controls button');
   await expect(controls).toHaveCount(3);
-  for (const [theme, palette] of [['light', 'green'], ['dark', 'green'], ['dark', 'blue'], ['dark', 'white'], ['dark', 'orange']]) {
+  for (const theme of ['light','dark']) for (const palette of ['green','blue','white','orange','rose','teal','sepia']) {
     await page.evaluate(({ theme, palette }) => Object.assign(document.documentElement.dataset, { theme, palette }), { theme, palette });
     const styles = await controls.evaluateAll(buttons => {
-      const luminance = color => color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(value => Number(value) / 255)
+      const canvas = document.createElement('canvas');
+      canvas.width=canvas.height=1;
+      const ctx=canvas.getContext('2d',{willReadFrequently:true});
+      const channels = color => {
+        ctx.clearRect(0,0,1,1);
+        ctx.fillStyle=color;
+        ctx.fillRect(0,0,1,1);
+        return [...ctx.getImageData(0,0,1,1).data].map(value=>value/255);
+      };
+      const luminance = rgb => rgb
         .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
         .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
       return buttons.map(button => {
         const style = getComputedStyle(button), { width, height } = button.getBoundingClientRect();
-        const [dark, light] = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => a - b);
-        return { width, height, opaque: style.backgroundColor.startsWith('rgb('), ratio: (light + .05) / (dark + .05) };
+        const [r,g,b,alpha]=channels(style.backgroundColor);
+        const ink=luminance(channels(style.color).slice(0,3));
+        const ratios=[0,1].map(art=>{
+          const backdrop=luminance([r,g,b].map(channel=>alpha*channel+(1-alpha)*art));
+          return (Math.max(ink,backdrop)+.05)/(Math.min(ink,backdrop)+.05);
+        });
+        return { width, height, alpha, ratio:Math.min(...ratios) };
       });
     });
-    for (const { width, height, opaque, ratio } of styles) {
-      expect(opaque, `${theme}/${palette}`).toBe(true);
+    for (const { width, height, alpha, ratio } of styles) {
+      expect(alpha, `${theme}/${palette}`).toBeCloseTo(.8);
       expect(ratio, `${theme}/${palette}`).toBeGreaterThanOrEqual(4.5);
       expect(width).toBe(isMobile ? 44 : 36);
       expect(height).toBe(width);
@@ -974,6 +990,7 @@ test('visual card controls use opaque high-contrast surfaces in all palettes', a
   await controls.first().press('Tab');
   await expect(controls.nth(1)).toBeFocused();
   await expect(controls.nth(1)).toHaveCSS('outline-style', 'solid');
+  await expect(controls.nth(1)).toHaveCSS('background-color', /^rgb\(/);
 });
 
 test('search, printing dialog, keyboard dismissal and reload retain deck data', async ({ page }) => {

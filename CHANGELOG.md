@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck ownership and costs — 2026-11-23
+
+- Use compact quantity badges on visual cards. Turn on **Show ownership** in the Cards tab to see coverage and printing matches. Resting card controls use translucent backgrounds (#234).
+- Show owned copies per row in **Ownership & costs**. The cheapest-printing estimate totals only the missing nonbasic copies in the selected zones (#235).
+
 ## Search cards and sourced tags — 2026-11-23
 
 - Open **Search cards** from the main navigation, with the same search, tracker and deck navigation behavior (#218).

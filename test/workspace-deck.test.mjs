@@ -250,14 +250,13 @@ test('all four deck views share filters, grouping, quantities, printing and menu
     assert.deepEqual(headings,['Command zone','Main deck','Maybeboard']);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="deck-card-name" aria-label="Leader" title="Leader · Unknown set/);
     else {
-      assert.match(w.node('#app').innerHTML,/<span class="entry-quantity"[^>]*>[\s\S]*?<span class="quantity-number">\d+<\/span><\/span><div class="card-side-controls">[\s\S]*?<\/div><button class="card-art"/);
+      assert.match(w.node('#app').innerHTML,/<span class="entry-quantity"[^>]*>\d+<\/span><div class="card-side-controls">[\s\S]*?<\/div><button class="card-art"/);
       assert.doesNotMatch(w.node('#app').innerHTML,/card-toolbar/);
     }
     assert.equal((w.node('#app').innerHTML.match(/class="card-slot"/g)||[]).length,layout.startsWith('visual')?3:0);
     assert.equal((w.node('#app').innerHTML.match(/data-card-menu=/g)||[]).length,3);
     const largeQuantity=vm.runInContext('deckEntry({...decks[0].cards[0],qty:500})',w.context);
-    if(layout.startsWith('visual'))assert.match(largeQuantity,/class="entry-quantity three-digits"[^>]*aria-label="500 copies[^\"]*"[\s\S]*?class="quantity-number">500<\/span>/);
-    else assert.doesNotMatch(largeQuantity,/three-digits/);
+    assert.match(largeQuantity,/class="entry-quantity"[^>]*aria-label="500 copies">500<\/span>/);
     assert.match(w.node('#app').innerHTML,/Maybeboard · 3/);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="row-mana"/);
     else assert.match(w.node('#app').innerHTML,/class="entry-quantity"/);
@@ -471,18 +470,23 @@ test('visual ownership markers use the existing allocation before filtering and 
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],lots))});
   vm.runInContext("openDeck('editor')",w.context);
   const before=vm.runInContext('JSON.stringify({decks,collection})',w.context);
-  const badge=(id,zone)=>vm.runInContext(`entryBadge(decks[0].cards.find(e=>e.card.id==='${id}'&&e.zone==='${zone}'),true,collectionReport(decks[0],collection).rows.find(r=>r.entry.card.id==='${id}'&&r.zone==='${zone}'))`,w.context);
+  assert.doesNotMatch(w.node('#app').innerHTML,/data-ownership/);
+  w.node('#show-deck-ownership').change({target:{checked:true}});
+  assert.match(w.node('#editor-card-area').outerHTML,/data-ownership="partial"/);
+  const badge=(id,zone)=>vm.runInContext(`entryBadge(decks[0].cards.find(e=>e.card.id==='${id}'&&e.zone==='${zone}'),true,ownershipBadge(collectionReport(decks[0],collection).rows.find(r=>r.entry.card.id==='${id}'&&r.zone==='${zone}')))`,w.context);
   assert.match(badge('Leader','command'),/data-ownership="missing"/);
-  assert.match(badge('Ramp spell','main'),/data-ownership="partial"[\s\S]*1 of 2 copies covered by collection; 1 missing/);
-  assert.match(badge('Owned','main'),/data-ownership="owned"[\s\S]*12 of 12 copies covered/);
+  assert.match(badge('Ramp spell','main'),/data-ownership="partial".*1 of 2 owned \(1 in other printings, 1 missing\)/);
+  assert.match(badge('Owned','main'),/data-ownership="owned".*12 of 12 owned \(12 in the stored printing\)/);
   assert.match(badge('Ramp spell','sideboard'),/data-ownership="missing"/);
-  assert.match(badge('Ramp spell','maybeboard'),/data-ownership="excluded"[\s\S]*outside ownership scope/);
+  assert.match(badge('Ramp spell','maybeboard'),/data-ownership="excluded".*Outside ownership scope/);
   w.node('#editor-search').input({target:{value:'Owned'}});
   assert.equal(vm.runInContext('JSON.stringify({decks,collection})',w.context),before);
   vm.runInContext("decks[0].ownershipMatch='printing'",w.context);
   assert.match(badge('Ramp spell','main'),/data-ownership="missing"/);
   vm.runInContext("decks[0].ownershipMatch='rules';decks[0].budgetZones=['sideboard']",w.context);
-  assert.match(badge('Ramp spell','sideboard'),/data-ownership="owned"/);
+  assert.match(badge('Ramp spell','sideboard'),/data-ownership="alternate"/);
   assert.match(badge('Ramp spell','main'),/data-ownership="excluded"/);
+  w.node('#show-deck-ownership').change({target:{checked:false}});
+  assert.doesNotMatch(w.node('#editor-card-area').outerHTML,/data-ownership/);
   assert.equal(w.writes.length,0);
 });

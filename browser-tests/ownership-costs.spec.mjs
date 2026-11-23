@@ -9,6 +9,7 @@ test('ownership costs sort without changing allocations and fit long, empty and 
     d.cards=d.cards.slice(0,4);
     d.cards.forEach((e,i)=>{e.qty=[1,12,2,2][i];e.zone=['command','main','sideboard','main'][i];e.card.prices.eur=[null,'2.25','0.50','2.25'][i];});
     d.cards[2].card.name='A very long card name with a deliberately extended title for ownership table wrapping';
+    d.cards[2].card.oracle_id=d.cards[1].card.oracle_id;
     localStorage.setItem(key,JSON.stringify(data));
   });
   await page.reload();
@@ -20,11 +21,20 @@ test('ownership costs sort without changing allocations and fit long, empty and 
   const copies=page.getByRole('table',{name:'Copy quantities',exact:true});
   const costs=page.getByRole('table',{name:'Cost estimates',exact:true});
   const missing=costs.getByRole('row').filter({hasText:'Cost of missing copies'});
+  const cheapestEstimate=costs.getByRole('row').filter({hasText:'Cheapest printings for missing copies'});
   await expect(copies.getByRole('cell')).toHaveText(['17','3','14']);
   await expect(missing).toContainText(/25[.,]75/);
   await expect(missing).toContainText('1 unpriced copy');
   const snapshot=await page.evaluate(()=>localStorage.getItem('arcana.workspace.v2'));
   const rows=page.locator('.planning-table tbody tr');
+  const owned=name=>rows.filter({hasText:name}).getByRole('cell').nth(2);
+  await expect(owned('Smoke Card 1')).toHaveText('No');
+  await expect(owned('Smoke Card 2')).toHaveText('3/12');
+  await expect(owned('A very long')).toHaveText('0/2');
+  const ownedSort=page.locator('[data-cost-sort="owned"]');
+  await page.locator('[data-cost-sort="card"]').scrollIntoViewIfNeeded();
+  await expect(ownedSort).toBeInViewport({ratio:.9});
+  expect(await ownedSort.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
   const names=()=>rows.locator('th').allTextContents();
   const price=page.locator('[data-cost-sort="price"]');
   await price.focus();await price.press('Enter');
@@ -36,6 +46,19 @@ test('ownership costs sort without changing allocations and fit long, empty and 
   expect((await names()).map(n=>n.startsWith('A very')?'Long':n)).toEqual(['Smoke Card 2','Smoke Card 4','Long','Smoke Card 1']);
   await expect(missing).toContainText(/25[.,]75/);
   expect(await page.evaluate(()=>localStorage.getItem('arcana.workspace.v2'))).toBe(snapshot);
+  await ownedSort.press('Enter');
+  await ownedSort.press('Enter');
+  await expect(ownedSort.locator('..')).toHaveAttribute('aria-sort','descending');
+  await expect(rows.first()).toContainText('Smoke Card 2');
+  const main=page.getByRole('checkbox',{name:'Main deck',exact:true});
+  await main.uncheck();
+  await expect(owned('Smoke Card 2')).toHaveText('—');
+  await expect(owned('A very long')).toHaveText('2/2');
+  const matching=page.getByRole('combobox',{name:'Ownership matching'});
+  await matching.selectOption('printing');
+  await expect(owned('A very long')).toHaveText('0/2');
+  await matching.selectOption('rules');
+  await main.check();
   const cardSort=page.locator('[data-cost-sort="card"]');
   await cardSort.scrollIntoViewIfNeeded();
   const before=await rows.first().boundingBox();
@@ -72,7 +95,18 @@ test('ownership costs sort without changing allocations and fit long, empty and 
     },coverage);
     await page.reload();await open();
     await expect(copies.getByRole('cell')).toHaveText(coverage==='none'?['17','0','17']:['17','17','0']);
-    if(coverage==='full'){await expect(missing).toContainText(/0[.,]00/);await expect(missing).not.toContainText('unpriced');}
+    if(coverage==='full'){
+      await expect(owned('Smoke Card 1')).toHaveText('Yes');
+      await expect(owned('Smoke Card 2')).toHaveText('12/12');
+      await expect(missing).toContainText(/0[.,]00/);
+      await expect(cheapestEstimate).toContainText('€0.00');
+      await expect(cheapestEstimate).not.toContainText('unpriced');
+    } else {
+      await page.route('**/api/search?**',route=>route.fulfill({json:{data:[],has_more:false}}));
+      await page.getByRole('button',{name:'Check cheapest printings',exact:true}).click();
+      await expect(cheapestEstimate).toContainText('Unavailable');
+      await expect(cheapestEstimate).toContainText('17 unpriced copies');
+    }
   }
   await page.evaluate(()=>{const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key));data.decks[0].cards=[];localStorage.setItem(key,JSON.stringify(data));});
   await page.reload();await open();
