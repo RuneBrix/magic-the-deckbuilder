@@ -11,7 +11,7 @@ test('navigation geometry reserves touch targets in a shorter sticky header',asy
   await testInfo.attach('navigation-height',{body:JSON.stringify({height,viewport:page.viewportSize()}),contentType:'application/json'});
   await page.screenshot({path:testInfo.outputPath('navigation-height.png')});
   expect(height).toBeLessThanOrEqual(isMobile?108:60);
-  for(const name of ['My decks','Explore cards','Collection','Settings','Help']) {
+  for(const name of ['My decks','Search cards','Collection','Settings','Help']) {
     const button=page.getByRole('button',{name,exact:true});
     const box=await button.boundingBox();expect(box.height).toBeGreaterThanOrEqual(44);
     if(isMobile)expect(box.width).toBeGreaterThanOrEqual(44);
@@ -54,9 +54,9 @@ test('My decks restores the last open deck while the library and Explore remain 
   await page.reload();await openDeck(page);
   await expect(page.getByRole('button',{name:'Find cards to add',exact:true})).toHaveCount(0);
   await page.getByRole('tab',{name:'Statistics',exact:true}).click();
-  for(const destination of ['Collection','Explore cards','Settings']) {
+  for(const destination of ['Collection','Search cards','Settings']) {
     await page.getByRole('button',{name:destination,exact:true}).click();
-    if(destination==='Explore cards') {
+    if(destination==='Search cards') {
       await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('other-deck');
       await page.locator('#raw').fill('otag:ramp');
     }

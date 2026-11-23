@@ -900,7 +900,7 @@ test('card context menus reuse deck entry and owned lot actions at viewport edge
   expect(selectionKept).toBe(true);
   await expect(menu).toBeHidden();
 
-  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('button',{name:'Search cards',exact:true}).click();
   await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('smoke-deck');
   const tracked=page.locator('#deck-tracker').getByRole('button',{name:'Smoke Card 1',exact:true});
   await tracked.click({button:'right'});
@@ -935,7 +935,7 @@ test('commander minus confirms from the deck and tracker', async ({ page, isMobi
   await expect(minus).toBeFocused();
   expect(await storedDeck()).toEqual(original);
 
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await page.getByRole('combobox', { name: 'Track deck', exact: true }).selectOption('smoke-deck');
   await activate(minus);
   await expect(keep).toBeFocused();
@@ -977,7 +977,7 @@ test('visual card controls use opaque high-contrast surfaces in all palettes', a
 });
 
 test('search, printing dialog, keyboard dismissal and reload retain deck data', async ({ page }) => {
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await page.locator('#raw').fill('Smoke');
   await page.locator('#search-form').getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('button', { name: `Inspect ${cards[0].name}`, exact: true }).click();
@@ -1148,12 +1148,12 @@ test('collection edits replace the clicked card and combine a matching condition
   await page.reload();expect(await holdings()).toEqual(saved);
 });
 
-test('Explore navigation starts fresh and tracker guidance follows the selector', async ({ page }, testInfo) => {
-  const explore = page.getByRole('button', { name: 'Explore cards', exact: true });
+test('Search cards navigation starts fresh and tracker guidance follows the selector', async ({ page }, testInfo) => {
+  const searchNav = page.getByRole('button', { name: 'Search cards', exact: true });
   const track = page.getByRole('combobox', { name: 'Track deck', exact: true });
   const raw = page.locator('#raw');
   await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await page.getByRole('combobox', { name: 'Track deck', exact: true }).selectOption('smoke-deck');
   await expect(track).toHaveValue('smoke-deck');
   await raw.focus();
@@ -1174,8 +1174,8 @@ test('Explore navigation starts fresh and tracker guidance follows the selector'
   await raw.press('Enter');
   await expect(page.locator('.card-tile')).toHaveCount(3);
   await page.getByRole('button', { name: 'My decks', exact: true }).click();
-  await explore.focus();
-  await explore.press('Enter');
+  await searchNav.focus();
+  await searchNav.press('Enter');
   await expect(raw).toBeFocused();
   await expect(raw).toHaveValue('');
   await expect(track).toHaveValue('');
@@ -1190,7 +1190,7 @@ test('Explore navigation starts fresh and tracker guidance follows the selector'
   await page.screenshot({ path: testInfo.outputPath('explore-fresh.png') });
 });
 
-test('Explore sorts USD prices in both directions and labels unavailable quotes', async ({ page }, testInfo) => {
+test('Search cards sorts USD prices in both directions and labels unavailable quotes', async ({ page }, testInfo) => {
   const priced = [
     { ...cards[0], prices: { usd: '0.25' } },
     { ...cards[1], prices: { usd: '12.00' } },
@@ -1205,7 +1205,7 @@ test('Explore sorts USD prices in both directions and labels unavailable quotes'
     const data = order === 'usd' && dir === 'asc' ? [priced[0], unknown, priced[1]] : [priced[1], unknown, priced[0]];
     return route.fulfill({ json: { data, total_cards: data.length, has_more: false } });
   });
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const raw = page.locator('#raw');
   await raw.fill(query);
   await raw.press('Enter');
@@ -1224,9 +1224,9 @@ test('Explore sorts USD prices in both directions and labels unavailable quotes'
   await page.screenshot({ path: testInfo.outputPath('explore-usd-sort.png') });
 });
 
-test('Explore fills available width and keeps selected functions inside their disclosure', async ({ page }, testInfo) => {
+test('Search cards fills available width and keeps selected functions inside their disclosure', async ({ page }, testInfo) => {
   await page.route('**/api/search?**', route => route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } }));
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await expect(page.locator('#search-output')).toBeEmpty();
   await expect(page.getByText('Discover cards', { exact: true })).toHaveCount(0);
   await page.locator('#raw').fill('t:creature (otag:ramp OR otag:draw)');
@@ -1297,7 +1297,7 @@ test('function pages and related browsing preserve the search until a filter is 
     }
     return route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } });
   });
-  await page.getByRole('button', { name: 'Explore cards' }).click();
+  await page.getByRole('button', { name: 'Search cards' }).click();
   const raw = page.locator('#raw');
   await raw.fill('t:creature (otag:ramp OR otag:draw)');
   await page.locator('#function-tags > summary').press('Enter');
@@ -1370,8 +1370,8 @@ test('function pages and related browsing preserve the search until a filter is 
   await expect(page.getByRole('button', { name: 'Remove sweeper filter', exact: true })).toHaveCount(2);
 });
 
-test('Explore accepts primary and guided keyboard submission and adds unlisted functions inline', async ({ page }, testInfo) => {
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+test('Search cards accepts primary and guided keyboard submission and adds unlisted functions inline', async ({ page }, testInfo) => {
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const filters = page.locator('#search-filters'), raw = page.locator('#raw');
   await raw.fill('name:"Sol Ring" usd<5');
   await expect(page.locator('#applied-filter-summary')).toHaveText('Card name · 1 query-only expression');
@@ -1418,7 +1418,7 @@ test('Explore accepts primary and guided keyboard submission and adds unlisted f
 });
 
 test('type and keyword chips suggest locally, synchronize, and clear independently', async ({ page, isMobile }, testInfo) => {
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const raw = page.locator('#raw');
   await raw.fill('usd<5 o:/draw a card/');
   await page.locator('#search-filters > summary').click();
@@ -1474,7 +1474,7 @@ test('type and keyword chips suggest locally, synchronize, and clear independent
 });
 
 test('guided clear controls reset only the requested value and return focus', async ({ page }) => {
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const raw = page.locator('#raw');
   await raw.fill('name:"Sol Ring" mv>=2 mv<=5 o:"draw" fo:"flying" c:m id>=W m>={U} m>={C} f:modern usd<5');
   await page.locator('#search-filters > summary').click();
@@ -1510,7 +1510,7 @@ test('one Colors panel and repeatable mana costs preserve query semantics', asyn
     const url=new URL(request.url());
     if(url.pathname==='/api/search')queries.push(url.searchParams.get('q'));
   });
-  await page.getByRole('button', {name:'Explore cards',exact:true}).click();
+  await page.getByRole('button', {name:'Search cards',exact:true}).click();
   await page.locator('#search-filters > summary').click();
   const raw=page.locator('#raw');
   await raw.fill('id:w usd<5');
@@ -1557,7 +1557,7 @@ test('one Colors panel and repeatable mana costs preserve query semantics', asyn
 test('repeatable mana and Oracle filters synchronize, scroll locally and preserve advanced syntax', async ({ page }, testInfo) => {
   const queries=[];
   page.on('request', request => {const url=new URL(request.url());if(url.pathname==='/api/search')queries.push(url.searchParams.get('q'));});
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await page.locator('#tracked-deck').selectOption('');
   await page.locator('#search-filters > summary').click();
   await page.locator('#filter-heading-mv').click();
@@ -1605,7 +1605,7 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
 });
 
 test('additional mana and Oracle rows can be removed by keyboard without changing other filters', async ({ page }, testInfo) => {
-  await page.getByRole('button',{name:'Explore cards',exact:true}).click();
+  await page.getByRole('button',{name:'Search cards',exact:true}).click();
   await page.locator('#raw').fill('(mv=1 OR mv=2 OR mv=3) (o:"draw" fo:"flying" o:"~ attacks") usd<5');
   await page.locator('#search-filters > summary').click();
   await page.locator('#filter-heading-mv').click();
@@ -1665,7 +1665,7 @@ test('additional mana and Oracle rows can be removed by keyboard without changin
 
 
 test('scoped clearing and activated abilities preserve the editable query and focus', async ({ page, isMobile }, testInfo) => {
-  await page.getByRole('button', {name:'Explore cards',exact:true}).click();
+  await page.getByRole('button', {name:'Search cards',exact:true}).click();
   const raw=page.locator('#raw');
   await raw.fill('t:elf t:creature -t:artifact keyword:flying mv>=2 mv<=5 c>=G id<=GU o:"draw" otag:ramp usd<5');
   const filtersPanel=page.locator('#search-filters');

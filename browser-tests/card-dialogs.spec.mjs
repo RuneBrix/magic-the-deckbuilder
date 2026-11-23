@@ -1,10 +1,137 @@
 import { test, expect } from '@playwright/test';
 import { cards, prepareApp } from './fixtures.mjs';
+import { functionMemberships } from '../public/core.js';
 
 test.beforeEach(async ({ page }) => prepareApp(page));
 
+test('Scryfall tags preserves details on cancel and replaces only the search on confirmation', async ({ page, isMobile }, testInfo) => {
+  const tagged = { ...cards[10], name: 'First Face // Second Face', image_uris: undefined,
+    oracle_id: '730897a9-3ead-4990-9492-1a2040d8ccac',
+    card_faces: ['First Face', 'Second Face'].map(name => ({ name, image_uris: cards[10].image_uris })) };
+  const untagged = cards[11];
+  const legacy = { ...cards[12], oracle_id: undefined };
+  const original = 't:creature otag:ramp';
+  const drafts = [];
+  let finishPrintings;
+  await page.route('**/api/search?**', async route => {
+    const query = new URL(route.request().url()).searchParams.get('q');
+    drafts.push(query);
+    const data = query === original ? [tagged, untagged, legacy] : [cards[13]];
+    await route.fulfill({ json: { data, total_cards: data.length, has_more: false } });
+  });
+  await page.route('**/api/printings?**', async route => {
+    const oracle = new URL(route.request().url()).searchParams.get('oracle');
+    if (oracle === tagged.oracle_id) await new Promise(resolve => { finishPrintings = resolve; });
+    await route.fulfill({ json: { data: [oracle === tagged.oracle_id ? tagged : untagged], has_more: false } });
+  });
+  const saved = await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'));
+  const searchNav = page.getByRole('button', { name: 'Search cards', exact: true });
+  const raw = page.locator('#raw');
+  await searchNav.click();
+  await expect(searchNav).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { name: 'Search cards', exact: true })).toBeVisible();
+  await page.locator('#tracked-deck').selectOption('smoke-deck');
+  await raw.fill(original);
+  await raw.press('Enter');
+  await expect(page.locator('.card-tile')).toHaveCount(3);
+  for (const [card, message] of [[untagged, 'No direct tags recorded'], [legacy, 'The saved card has no Oracle ID']]) {
+    await page.getByRole('button', { name: 'Inspect '+card.name, exact: true }).click();
+    await page.locator('#detail-tags summary').click();
+    await expect(page.locator('#detail-tags')).toContainText(message);
+    await expect(page.locator('[data-detail-tag]')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+  }
+  await page.locator('#sort').selectOption('name');
+  await expect.poll(() => drafts.length).toBe(2);
+  await page.locator('#search-filters > summary').click();
+  await page.getByRole('button', { name: 'Inspect '+tagged.name, exact: true }).click();
+  const details = page.getByRole('dialog', { name: tagged.name+' — Card details' });
+  await expect(details.locator('#detail-images img')).toHaveCount(2);
+  const add = details.getByRole('button', { name: 'Add card to deck' });
+  const actionPosition = () => add.evaluate(button => {
+    const dialog = button.closest('dialog');
+    return button.getBoundingClientRect().top - dialog.getBoundingClientRect().top + dialog.scrollTop;
+  });
+  const beforeTags = await actionPosition();
+  await details.locator('#detail-tags summary').press('Enter');
+  expect(await actionPosition()).toBe(beforeTags);
+  const membershipIds = functionMemberships(tagged).map(tag => tag.id);
+  const tags = details.locator('[data-detail-tag]');
+  expect(membershipIds.length).toBeGreaterThan(40);
+  expect(await tags.evaluateAll(buttons => buttons.map(button => button.dataset.detailTag))).toEqual(membershipIds);
+  const first = tags.first();
+  await first.scrollIntoViewIfNeeded();
+  const next = await tags.nth(1).boundingBox();
+  await first.focus();
+  await expect(first).toHaveCSS('outline-style', 'solid');
+  if (!isMobile) await first.hover();
+  expect(await tags.nth(1).boundingBox()).toEqual(next);
+  await page.screenshot({ path: testInfo.outputPath('card-scryfall-tags.png') });
+  await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+  expect(await details.evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth)).toBe(true);
+  await add.scrollIntoViewIfNeeded();
+  await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+  const tag = tags.last();
+  await tag.scrollIntoViewIfNeeded();
+  const detailScroll = await details.evaluate(dialog => dialog.scrollTop);
+  if (isMobile) await tag.tap(); else await tag.press('Enter');
+  const warning = page.getByRole('dialog', { name: 'Replace your current search?' });
+  await expect(warning).toHaveAccessibleDescription(/clear your current query, filters and results/);
+  await expect(warning.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('replace-tag-search.png') });
+  await page.keyboard.press('Escape');
+  await expect(tag).toBeFocused();
+  expect(await details.evaluate(dialog => dialog.scrollTop)).toBe(detailScroll);
+  await expect(raw).toHaveValue(original);
+  await expect(page.locator('#sort')).toHaveValue('name');
+  await expect(page.locator('.card-tile')).toHaveCount(3);
+  await expect(page.locator('#search-filters')).toHaveAttribute('open', '');
+  await expect.poll(() => typeof finishPrintings).toBe('function');
+  await tag.press('Enter');
+  await warning.getByRole('button', { name: 'Search by tag' }).click();
+  const request = page.waitForResponse('**/api/printings?**');
+  finishPrintings();
+  await request;
+  const expectedQuery = 'otag:'+membershipIds.at(-1);
+  await expect(warning).toBeHidden();
+  await expect(details).toBeHidden();
+  await expect(raw).toHaveValue(expectedQuery);
+  await expect(raw).toBeFocused();
+  await expect(page.locator('#tracked-deck')).toHaveValue('smoke-deck');
+  await expect(page.locator('#sort')).toHaveValue('edhrec');
+  await expect(page.locator('#search-filters')).not.toHaveAttribute('open', '');
+  await expect(page.locator('.card-tile')).toHaveCount(1);
+  expect(drafts).toEqual([original, original, expectedQuery]);
+  expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(saved);
+});
+
+test('Scryfall tags starts a clean canonical search from the deck', async ({ page }) => {
+  const oracle = '7735eeba-693b-47e2-bd51-414379cf1016';
+  await page.evaluate(oracle => {
+    const key = 'arcana.workspace.v2';
+    const stored = JSON.parse(localStorage.getItem(key));
+    stored.decks[0].cards[1].card.oracle_id = oracle;
+    localStorage.setItem(key, JSON.stringify(stored));
+  }, oracle);
+  await page.reload();
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await page.locator('#editor-layout').selectOption('text-vertical');
+  await page.locator(`[data-inspect="${cards[1].id}"]`).click();
+  await page.locator('#detail-tags summary').click();
+  await expect(page.locator('#detail-tags')).toContainText('Direct Oracle tags from the');
+  const tag = page.getByRole('button', { name: 'Search cards tagged swap removal', exact: true });
+  const searched = page.waitForRequest(request => new URL(request.url()).searchParams.get('q') === 'otag:swap-removal');
+  await tag.click();
+  await searched;
+  await expect(page.locator('#tag-search-confirmation')).toBeHidden();
+  await expect(page.locator('#raw')).toHaveValue('otag:swap-removal');
+  await page.getByRole('button', { name: 'My decks', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Smoke Garden', exact: true })).toBeFocused();
+});
+
 test('Related examples open their own printing and return to the same history, scroll and focus', async ({ page, isMobile }, testInfo) => {
   const double = { ...cards[10], name: 'First Face // Second Face', image_uris: undefined,
+    oracle_id: '7735eeba-693b-47e2-bd51-414379cf1016',
     card_faces: ['First Face', 'Second Face'].map(name => ({ name, image_uris: cards[10].image_uris })) };
   const missing = { ...cards[11], name: 'Example without artwork', image_uris: undefined };
   const examples = [double, ...cards.slice(0, 6), missing];
@@ -17,7 +144,7 @@ test('Related examples open their own printing and return to the same history, s
     const oracle = new URL(route.request().url()).searchParams.get('oracle');
     await route.fulfill({ json: { data: examples.filter(card => card.oracle_id === oracle), has_more: false } });
   });
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const query = 't:elf otag:ramp';
   await page.locator('#raw').fill(query);
   await page.locator('#function-tags > summary').click();
@@ -55,6 +182,17 @@ test('Related examples open their own printing and return to the same history, s
   await expect(trigger).toBeFocused();
   await expect(page.locator('#raw')).toHaveValue(query);
   expect(searches).toEqual(['game:paper otag:sweeper', 'game:paper otag:removal']);
+
+  await trigger.click();
+  await first.click();
+  await page.locator('#detail-tags summary').click();
+  await page.getByRole('button', { name: 'Search cards tagged swap removal', exact: true }).click();
+  const warning = page.getByRole('dialog', { name: 'Replace your current search?' });
+  await warning.getByRole('button', { name: 'Search by tag' }).click();
+  await expect(related).toBeHidden();
+  await expect(page.locator('#dialog')).toBeHidden();
+  await expect(page.locator('#raw')).toHaveValue('otag:swap-removal');
+  await expect(page.locator('#raw')).toBeFocused();
 });
 
 test('shared and dedicated modal windows keep the background at its starting scroll position', async ({ page, isMobile }, testInfo) => {
@@ -160,7 +298,7 @@ test('a pointer drag starting on blank space or artwork does not select the page
   await field.press('ControlOrMeta+A');
   expect(await field.evaluate(el => el.value.slice(el.selectionStart, el.selectionEnd))).toBe('Smoke Card');
   await field.fill('');
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await page.locator('#raw').fill('Smoke');
   await page.locator('#raw').press('Enter');
   const art = page.locator('.card-tile img').first();

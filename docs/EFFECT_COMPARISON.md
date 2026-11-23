@@ -1,6 +1,6 @@
 # Reversible search broadening
 
-[D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) introduced search broadening alongside manual comparison. [#47](https://github.com/RuneBrix/magic-the-deckbuilder/issues/47) removes the candidate shortlist and optional pair comparison at user request. Independent broadening remains available in Explore cards.
+[D02 / #2](https://github.com/RuneBrix/magic-the-deckbuilder/issues/2) introduced search broadening alongside manual comparison. [#47](https://github.com/RuneBrix/magic-the-deckbuilder/issues/47) removes the candidate shortlist and optional pair comparison at user request. Independent broadening remains available in Search cards.
 
 ## Broadening and restoration
 

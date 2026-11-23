@@ -73,7 +73,7 @@ test('Search button keeps keyboard position through loading, success, no-match, 
     await route.fulfill(outcome === 'success' ? { json: { data: cards.slice(0, 3), total_cards: 3, has_more: false } }
       : { status: outcome === 'empty' ? 404 : 500, json: { error: outcome === 'empty' ? 'No cards found' : 'Test search failure' } });
   });
-  await page.getByRole('button', { name: 'Explore cards', exact: true }).click();
+  await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const input = page.getByRole('textbox', { name: 'Search cards or use Scryfall syntax' });
   const search = page.locator('#search-form').getByRole('button', { name: 'Search', exact: true });
   for (const key of ['Enter', 'Space']) for (outcome of ['success', 'empty', 'error']) {

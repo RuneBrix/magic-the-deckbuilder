@@ -30,7 +30,7 @@ jobs:
   browser:
     name: Chromium smoke / desktop and phone / light and dark
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
