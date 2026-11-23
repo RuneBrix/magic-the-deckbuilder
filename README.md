@@ -45,7 +45,7 @@ Decks save in this browser's localStorage on this origin. **Export JSON backups 
 
 Card search, the optional example deck, imports, card images, and refreshes need internet access. The example deck is deliberately incomplete and loaded from real API records. No deck is created until requested.
 
-Function discovery uses a dated bundled Tagger snapshot with curated starting points, not a live taxonomy; some specialized tags can change or be absent. Custom tags are validated by Scryfall search. Private deck functions receive supported initial assignments from the offline snapshot and remain editable by the player. The app does not rank synergy or guarantee that a narrower search retains all useful cards.
+Function discovery uses a dated bundled Tagger snapshot with curated starting points, not a live taxonomy; some specialized tags can change or be absent. Custom tags are validated by Scryfall search. New deck entries can receive a broad initial function from the offline snapshot, and those private labels remain editable. The app does not rank synergy or guarantee that a narrower search retains all useful cards.
 
 Legality is **partial**, not tournament certification. Modern construction and bounded Commander/companion checks are implemented; unusual exceptions and unsupported predicates remain manual. Checks use stored Scryfall records. Refresh before use and inspect the [current supported scope](docs/CONSTRUCTION_RULES.md). Format status and external rules can change.
 

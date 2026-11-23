@@ -1,5 +1,10 @@
 # Changelog
 
+## Deck functions — 2026-11-23
+
+- Initialize new cards' functions from broad families in the bundled Oracle Tags snapshot. Families beyond the original suggestions can now supply a default, and existing entries keep their stored assignments (#210).
+- Rename a private function group from its group actions menu. The rename applies to every entry in that zone's group, including filtered-out entries. Future additions keep their own automatic defaults (#211).
+
 ## Deck ownership and costs — 2026-11-23
 
 - Use compact quantity badges on visual cards. Turn on **Show ownership** in the Cards tab to see coverage and printing matches. Resting card controls use translucent backgrounds (#234).
