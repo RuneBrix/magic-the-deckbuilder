@@ -252,10 +252,11 @@ test('shared and dedicated modal windows keep the background at its starting scr
   await page.locator('.deck-menu > summary').click();
   await page.getByRole('button', { name: 'Export deck', exact: true }).click();
   await expect(shared.getByRole('heading', { name: 'Export Smoke Garden', exact: true })).toBeVisible();
-  await shared.locator('.planning-help > summary').press('Enter');
-  const preview = shared.getByRole('textbox', { name: 'Text decklist' });
+  await page.addStyleTag({ content: '#export-options label, #export-options select, #dialog .planning-help p{font-size:22px}' });
+  await shared.getByText('Format and ownership help', { exact: true }).press('Enter');
+  const preview = shared.getByRole('textbox', { name: 'Example row' });
   await preview.press('ControlOrMeta+A');
-  expect(await preview.evaluate(el => el.value.slice(el.selectionStart, el.selectionEnd))).toContain('Smoke Card 1');
+  expect(await preview.evaluate(el => el.value.slice(el.selectionStart, el.selectionEnd))).toContain('Smoke Card 2');
   await shared.evaluate(dialog => { dialog.scrollTop = 0; });
   const startExport = await snapshot();
   const box = await shared.boundingBox();

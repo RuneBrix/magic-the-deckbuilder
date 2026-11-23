@@ -617,7 +617,27 @@ dialog h2{font-size:28px}
 .library-back{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-bottom:8px}
 .library-back svg{transform:rotate(180deg)}
 .workspace-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
-.export-check{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}.export-check input{margin:0;flex:none}.export-format{display:flex;flex-wrap:wrap;gap:0 20px}.export-backup{margin-top:20px}#export-preview{width:100%;resize:vertical}#export-status{overflow-wrap:anywhere}
+#dialog:has(#export-options){width:620px}
+#export-options{gap:10px}
+.export-selectors{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));gap:8px 16px}
+.export-selectors label,.export-selectors select{min-width:0;margin:0}
+.export-selectors select,#group-remove-scope{min-height:44px;text-transform:none}
+#export-categories>div{max-height:12rem;overflow:auto;padding:3px}
+#export-categories label{min-width:0;overflow-wrap:anywhere}
+#export-options :is(.planning-scope,.export-fields){margin:0}
+#export-options + .planning-help{margin:8px 0 0}
+#export-preview{width:100%;resize:vertical;overflow-wrap:anywhere}
+#export-status{overflow-wrap:anywhere;margin:6px 0 0}
+#export-status:empty{margin:0}
+.group-remove-target{overflow-wrap:anywhere}
+#dialog:has(.deck-group-grid figure:nth-child(3)){width:780px}
+#dialog:has(.deck-group-grid) h2,#dialog:has(#export-options) h2{overflow-wrap:anywhere;padding-right:24px}
+.deck-group-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,8.125rem),1fr));gap:16px 12px}
+.deck-group-grid figure{position:relative;min-width:0;max-width:13rem;margin:0}
+.deck-group-grid figcaption{padding-top:6px;overflow-wrap:anywhere}
+.deck-group-grid figcaption small{display:block;color:var(--muted)}
+.deck-group-grid .card-flip{position:absolute;z-index:1;inset:6px 6px auto auto;min-width:44px;min-height:44px}
+.deck-group-grid .entry-art-fallback{font:inherit;text-align:center}
 .deck-workspace .deck-tabs{padding:0;gap:32px}
 .deck-workspace .deck-tabs button{min-height:44px;font-size:14px}
 .editor-content{padding-top:16px}

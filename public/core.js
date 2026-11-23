@@ -525,21 +525,83 @@ export function legalityReport(deck) {
 }
 export function legality(deck) { const report = legalityReport(deck); return [...report.failed, ...report.unavailable]; }
 export function exportDeckText(deck, { zones=Object.keys(ZONES), headings=true, quantities=true, missingOnly=false, collection=[] } = {}) {
-  const rows=missingOnly?collectionReport({...deck,budgetZones:zones},collection).rows:null;
-  const selected=deck.cards.map(entry=>({...entry,qty:rows?rows.find(row=>row.entry===entry)?.missing??0:entry.qty}));
-  const sections=Object.entries(ZONES).filter(([z])=>zones.includes(z)).map(([z,label])=>{
-    const totals=new Map();
-    for(const {card,qty} of selected.filter(e=>zoneFor(e)===z && e.qty>0))totals.set(card.name,(totals.get(card.name)||0)+qty);
-    return {label,totals};
-  }).filter(section=>section.totals.size);
-  if(!headings){
-    const combined=new Map();
-    for(const {totals} of sections)for(const [name,qty] of totals)combined.set(name,(combined.get(name)||0)+qty);
-    return [...combined].map(([name,qty])=>`${quantities?qty+' ':''}${name}`).join('\n');
+  return deckExport(deck, {zones, section:headings?'zone':'none', fields:quantities?['quantity','name']:['name'], ownership:missingOnly?'missing':'all', collection}).text;
+}
+
+export const DECK_EXPORT_FIELDS = { quantity:'Quantity', name:'Card name', set:'Set', number:'Collector number', finish:'Finish', language:'Language' };
+export const EXPORT_SECTIONS = { zone:'Zone', type:'Type', role:'Function' };
+const exportCategory = (entry, kind) => kind === 'role' ? primaryRole(entry) : category(entry.card);
+
+function delimitedExportRow(values, separator) {
+  return values.map(value => {
+    const text = String(value);
+    return text.includes(separator) || /["\r\n]/.test(text) ? `"${text.replaceAll('"','""')}"` : text;
+  }).join(separator);
+}
+
+export function deckExport(deck, {
+  zones=Object.keys(ZONES), entries=deck.cards, categoryKind='type', categoryMode='all', categories=[],
+  section='zone', sort='stored', format='txt', fields=['quantity','name'], ownership='all', collection=[]
+} = {}) {
+  if (!fields.length) return {text:'',example:''};
+  const metadata = fields.filter(field => field !== 'quantity' && field !== 'name');
+  const included = entries.filter(entry => {
+    if (!zones.includes(zoneFor(entry))) return false;
+    if (categoryMode === 'all') return true;
+    return categories.includes(exportCategory(entry,categoryKind)) === (categoryMode === 'include');
+  });
+  const allocation = ownership === 'all' ? null : new Map(collectionReport({...deck,cards:included,budgetZones:zones},collection)
+    .rows.map(row => [row.entry,row[ownership]]));
+  const sectionRows = new Map();
+  for (const zone of Object.keys(ZONES)) {
+    for (const entry of included.filter(entry => zoneFor(entry) === zone)) {
+      const qty = allocation ? allocation.get(entry) : entry.qty;
+      if (!qty) continue;
+      const {card} = entry;
+      const label = section === 'zone' ? ZONES[zone] : section === 'none' ? '' : exportCategory(entry,section);
+      const finish = entry.finish ?? (card.finishes?.length ? defaultDeckFinish(card) : null);
+      const values = { name:card.name, set:String(card.set || '').toUpperCase() || card.set_name || '', number:card.collector_number || '',
+        finish:finish === 'regular' ? 'nonfoil' : finish ?? '', language:card.lang || '' };
+      const key = JSON.stringify([card.name,...metadata.map(field => values[field])]);
+      if (!sectionRows.has(label)) sectionRows.set(label,new Map());
+      const rows = sectionRows.get(label);
+      if (rows.has(key)) rows.get(key).quantity += qty;
+      else rows.set(key,{...values,quantity:qty});
+    }
   }
-  return sections.map(({label,totals})=>{
-    return label+'\n'+[...totals].map(([name,qty])=>`${quantities?qty+' ':''}${name}`).join('\n');
-  }).join('\n\n');
+  const sections = [...sectionRows].map(([label, rows]) => [label,[...rows.values()]]);
+  if (!sections.length) return {text:'',example:''};
+  if (section === 'type' || section === 'role') sections.sort(([a],[b]) => a.localeCompare(b,'en'));
+  const byName = (a,b) => a.name.localeCompare(b.name,'en');
+  for (const [,rows] of sections) {
+    if (sort === 'name') rows.sort(byName);
+    if (sort === 'quantity') rows.sort((a,b) => b.quantity-a.quantity || byName(a,b));
+  }
+
+  const csv = format === 'csv';
+  const plain = !csv && !metadata.length;
+  const sectionColumn = csv && section !== 'none';
+  const delimiter = csv ? ',' : '\t';
+  const newline = csv ? '\r\n' : '\n';
+  const header = plain ? [] : [delimitedExportRow([
+    ...(sectionColumn ? [EXPORT_SECTIONS[section]] : []), ...fields.map(field => DECK_EXPORT_FIELDS[field])
+  ],delimiter)];
+  const plainCell = value => /[\r\n]/.test(value) ? delimitedExportRow([value],delimiter) : value;
+  const renderRow = (label,row) => {
+    const values = fields.map(field => row[field]);
+    if (plain) return values.map(plainCell).join(' ');
+    return delimitedExportRow(sectionColumn ? [label,...values] : values,delimiter);
+  };
+  const renderSection = (label,rows) => [
+    ...(!csv && label ? [plain ? plainCell(label) : delimitedExportRow([label],delimiter)] : []),
+    ...(csv ? [] : header), ...rows.map(row => renderRow(label,row))
+  ].join(newline);
+  const [firstLabel,firstRows] = sections[0];
+  const csvHeader = csv ? header : [];
+  return {
+    text:[...csvHeader,sections.map(([label,rows]) => renderSection(label,rows)).join(csv ? newline : '\n\n')].join(newline),
+    example:[...csvHeader,renderSection(firstLabel,firstRows.slice(0,1))].join(newline)
+  };
 }
 export function resolveImport(parsed, cards) {
   const entries=[], problems=[];

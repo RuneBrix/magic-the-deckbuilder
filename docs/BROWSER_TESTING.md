@@ -30,7 +30,7 @@ API requests receive deterministic fixture responses, and external requests rece
 
 - Card-lookup audit checks cover supported manual Collection finishes, long double-faced names, exact printing/language metadata, cancellation, rejected-save retry and reload. New-deck text imports keep their reviewed double-faced printing, finish and zone through quota failure/retry, including enlarged text and reachable dialog actions. See the [dated workflow audit](archive/CARD_LOOKUP_AUDIT_2026-11-18.md).
 
-- Owned-printing matching reviews finish/language changes, cancels without writes, retries quota failure and preserves split quantities, functions and unchanged inventory after reload. Text export covers independent zones, headings and quantities, missing-copy allocation, empty/fully covered selections, actual text/complete JSON downloads, keyboard dismissal and enlarged-text dialog fit in all four projects.
+- Owned-printing matching reviews finish/language changes, cancels without writes, retries quota failure and preserves split quantities, functions and inventory after reload. Deck export covers zone and category selection, missing-copy allocation, one-row examples, TXT/CSV and complete JSON downloads, empty selections and enlarged-text dialog fit. Group actions cover Type and Function menus, filtered artwork and CSV, explicit removal scope, cancellation, failed-save retry, focus and reload preservation.
 
 - Settings page/Back navigation from library, editor, Explore and Collection; retained deck tab/query/inventory, workspace download/open and keyboard focus. Fourteen Light/Dark palette combinations cover desktop/phone forms, guide dialogs, chart/deck surfaces, token contrast, legacy migration, per-appearance reload and enlarged-text reflow.
 
