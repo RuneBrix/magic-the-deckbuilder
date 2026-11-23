@@ -52,12 +52,13 @@ test('catalog conversion keeps all memberships, stable sorted indexes and reject
   const oracle_id='00000000-0000-4000-8000-000000000001';
   const rows=[
     {id:'z',slug:'zebra',type:'oracle',parent_ids:['a'],taggings:[{oracle_id},{oracle_id}]},
-    {id:'a',slug:'answer',type:'oracle',child_ids:['z'],taggings:[{oracle_id}]},
+    {id:'a',slug:'answer',type:'oracle',child_ids:['z'],taggings:[]},
+    {id:'b',slug:'bird',type:'oracle',taggings:[{oracle_id}]},
   ];
   const bulk={updated_at:'2026-11-11T10:00:00Z'};
   const catalog=buildTagCatalog(rows,bulk);
-  assert.deepEqual(catalog.memberships,{[oracle_id]:[0,1]});
-  assert.deepEqual(catalog.tags.map(t=>[t.id,t.cardCount]),[['answer',1],['zebra',1]]);
+  assert.deepEqual(catalog.memberships,{[oracle_id]:[1,2]});
+  assert.deepEqual(catalog.tags.map(t=>[t.id,t.cardCount]),[['answer',0],['bird',1],['zebra',1]]);
   assert.deepEqual(buildTagCatalog([...rows].reverse(),bulk),catalog);
   assert.throws(()=>buildTagCatalog([{...rows[0],taggings:undefined}],bulk),/taggings/);
   assert.throws(()=>buildTagCatalog([{...rows[1],taggings:[{oracle_id:'invalid'}]}],bulk),/taggings/);

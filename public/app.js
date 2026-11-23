@@ -306,7 +306,7 @@ function searchPanels() {
       <input id="tag-search" type="search" value="${esc(tagSearch)}" maxlength="200" placeholder="e.g. ramp or removal" aria-describedby="tag-match-count">
       <p id="tag-match-count" role="status">${tagMatchCount(matches)}</p>
       <div id="tag-options">${tagOptions(matches)}</div>
-      <details class="query-help function-data-help"><summary>About function data</summary><p>Card counts are direct taggings in the <a href="${esc(TAG_CATALOG.source)}" target="_blank" rel="noreferrer">Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}</a>. Live search totals can differ.</p></details>
+      <details class="query-help function-data-help"><summary>About function data</summary><p>Direct counts come from the <a href="${esc(TAG_CATALOG.source)}" target="_blank" rel="noreferrer">Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}</a>. Scryfall searches can also match cards tagged with related functions.</p></details>
     </div>
   </details>`;
 }
@@ -359,7 +359,7 @@ const tagName = id => TAGS.find(([slug])=>slug===id)?.[1] || id.replaceAll('-','
 const tagFilterAction = id => filters.tags.includes(id) ? 'Remove' : 'Add';
 const toggleFunction = id => ({...filters,tags:filters.tags.includes(id)?filters.tags.filter(tag=>tag!==id):[...filters.tags,id]});
 function tagCardCount(tag) {
-  return Number.isSafeInteger(tag.cardCount) ? `${tag.cardCount.toLocaleString()} ${tag.cardCount===1?'card':'cards'}` : 'Count unavailable';
+  return Number.isSafeInteger(tag.cardCount) && tag.cardCount>=0 ? `${tag.cardCount.toLocaleString()} directly tagged` : 'Count unavailable';
 }
 function tagOptions(matches) {
   const pages=Math.max(1,Math.ceil(matches.length/TAG_PAGE_SIZE));
@@ -384,7 +384,7 @@ function browseFunctions(id) {
     <h3 id="browsed-function" tabindex="-1"></h3>
     <nav class="tag-history" aria-label="Function browsing history"><button class="secondary" data-tag-step="-1">Back</button><button class="secondary" data-tag-step="1">Forward</button></nav>
     <div id="tag-relationships"></div>
-    <section aria-label="Example cards"><h4>Example cards</h4><p class="hint">Paper cards from Scryfall search, which can include related tags.</p>
+    <section aria-label="Example cards"><h4>Example cards</h4><p class="hint">Examples use this function alone and can include related tags.</p>
       <p id="tag-example-status" role="status"></p><div id="tag-examples"></div></section></section>`,dialog);
   const overlay=$('.function-discovery'),heading=$('#browsed-function');
   const examples=$('#tag-examples'),status=$('#tag-example-status');
@@ -404,9 +404,11 @@ function browseFunctions(id) {
     timer=setTimeout(async()=>{
       const isCurrent=()=>!signal.aborted && dialog.open && overlay.isConnected;
       try {
-        const {data}=await api('/api/search?'+new URLSearchParams({q:'game:paper otag:'+tag,order:'edhrec'}),{signal});
+        const {data,total_cards:matched}=await api('/api/search?'+new URLSearchParams({q:'game:paper otag:'+tag,order:'edhrec'}),{signal});
         if (!isCurrent()) return;
-        status.textContent=data.length?'':'No paper cards matched this function.';
+        if (matched===0) status.textContent='No paper cards matched this function.';
+        else if (Number.isSafeInteger(matched) && matched>0) status.textContent=`${matched.toLocaleString()} paper ${matched===1?'card':'cards'} matched this function.`;
+        else status.textContent='Paper search count unavailable.';
         exampleCards=data.slice(0,8);
         examples.innerHTML=exampleCards.length?`<ul class="tag-example-grid">${exampleCards.map((card,i)=>{
           const image=safeUrl(imageFor(card),true)||safeUrl(card.image_uris?.small||card.card_faces?.[0]?.image_uris?.small,true);
@@ -425,7 +427,7 @@ function browseFunctions(id) {
     heading.textContent=tagName(tag.id);
     back.disabled=index===0;
     forward.disabled=index===history.length-1;
-    $('#tag-relationships').innerHTML=`<p class="tag-snapshot-count">${tagCardCount(tag)} · Direct taggings in the ${esc(TAG_CATALOG.updated.slice(0,10))} snapshot</p>
+    $('#tag-relationships').innerHTML=`<p class="tag-snapshot-count">${tagCardCount(tag)} in the ${esc(TAG_CATALOG.updated.slice(0,10))} snapshot.</p>
       <div class="tag-relations"><div><h4>Broader functions</h4>${tag.parents.length?`<ul>${tag.parents.map(parent=>`<li><button class="text-button" data-tag-navigate="${esc(parent)}">${esc(tagName(parent))}</button></li>`).join('')}</ul>`:'<p class="hint">None recorded.</p>'}</div>
       <label>Narrower functions<select id="tag-child" ${tag.children.length?'':'disabled'}><option value="">${tag.children.length?'Choose a narrower function':'None recorded'}</option>${tag.children.map(child=>`<option value="${esc(child)}">${esc(tagName(child))}</option>`).join('')}</select></label></div>
       ${tag.aliases.length?`<p>Aliases: ${esc(tag.aliases.join(', '))}</p>`:''}

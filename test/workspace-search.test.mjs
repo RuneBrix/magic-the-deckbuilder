@@ -69,7 +69,7 @@ test('tag discovery pages through alias matches with snapshot counts and inline 
   assert.doesNotMatch(html, /Directly tagged cards|starting points/);
   assert.match(html, /About function data/);
   assert.match(html, /Scryfall Oracle Tags snapshot from/);
-  assert.match(html, /class="tag-card-count">[\d,.]+ cards?/);
+  assert.match(html, /class="tag-card-count">1 directly tagged/);
   assert.match(html, /outside this snapshot/);
   assert.match(html, /id="tag-match-count"[^>]*>[\d,.]+ matching tags?/);
   assert.match(html, /Matching all \(AND\)/);
@@ -90,8 +90,9 @@ test('tag discovery pages through alias matches with snapshot counts and inline 
   assert.deepEqual(pageIds(),matching.slice(40,80));
   w.node('#tag-search').input({target:{value:'a '}});
   assert.deepEqual(pageIds(),matching.slice(0,40));
-  assert.equal(vm.runInContext('tagCardCount({cardCount:0})',w.context),'0 cards');
+  assert.equal(vm.runInContext('tagCardCount({cardCount:0})',w.context),'0 directly tagged');
   assert.equal(vm.runInContext('tagCardCount({})',w.context),'Count unavailable');
+  assert.equal(vm.runInContext('tagCardCount({cardCount:-1})',w.context),'Count unavailable');
 });
 
 test('upstream no-match responses explain recovery and possible unsupported custom tags', async () => {
