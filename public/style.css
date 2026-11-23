@@ -923,7 +923,29 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 @media(max-width:600px){.deck-title-row{flex-wrap:nowrap;gap:12px}.deck-title-row h1{font-size:30px}.deck-title-row .workspace-actions{width:auto}.deck-editor-meta{gap:8px 14px}.bracket-tools{width:100%;gap:4px 12px}.bracket-control{flex-wrap:wrap}.library{padding:24px 16px}.deck-editor-header{margin-bottom:12px}}
 
 /* Deck filtering/sorting and non-overlapping left preview (#40 / #42). */
-.editor-controls .deck-text-filter{flex:2;min-width:220px}
+.deck-filter-mode{display:grid;grid-template-columns:minmax(0,1fr) minmax(6rem,auto);align-items:end;gap:12px;flex:2 1 300px;min-width:0}
+.deck-filter-mode select{width:100%}
+.deck-selection-hint{margin:10px 0 0}
+#batch-actions:not([hidden]){position:fixed;z-index:8;inset:auto 0 calc(12px + env(safe-area-inset-bottom));width:max-content;max-width:calc(100% - 24px);max-height:45dvh;overflow:auto;margin-inline:auto;padding:6px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;box-shadow:0 4px 16px #0003}
+#batch-count{margin:0;font-weight:650;font-size:.875rem;overflow-wrap:anywhere}
+#batch-actions>button{min-height:44px;white-space:normal}
+#batch-menu-button{display:inline-flex;align-items:center;gap:6px}
+html:has(#batch-actions:not([hidden])){scroll-padding-bottom:calc(var(--batch-actions-height,0px) + 24px + env(safe-area-inset-bottom))}
+.deck-workspace:has(#batch-actions:not([hidden])){padding-bottom:calc(var(--batch-actions-height,0px) + 32px + env(safe-area-inset-bottom))}
+html:has(#batch-actions:not([hidden])) #toast{bottom:calc(var(--batch-actions-height,0px) + 28px + env(safe-area-inset-bottom))}
+.deck-selection-mark{display:grid;place-items:center;width:20px;height:20px;border:1px solid var(--ink);border-radius:3px;background:var(--surface);color:var(--ink)}
+.deck-selection-mark svg{visibility:hidden}
+[aria-pressed=true]>.deck-selection-mark{background:var(--accent);color:var(--on-accent)}
+[aria-pressed=true]>.deck-selection-mark svg{visibility:visible}
+.visual-card .deck-selection-mark{position:absolute;z-index:2;top:5px;left:50%;transform:translateX(-50%)}
+.deck-entry:has([data-select-entry][aria-pressed=true]){outline:2px solid var(--accent);outline-offset:2px}
+.text-card:has([data-select-entry]){--deck-quantity-width:max(24px,calc(3ch + 4px))}
+.text-card .deck-card-name[data-select-entry]{position:relative;padding-left:25px}
+.text-card .deck-selection-mark{position:absolute;left:0;top:50%;transform:translateY(-50%)}
+.batch-scope,.batch-review{overflow-wrap:anywhere}
+.batch-review{margin:8px 0;padding-left:22px}
+.batch-review small{display:block;color:var(--muted)}
+.batch-review li+li{margin-top:6px}
 .editor-controls>.deck-ownership-toggle{display:flex;align-items:center;gap:8px;flex:none;min-width:0;min-height:44px;color:var(--ink);cursor:pointer}
 .deck-ownership-toggle input{accent-color:var(--accent)}
 .editor-controls select{text-transform:none}
@@ -939,7 +961,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .deck-hover-preview figcaption span{display:block}
 .deck-row.is-previewed,.deck-workspace .deck-row:hover,.deck-workspace .deck-row:focus-within{background:var(--soft)}
 @media(min-width:1100px){.deck-card-area{display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px;align-items:start}.deck-hover-preview{display:block;position:sticky;top:calc(var(--nav-height,60px) + 20px);align-self:start;padding-top:12px}.deck-hover-preview .hint{line-height:1.6;max-width:24ch}.deck-hover-preview img{max-height:calc(100dvh - var(--nav-height,60px) - 160px)}}
-@media(max-width:600px){.editor-controls .deck-text-filter{min-width:100%;flex-basis:100%}.editor-controls>button{min-height:36px}}
+@media(max-width:600px){.editor-controls .deck-filter-mode{flex-basis:100%}.editor-controls>button{min-height:36px}#batch-count{flex-basis:100%}}
 
 /* Shared deck entries across visual stacks and text views (#41 / #43). */
 .deck-group-list,.deck-group-items{min-width:0}
@@ -960,6 +982,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .deck-group-actions button:hover,.deck-group-actions button:focus-visible{background:var(--soft)}
 @supports (position-area:bottom span-left){
   .deck-group-actions{inset:auto;margin:4px 0;position-area:bottom span-left;position-try-fallbacks:flip-block,flip-inline,flip-block flip-inline}
+  #batch-menu{position-area:top span-right;position-try-fallbacks:flip-inline,flip-block}
 }
 @media (pointer:coarse){.deck-group-controls h4 button,.deck-group-controls .card-menu-trigger{min-width:44px;min-height:44px}}
 .deck-group{min-width:0}
@@ -1010,7 +1033,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .card-art[data-finish=foil]::after,.preview-art[data-finish=foil]::after,.card-art[data-finish=etched]::after,.preview-art[data-finish=etched]::after{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;z-index:1}
 .card-art[data-finish=foil]::after,.preview-art[data-finish=foil]::after{background:linear-gradient(125deg,transparent 18%,#80d8ff26 32%,#e6a8ff2e 44%,#ffe7a326 54%,#8dffc126 64%,transparent 80%)}
 .card-art[data-finish=etched]::after,.preview-art[data-finish=etched]::after{background:linear-gradient(135deg,transparent 25%,#d6d3c426 48%,#fff2ce1a 52%,transparent 75%)}
-.text-card{display:grid;grid-template-columns:24px minmax(0,1fr) auto 60px 28px;gap:6px;align-items:center;padding:4px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
+.text-card{display:grid;grid-template-columns:var(--deck-quantity-width,24px) minmax(0,1fr) auto 60px 28px;gap:6px;align-items:center;padding:4px;background:var(--surface);border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
 .text-card .entry-quantity{text-align:center;font-size:inherit;font-weight:400;font-variant-numeric:tabular-nums}
 .text-card .deck-card-name{display:block;min-width:0;min-height:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:inherit;line-height:inherit}
 .deck-card-variant{display:block;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:10px}
@@ -1058,7 +1081,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 @media(max-width:600px){.text-horizontal .deck-group-items,.text-vertical .deck-group-list{grid-template-columns:minmax(0,1fr)}}
 @container(max-width:850px){.text-horizontal .deck-group-items,.text-vertical .deck-group-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container(max-width:560px){.text-horizontal .deck-group-items,.text-vertical .deck-group-list{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:600px),(hover:none){.card-menu-trigger{min-width:44px;min-height:44px}.card-quantity button{min-width:36px;min-height:44px}.card-side-controls{--card-control-size:44px}.text-card{grid-template-columns:20px minmax(0,1fr) auto 76px 44px;gap:4px}.text-card .card-quantity button{min-width:36px;min-height:44px}.text-card .card-menu-trigger{min-width:44px;min-height:44px}}
+@media(max-width:600px),(hover:none){.card-menu-trigger{min-width:44px;min-height:44px}.card-quantity button{min-width:36px;min-height:44px}.card-side-controls{--card-control-size:44px}.text-card{grid-template-columns:var(--deck-quantity-width,20px) minmax(0,1fr) auto 76px 44px;gap:4px}.text-card .card-quantity button{min-width:36px;min-height:44px}.text-card .card-menu-trigger{min-width:44px;min-height:44px}}
 
 
 
@@ -1194,7 +1217,7 @@ dialog:has(.owned-editor){width:900px;max-width:calc(100vw - 32px);padding:28px}
 @media(max-width:600px){.explorer .card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 @media(max-width:600px),(hover:none),(pointer:coarse){
-  .text-card{grid-template-columns:20px minmax(0,1fr) auto 92px 44px}
+  .text-card{grid-template-columns:var(--deck-quantity-width,20px) minmax(0,1fr) auto 92px 44px}
   .text-card .card-quantity button,.text-card .card-menu-trigger{min-width:44px;min-height:44px}
   .collection-page .collection-actions button{min-width:44px;min-height:44px}
 }

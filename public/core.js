@@ -92,10 +92,10 @@ export const entryKey = entry => JSON.stringify([deckCardIdentity(entry.card), z
 export const deckCardCopies = (deck, card, zone) => deck?.cards.reduce((total, entry) =>
   total + (deckCardIdentity(entry.card) === deckCardIdentity(card) && (zone === undefined || zoneFor(entry) === zone) ? entry.qty : 0), 0) ?? 0;
 const variantKey = entry => JSON.stringify([deckCardIdentity(entry.card), zoneFor(entry), entry.card.id, entry.finish ?? defaultDeckFinish(entry.card)]);
-function matchingEntry(deck, candidate, except) {
+function matchingEntry(deck, candidate, except, allowLegacyFallback=true) {
   const variant=variantKey(candidate);
   return deck.cards.find(entry=>entry!==except && variantKey(entry)===variant)
-    || (candidate.finish===undefined && deck.cards.find(entry=>entry!==except && entryKey(entry)===entryKey(candidate)));
+    || (allowLegacyFallback && candidate.finish===undefined && deck.cards.find(entry=>entry!==except && entryKey(entry)===entryKey(candidate)));
 }
 export const zoneCount = (deck, zone) => count({ cards: deck.cards.filter(e => zoneFor(e) === zone) });
 export function setCompanion(deck, key) {
@@ -104,12 +104,18 @@ export function setCompanion(deck, key) {
   for (const card of deck.cards) delete card.companion;
   if (entry) entry.companion = true;
 }
-export function moveEntry(deck, key, zone) {
+export function moveEntry(deck, key, zone, {preservePrinting=false}={}) {
   if (typeof zone !== 'string' || !Object.hasOwn(ZONES, zone)) throw Error('Unknown deck zone.');
   const entry = deck.cards.find(e => entryKey(e) === key);
   if (!entry || zoneFor(entry) === zone) return entry;
-  const target = matchingEntry(deck, {...entry,zone}, entry);
+  const destination = {...entry,zone};
+  const target = matchingEntry(deck, destination, entry, !preservePrinting);
   if (deckCardCopies(deck, entry.card, zone) + entry.qty > 500) throw Error('Maximum 500 copies per card in a zone. Nothing moved.');
+  if (preservePrinting && !target && entry.finish === undefined && deck.cards.some(other => entryKey(other) === entryKey(destination))) {
+    const finish = defaultDeckFinish(entry.card);
+    if (!finish) throw Error(`Choose a finish for ${entry.card.name} in its card details before moving it.`);
+    entry.finish = finish;
+  }
   if (zone !== 'sideboard') delete entry.companion;
   if (target) { target.qty += entry.qty; target.tags = [...new Set([...target.tags, ...entry.tags])]; deck.cards = deck.cards.filter(e => e !== entry); }
   else { entry.zone = zone; entry.commander = zone === 'command'; }
@@ -251,6 +257,31 @@ export function deckFinishOptions(card) {
 function defaultDeckFinish(card) {
   const options=deckFinishOptions(card);
   return options.includes('regular')?'regular':options.length===1?options[0]:null;
+}
+export function selectionCollectionFinish(entry) {
+  const finish = entry.finish ?? defaultDeckFinish(entry.card);
+  return !entry.card.finishes?.length || deckFinishOptions(entry.card).includes(finish) ? finish : null;
+}
+export function addEntriesToCollection(collection, entries, now=new Date().toISOString()) {
+  const next = [...collection];
+  const key = (card,finish) => JSON.stringify([card.id,finish]);
+  const positions = new Map(collection.flatMap((lot,index) => lot.condition ? [] : [[key(lot.card,lot.finish),index]]));
+  for (const entry of entries) {
+    const {card,qty} = entry;
+    const finish = selectionCollectionFinish(entry);
+    if (!finish) throw Error(`Choose a finish for ${card.name} in its card details before adding it to Collection.`);
+    const lotKey = key(card,finish), index = positions.get(lotKey);
+    if (index !== undefined) {
+      const lot = next[index];
+      if (lot.qty+qty>9999) throw Error(`Collection can hold up to 9,999 copies of the same lot of ${card.name}.`);
+      next[index] = {...lot,qty:lot.qty+qty,updatedAt:now};
+    } else {
+      if (next.length>=5000) throw Error('Collection can hold up to 5,000 lots.');
+      positions.set(lotKey,next.length);
+      next.push({card:structuredClone(card),qty,finish,addedAt:now,updatedAt:now});
+    }
+  }
+  return next;
 }
 export const deckCurrency = deck => deck?.currency ?? 'EUR';
 export const isBasicLand = card => /\bBasic\b/.test(deckTypeLine(card).split(' — ')[0]) && isLand(card);

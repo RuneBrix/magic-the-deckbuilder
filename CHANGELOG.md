@@ -1,5 +1,9 @@
 # Changelog
 
+## Deck card selection — 2026-11-23
+
+- Use Select beside Filter cards to choose whole deck entries across zones. The bottom Actions menu can assign functions, move entries, copy names and quantities, add exact printings to Collection, and confirm removal of the selected copies (#215).
+
 ## Deck and group export — 2026-11-23
 
 - Export decks as TXT or CSV with zone, category and ownership selections, optional printing metadata, sorting and a one-row example. Complete JSON remains available (#238).

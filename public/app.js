@@ -5,6 +5,7 @@ import { bindStatistics, statPanel } from './statistics-view.js';
 import { budgetPanel } from './budget-view.js';
 import { deckPrintingPrice, deckCurrency, isBasicLand, parseEuroQuote, COST_SYMBOLS, MAX_COST_AMOUNT, functionMemberships, suggestedFunctions, unassignedFunctionSuggestions, ownedPrintingPlan } from './core.js';
 import { isReservedFunctionGroup, renameFunctionGroup, deckExport, DECK_EXPORT_FIELDS, EXPORT_SECTIONS } from './core.js';
+import { addEntriesToCollection, selectionCollectionFinish } from './core.js';
 import { cheapestPrintings, refreshPriceQuotes, cheapestDeckPlan } from './deck-prices.js';
 import { TYPE_CATALOG, KEYWORD_CATALOG } from './filter-catalog.js';
 
@@ -70,6 +71,8 @@ const TAG_PAGE_SIZE = 40;
 let tagPage = 1;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
+let selectionDeck = null;
+const selectedDeckEntries = new Map();
 let showDeckOwnership = false;
 const collapsedDeckGroups = new WeakMap();
 let previewKey = '', previewDeck = '', cardActionTrigger = null, cardActionContext = null;
@@ -141,6 +144,10 @@ function updateStickyHeights() {
   document.documentElement.style?.setProperty('--nav-height',Math.ceil($('.workspace-nav').getBoundingClientRect().height)+'px');
   const form=$('#search-form');
   form?.parentElement?.style.setProperty('--search-form-height',form.offsetHeight+'px');
+  if (selectionDeck) {
+    const bar = $('#batch-actions');
+    document.documentElement.style?.setProperty('--batch-actions-height',(bar && !bar.hidden ? bar.offsetHeight : 0)+'px');
+  }
 }
 const stickyObserver=typeof ResizeObserver==='undefined'?null:new ResizeObserver(updateStickyHeights);
 function render() {
@@ -154,6 +161,10 @@ function render() {
     else {const attribute=[...focused.attributes].find(a=>a.name.startsWith('data-'));if(attribute)focusSelector='['+attribute.name+'="'+CSS.escape(attribute.value)+'"]';}
   }
   const d = current();
+  if (selectionDeck && (view !== 'deck' || deckTab !== 'cards' || selectionDeck !== d)) {
+    selectionDeck = null;
+    selectedDeckEntries.clear();
+  }
   if(view==='deck' && deckTab==='checks' && d)scheduleLegality(d);
   const statistics = view === 'deck' && d && deckTab === 'stats' ? stats(d, { detailed: true }) : null;
   const previousStatistics = statistics ? $('#deck-statistics') : null;
@@ -166,6 +177,8 @@ function render() {
   stickyObserver?.observe($('.workspace-nav'));
   const searchForm=document.querySelector('#search-form');
   if(searchForm)stickyObserver?.observe(searchForm);
+  const batchActions = $('#batch-actions');
+  if (batchActions) stickyObserver?.observe(batchActions);
   bind();
   if(view==='settings')bindSettings();
   if (statistics) bindStatistics($('#deck-statistics'), statistics,
@@ -911,7 +924,7 @@ function deckWorkspace(d, statistics, previousStatistics) {
   const s=statistics ?? stats(d), report=legalityReport(d);
   const tabs=[['cards','Cards'],['stats','Statistics'],['planning','Ownership & costs'],['checks','Checks']];
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><button class="text-button library-back" data-home data-view="decks">${icon('arrow',16)} Back to library</button><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions">${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual cards'],['visual-vertical','Vertical visual cards'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price '+currencySymbol(deckCurrency(d))+' (low first)'],['price-desc','Price '+currencySymbol(deckCurrency(d))+' (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><button class="text-button" data-action="clear-deck-filters">Clear filter</button>${editorOptions.layout.startsWith('visual')?`<label class="deck-ownership-toggle"><input id="show-deck-ownership" type="checkbox" ${showDeckOwnership?'checked':''}> Show ownership</label>`:''}</div>${deckCards(d)}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><button class="text-button library-back" data-home data-view="decks">${icon('arrow',16)} Back to library</button><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions">${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual cards'],['visual-vertical','Vertical visual cards'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price '+currencySymbol(deckCurrency(d))+' (low first)'],['price-desc','Price '+currencySymbol(deckCurrency(d))+' (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<div class="deck-filter-mode"><label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><label class="deck-mode">Mode<select id="editor-mode"><option value="default">Default</option><option value="select"${selectionDeck === d ? ' selected' : ''}>Select</option></select></label></div><button class="text-button" data-action="clear-deck-filters">Clear filter</button>${editorOptions.layout.startsWith('visual')?`<label class="deck-ownership-toggle"><input id="show-deck-ownership" type="checkbox" ${showDeckOwnership?'checked':''}> Show ownership</label>`:''}</div>${selectionDeck === d ? '<p class="hint deck-selection-hint" id="deck-selection-hint">Select cards to include all copies of each entry, across any zone.</p>' : ''}${deckCards(d)}${selectionDeck === d ? batchBar() : ''}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
 }
 function quickAddMarkup(d) {
   return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p id="quick-add-status" class="hint" role="status"></p></section>`;
@@ -1073,6 +1086,7 @@ function previewMarkup(d) {
   return `<figure${faces}>${faces?flipControl(entry.card):''}${image?`<div class="preview-art" data-finish="${esc(finish||'')}"><img src="${esc(image)}" alt="${esc(entry.card.name)}${finish&&finish!=='regular'?' · '+finish:''}"></div>`:'<p class="hint">Artwork unavailable for this printing.</p>'}<figcaption>${esc(entry.card.name)} · ${ZONES[zoneFor(entry)]}<span>${esc(primaryRole(entry))}</span><span>${price}</span></figcaption></figure>`;
 }
 function deckCards(d) {
+  if (selectionDeck === d) syncDeckSelection(d);
   if(previewDeck!==d.id || !deckEntries(d,editorOptions).some(e=>entryKey(e)===previewKey)){previewKey='';previewDeck=d.id;}
   return `<div id="editor-card-area"><div class="deck-card-area"><aside class="deck-hover-preview" aria-label="Card preview"><div id="deck-card-preview">${previewMarkup(d)}</div></aside><div class="deck-rows">${deckList(d,true)}</div></div><div id="deck-drag-targets" hidden><p id="deck-drag-label" role="status"></p><div class="drag-zone-targets" role="group" aria-label="Card drop destinations"><div data-drop-new-function>Add to new function</div>${Object.entries(ZONES).map(([zone,label])=>`<div data-drop-zone="${zone}">Move to ${label}</div>`).join('')}</div><div class="drag-trash" data-drop-trash title="Confirm deletion of all copies across all zones"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg><span>Delete card…</span><small>All zones · asks first</small></div></div></div>`;
 }
@@ -1095,8 +1109,13 @@ function deckEntry(e, atLimit, coverage) {
   const menu=`<button class="card-menu-trigger" data-card-menu="${esc(key)}" aria-label="Card actions for ${esc(e.card.name)} in ${zone}${variant}" aria-haspopup="menu" aria-controls="card-actions" aria-expanded="false">${icon('more',18)}</button>`;
   const ownership=coverage ? ownershipBadge(coverage) : null;
   const badge=entryBadge(e,visual,ownership);
-  const art=`<button class="card-art" data-finish="${esc(finish||'')}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}" aria-label="Inspect ${esc(e.card.name)} in ${zone}"${ownership?` title="${esc(ownership.description)}" aria-description="${esc(ownership.description)}"`:''}>${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}</button>`;
-  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}" data-card-draggable${faces} data-preview-entry="${esc(key)}"${visual?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${e.qty} ${e.qty===1?'copy':'copies'}${variant||' · '+finishLabel}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e)}`:`${badge}<button class="deck-card-name" aria-label="${esc(e.card.name)}" title="${esc(e.card.name)}${printingTitle}" data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}">${esc(e.card.name)}<small class="deck-card-variant">${esc(edition)}</small></button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
+  const nameTitle = `title="${esc(e.card.name)}${printingTitle}"`;
+  const action = selectionDeck
+    ? `data-select-entry="${esc(key)}" aria-pressed="${selectedDeckEntries.has(key)}" aria-label="Select ${esc(e.card.name)} · ${zone} · ${copyCount(e.qty)}${printingTitle}"${visual ? '' : ' '+nameTitle}`
+    : `aria-label="${visual ? `Inspect ${esc(e.card.name)} in ${zone}` : esc(e.card.name)}"${visual ? '' : ' '+nameTitle} data-inspect="${esc(e.card.id)}" data-entry="${esc(key)}"`;
+  const mark = selectionDeck ? `<span class="deck-selection-mark" aria-hidden="true">${icon('check',14)}</span>` : '';
+  const art=`<button class="card-art" ${action} data-finish="${esc(finish||'')}"${ownership?` title="${esc(ownership.description)}" aria-description="${esc(ownership.description)}"`:''}>${image?`<img draggable="false" src="${esc(image)}" alt="${esc(e.card.name)}" loading="lazy" width="488" height="680">`:`<span class="entry-art-fallback">${esc(e.card.name)}<small>${esc(e.card.type_line)}</small></span>`}${mark}</button>`;
+  return `<article class="deck-entry ${visual?'visual-card':'text-card'}${key===previewKey?' is-previewed':''}"${selectionDeck ? '' : ' data-card-draggable'}${faces} data-preview-entry="${esc(key)}"${visual&&!selectionDeck?` tabindex="0" aria-label="${esc(e.card.name)} · ${zone} · ${copyCount(e.qty)}${variant||' · '+finishLabel}"`: ''}>${visual?`${badge}<div class="card-side-controls">${quantity}${menu}${faces?flipControl(e.card):''}</div>${art}${stackCardMeta(e)}`:`${badge}<button class="deck-card-name" ${action}>${mark}${esc(e.card.name)}<small class="deck-card-variant">${esc(edition)}</small></button><span class="row-mana">${mana(e.card.mana_cost||e.card.card_faces?.[0]?.mana_cost)}</span>${quantity}${menu}`}</article>`;
 }
 function deckGroupName(entry, grouping) {
   if (grouping === 'role') return primaryRole(entry);
@@ -1104,6 +1123,186 @@ function deckGroupName(entry, grouping) {
 }
 const deckGroupKey = (zone, grouping, name) => JSON.stringify([zone, grouping, name]);
 const isLandGroup = name => /^lands?$/i.test(name);
+
+const batchActions = { assign:'Assign to function…', move:'Move to zone…', copy:'Copy card names', collection:'Add to Collection…', remove:'Remove from deck…' };
+const selectionSignature = entry => JSON.stringify([entry.card.id,entry.qty,entry.tags,entry.companion]);
+const entryCount = qty => `${qty} ${qty === 1 ? 'entry' : 'entries'}`;
+const copyCount = qty => `${qty} ${qty === 1 ? 'copy' : 'copies'}`;
+
+function syncDeckSelection(deck) {
+  if (!selectedDeckEntries.size) return [];
+  const collapsed = collapsedDeckGroups.get(deck);
+  const entries = deckEntries(deck,editorOptions).filter(entry => {
+    if (selectedDeckEntries.get(entryKey(entry)) !== selectionSignature(entry)) return false;
+    const zone = zoneFor(entry), grouping = editorOptions.group;
+    return zone === 'command' || !collapsed?.has(deckGroupKey(zone,grouping,deckGroupName(entry,grouping)));
+  });
+  const visible = new Set(entries.map(entryKey));
+  for (const key of selectedDeckEntries.keys()) if (!visible.has(key)) selectedDeckEntries.delete(key);
+  return entries;
+}
+
+function selectionSummary(entries) {
+  return `${entryCount(entries.length)} · ${copyCount(count({cards:entries}))} selected`;
+}
+
+function batchBar() {
+  const entries = syncDeckSelection(selectionDeck);
+  return `<div id="batch-actions" role="group" aria-label="Selected card actions"${entries.length ? '' : ' hidden'}>
+    <p id="batch-count" role="status">${selectionSummary(entries)}</p>
+    <button type="button" class="primary" id="batch-menu-button" popovertarget="batch-menu">Actions ${icon('down',14)}</button>
+    <button type="button" class="text-button" data-batch-control="clear">Clear selection</button>
+    <button type="button" class="text-button" data-batch-control="done">Done</button>
+    <div id="batch-menu" class="deck-group-actions" popover>${Object.entries(batchActions).map(([key,label],i) => `<button type="button" data-batch-action="${key}"${i === 0 ? ' autofocus' : ''}${key === 'remove' ? ' class="danger"' : ''}>${label}</button>`).join('')}</div>
+  </div>`;
+}
+
+function updateBatchControls(deck) {
+  const entries = syncDeckSelection(deck), bar = $('#batch-actions');
+  bar.hidden = !entries.length;
+  if (bar.hidden && $('#batch-menu').matches(':popover-open')) $('#batch-menu').hidePopover();
+  $('#batch-count').textContent = selectionSummary(entries);
+  for (const card of document.querySelectorAll('[data-select-entry]')) {
+    card.setAttribute('aria-pressed',String(selectedDeckEntries.has(card.dataset.selectEntry)));
+  }
+  updateStickyHeights();
+}
+
+function revealFromBatchBar(target) {
+  if (!selectionDeck || !target || target.closest('#batch-actions')) return;
+  const bar = $('#batch-actions');
+  if (!bar || bar.hidden) return;
+  const rect = target.getBoundingClientRect(), bounds = bar.getBoundingClientRect();
+  if (rect.bottom+4>bounds.top && rect.top<bounds.bottom && rect.left<bounds.right && rect.right>bounds.left) {
+    target.scrollIntoView({block:'center'});
+  }
+}
+
+function setDeckSelectionMode(selecting) {
+  selectionDeck = selecting ? current() : null;
+  selectedDeckEntries.clear();
+  render();
+  $('#editor-mode')?.focus();
+}
+
+async function useBatchAction(action) {
+  const deck = current();
+  if (!deck || selectionDeck !== deck || !Object.hasOwn(batchActions,action)) return;
+  $('#batch-menu').hidePopover();
+  $('#batch-menu-button').focus({preventScroll:true});
+  const previousSize = selectedDeckEntries.size;
+  const entries = syncDeckSelection(deck);
+  if (!entries.length || entries.length !== previousSize) {
+    updateBatchControls(deck);
+    if (!entries.length) $('#editor-mode')?.focus();
+    toast('The selection changed. Review the selected cards and try again.');
+    return;
+  }
+  if (action === 'copy') {
+    try {
+      await navigator.clipboard.writeText(exportDeckText({cards:entries}));
+      toast(`Copied ${copyCount(count({cards:entries}))} with their zone headings.`);
+    } catch {
+      toast('Could not copy cards. Allow clipboard access in your browser and try again.');
+    }
+    return;
+  }
+  batchActionDialog(deck,entries,action);
+}
+
+function batchActionDialog(deck, entries, action) {
+  const reviewed = new Map(entries.map(entry => [entryKey(entry),selectionSignature(entry)]));
+  const chosenCollection = collection;
+  const functions = [...new Set(deck.cards.map(entry => entry.tags[0]).filter(Boolean))].sort((a,b) => a.localeCompare(b,'en'));
+  const zones = Object.keys(ZONES).filter(zone => entries.some(entry => zoneFor(entry) !== zone));
+  const titles = {assign:'Assign selected cards to a function',move:'Move selected cards',collection:'Add selected cards to Collection',remove:'Remove selected cards?'};
+  const labels = {assign:'Assign function',move:'Move cards',collection:'Add copies',remove:'Remove copies'};
+  const scope = Object.entries(ZONES).flatMap(([zone,label]) => {
+    const copies = count({cards:entries.filter(entry => zoneFor(entry) === zone)});
+    return copies ? [`${label} · ${copyCount(copies)}`] : [];
+  }).join(' / ');
+  const controls = action === 'assign' ? `<label>Function<select id="batch-function" name="function" autofocus>
+      ${functions.map((name,index) => `<option value="${index}">${esc(name)}</option>`).join('')}<option value="new">New function…</option>
+    </select></label><label id="batch-function-name"${functions.length ? ' hidden' : ''}>New function name<input name="name" maxlength="80"${functions.length ? ' disabled' : ' required'}></label>` : action === 'move'
+    ? `<label>Destination zone<select name="zone" id="batch-zone" autofocus>${zones.map(zone => `<option value="${zone}">${ZONES[zone]}</option>`).join('')}</select></label><p id="batch-move-scope" role="status"></p>` : '';
+  showDialog(`<h2>${titles[action]}</h2><p class="batch-scope">${esc(deck.name)} · ${esc(selectionSummary(entries))}</p><p>${scope}</p>
+    ${action === 'collection' ? '<p>Add these exact printings and quantities to lots with condition unrecorded. Review the finishes below.</p>' : ''}
+    <details class="planning-help"${action === 'collection' ? ' open' : ''}><summary>Review selected entries</summary><ul class="batch-review">${entries.map(entry => {
+      const finish = action === 'collection' ? selectionCollectionFinish(entry) : entry.finish;
+      const label = ({regular:'Nonfoil',foil:'Foil',etched:'Etched'})[finish] || 'Finish unavailable';
+      return `<li>${entry.qty} × ${esc(entry.card.name)}<small>${ZONES[zoneFor(entry)]} · ${esc(printingLabel(entry.card))} · ${label}</small></li>`;
+    }).join('')}</ul></details>
+    <form id="batch-action-form">${controls}<p class="query-error" id="batch-action-error" role="alert" hidden></p><div class="workspace-actions">
+      <button type="button" class="secondary" id="batch-cancel"${controls ? '' : ' autofocus'}>${action === 'remove' ? 'Keep cards' : 'Cancel'}</button>
+      <button class="${action === 'remove' ? 'danger' : 'primary'}">${labels[action]}</button></div></form>`);
+  $('#batch-cancel').onclick = closeDialog;
+  $('#dialog').onclose = () => {
+    if (selectionDeck === deck && !selectedDeckEntries.size) $('#editor-mode')?.focus();
+  };
+  if (action === 'move') {
+    const destination = $('#batch-zone');
+    destination.onchange = () => {
+      const moving = entries.filter(entry => zoneFor(entry) !== destination.value);
+      $('#batch-move-scope').textContent = `Move ${copyCount(count({cards:moving}))} to ${ZONES[destination.value]}.`;
+    };
+    destination.onchange();
+  }
+  if (action === 'assign') $('#batch-function').onchange = event => {
+    const name = $('#batch-function-name'), creating = event.target.value === 'new';
+    name.hidden = !creating;
+    name.querySelector('input').disabled = !creating;
+    name.querySelector('input').required = creating;
+  };
+  $('#batch-action-form').onsubmit = event => {
+    event.preventDefault();
+    const values = new FormData(event.target);
+    try {
+      const selected = syncDeckSelection(deck);
+      if (selectionDeck !== deck || current() !== deck || selected.length !== reviewed.size || selected.some(entry => reviewed.get(entryKey(entry)) !== selectionSignature(entry))) {
+        if (selectionDeck === deck) updateBatchControls(deck);
+        throw Error('The selection changed. Close this dialog and review the selected cards again.');
+      }
+      let affected = selected;
+      if (action === 'collection') {
+        if (collection !== chosenCollection) throw Error('Collection changed. Close this dialog and review the addition again.');
+        const next = addEntriesToCollection(collection,selected);
+        const json = JSON.stringify(workspaceFile(decks,next));
+        try { writeStoredWorkspace(json); }
+        catch { throw Error('Could not save Collection. Free browser space or save a workspace copy, then retry.'); }
+        collection = next;
+        storageError = '';
+        updateBackupStatus();
+      } else {
+        const staged = structuredClone(deck);
+        if (action === 'move') {
+          const zone = values.get('zone');
+          if (!zones.includes(zone)) throw Error('Choose a destination zone.');
+          affected = selected.filter(entry => zoneFor(entry) !== zone);
+          for (const entry of affected) moveEntry(staged,entryKey(entry),zone,{preservePrinting:true});
+        } else if (action === 'assign') {
+          const group = values.get('function');
+          const name = group === 'new' ? String(values.get('name') || '').trim() : functions[group];
+          if (!name) throw Error('Choose or enter a function name.');
+          if (group !== 'new' && !deck.cards.some(entry => entry.tags[0] === name)) throw Error('That function group changed. Close this dialog and choose a function again.');
+          for (const key of reviewed.keys()) assignEntryFunction(staged,key,name);
+        } else {
+          staged.cards = staged.cards.filter(entry => !reviewed.has(entryKey(entry)));
+        }
+        commitDeckSnapshot(deck,staged);
+      }
+      selectedDeckEntries.clear();
+      closeDialog();
+      render();
+      $('#editor-mode')?.focus();
+      const result = {assign:'Function assigned',move:'Moved',collection:'Added to Collection',remove:'Removed'};
+      toast(`${result[action]} · ${copyCount(count({cards:affected}))}`);
+    } catch (error) {
+      const feedback = $('#batch-action-error');
+      feedback.hidden = false;
+      feedback.textContent = error.message;
+    }
+  };
+}
 
 function deckList(d, full=false) {
   const filtered = full ? deckEntries(d, editorOptions) : d.cards;
@@ -1177,6 +1376,7 @@ async function useDeckGroupControl(button) {
     collapsedDeckGroups.set(deck, groups);
     button.setAttribute('aria-expanded', String(!collapse));
     group.querySelector('.deck-group-items').hidden = collapse;
+    if (selectionDeck === deck) updateBatchControls(deck);
     return;
   }
   const [zone, grouping, name] = JSON.parse(key);
@@ -1986,7 +2186,15 @@ function bind() {
   $('#deck-companion')?.addEventListener('change',e=>{try{changeDeck(deck=>setCompanion(deck,e.target.value||null));$('#deck-companion')?.focus();}catch(error){toast(error.message);}});
   $('#assigned-bracket')?.addEventListener('change',e=>{const d=current();if(!d || d.format!=='commander')return;const value=Number(e.target.value);if(e.target.value && !Object.hasOwn(BRACKETS,value))return;if(e.target.value)d.bracket=value;else delete d.bracket;d.updated=new Date().toISOString();save();render();$('#assigned-bracket')?.focus();});
   for(const key of ['layout','group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
-  $('#editor-search')?.addEventListener('input',e=>{editorOptions.search=e.target.value;const d=current();if(view==='deck' && d)$('#editor-card-area').outerHTML=deckCards(d);});
+  $('#editor-mode')?.addEventListener('change',e=>setDeckSelectionMode(e.target.value === 'select'));
+  $('#editor-search')?.addEventListener('input',e=>{
+    editorOptions.search=e.target.value;
+    const d=current();
+    if(view==='deck' && d){
+      $('#editor-card-area').outerHTML=deckCards(d);
+      if(selectionDeck === d)updateBatchControls(d);
+    }
+  });
   $('#show-deck-ownership')?.addEventListener('change',e=>{
     showDeckOwnership=e.target.checked;
     $('#editor-card-area').outerHTML=deckCards(current());
@@ -2044,7 +2252,11 @@ $('#app').addEventListener('keydown',e=>{
   }
 });
 $('#app').addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
-$('#app').addEventListener('focusin',e=>{const row=e.target.closest('[data-preview-entry]');if(row)previewEntry(row.dataset.previewEntry);});
+$('#app').addEventListener('focusin',e=>{
+  const row=e.target.closest('[data-preview-entry]');
+  if(row)previewEntry(row.dataset.previewEntry);
+  if (selectionDeck && e.target.matches(':focus-visible')) revealFromBatchBar(e.target);
+});
 for(const event of ['pointerout','focusout'])$('#app').addEventListener(event,e=>{
   if(event==='pointerout' && e.pointerType==='touch')return;
   const container=e.target.closest('[data-card-faces]');
@@ -2068,6 +2280,26 @@ $('#app').addEventListener('click',async e=>{
   const ownedRow=e.target.closest('[data-owned-row]');
   if(ownedRow && !e.target.closest('button,a,input,select,textarea,label')){collectionLotDialog(null,Number(ownedRow.dataset.ownedRow));return;}
   const button=e.target.closest('button, a[data-view], a[data-action]');if(!button)return;
+  if (button.dataset.selectEntry) {
+    const deck = current(), key = button.dataset.selectEntry;
+    if (!deck || deck !== selectionDeck) return;
+    const entry = deck.cards.find(entry => entryKey(entry) === key);
+    if (!entry) return;
+    if (selectedDeckEntries.has(key)) selectedDeckEntries.delete(key);
+    else selectedDeckEntries.set(key,selectionSignature(entry));
+    updateBatchControls(deck);
+    revealFromBatchBar(document.activeElement);
+    return;
+  }
+  if (button.dataset.batchAction) { await useBatchAction(button.dataset.batchAction); return; }
+  if (button.dataset.batchControl === 'done') { setDeckSelectionMode(false); return; }
+  if (button.dataset.batchControl === 'clear' && selectionDeck) {
+    const selected = $('[data-select-entry][aria-pressed="true"]');
+    selectedDeckEntries.clear();
+    updateBatchControls(selectionDeck);
+    (selected ?? $('#editor-mode'))?.focus();
+    return;
+  }
   if(button.dataset.toggleDeckGroup!==undefined || button.dataset.deckGroupAction){await useDeckGroupControl(button);return;}
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
