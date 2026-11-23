@@ -1312,7 +1312,10 @@ test('function pages and related browsing preserve the search until a filter is 
     if (query === exampleQuery('removal') && ++removalAttempts === 1) {
       return route.fulfill({ status: 502, json: { error: 'Fixture unavailable' } });
     }
-    return route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12, has_more: false } });
+    if (query === exampleQuery('draw')) {
+      return route.fulfill({ status: 404, json: { error: 'Your query didn’t match any cards.' } });
+    }
+    return route.fulfill({ json: { data: cards.slice(0, 12), total_cards: 12345, has_more: true } });
   });
   await page.getByRole('button', { name: 'Search cards' }).click();
   const raw = page.locator('#raw');
@@ -1324,7 +1327,7 @@ test('function pages and related browsing preserve the search until a filter is 
   const pager = page.locator('#tag-page');
   await lookup.fill('a');
   await expect(tiles).toHaveCount(40);
-  await expect(tiles.first()).toContainText(/\d+ cards?/);
+  await expect(tiles.first()).toContainText(/\d+ directly tagged/);
   const phone = page.viewportSize().width < 600;
   const geometry = await tiles.evaluateAll(nodes => nodes.map(node => {
     const { x, y, width, height } = node.getBoundingClientRect();
@@ -1347,16 +1350,23 @@ test('function pages and related browsing preserve the search until a filter is 
   await page.screenshot({ path: testInfo.outputPath('function-grid.png') });
   expect(queries).toEqual([]);
 
+  await lookup.fill('card draw');
+  await page.getByRole('button', { name: 'Browse draw relationships', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Related functions' });
+  await expect(dialog.getByText('No paper cards matched this function.')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Try again' })).toBeHidden();
+  await page.keyboard.press('Escape');
+
   await lookup.fill('sweeper');
   const trigger = page.getByRole('button', { name: 'Browse sweeper relationships', exact: true });
   await trigger.press('Enter');
-  const dialog = page.getByRole('dialog', { name: 'Related functions' });
   const heading = dialog.locator('#browsed-function');
   await expect(heading).toBeFocused();
   await expect(dialog.getByText('Loading example cards…')).toBeVisible();
   await expect.poll(() => queries.includes(exampleQuery('sweeper'))).toBe(true);
   await dialog.getByRole('button', { name: 'Removal', exact: true }).click();
   await expect(dialog.getByText('Example cards are unavailable.')).toBeVisible();
+  await expect(dialog.getByText(/0 directly tagged in the .* snapshot/)).toBeVisible();
   releaseSweeper();
   await dialog.getByRole('button', { name: 'Try again' }).click();
   const examples = dialog.locator('.tag-example-grid li');
@@ -1365,7 +1375,7 @@ test('function pages and related browsing preserve the search until a filter is 
   await expect.poll(() => examples.locator('img').evaluateAll(images => images.filter(img => img.naturalWidth > 0).length)).toBe(8);
   const rowPositions = await examples.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
   expect(new Set(rowPositions).size).toBe(phone ? 4 : 2);
-  await expect(dialog.getByText(/Direct taggings in the/)).toBeVisible();
+  await expect(dialog.getByText('12,345 paper cards matched this function.')).toBeVisible();
   await dialogFits(page);
   await dialog.screenshot({ path: testInfo.outputPath('function-overlay.png') });
   await dialog.getByRole('button', { name: 'Back', exact: true }).click();

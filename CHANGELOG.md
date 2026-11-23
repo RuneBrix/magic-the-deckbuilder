@@ -1,5 +1,9 @@
 # Changelog
 
+## Function counts in Search cards — 2026-11-23
+
+- Label direct tagging counts on function tiles. Related shows the dated snapshot count and Scryfall's paper search total beside its example cards (#242).
+
 ## Deck card selection — 2026-11-23
 
 - Use Select beside Filter cards to choose whole deck entries across zones. The bottom Actions menu can assign functions, move entries, copy names and quantities, add exact printings to Collection, and confirm removal of the selected copies (#215).
