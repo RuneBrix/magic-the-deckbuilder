@@ -10,6 +10,60 @@ async function fits(page) {
   if(box)expect(box.x>=0 && box.y>=0 && box.x+box.width<=page.viewportSize().width && box.y+box.height<=page.viewportSize().height).toBe(true);
 }
 
+test('collection upload keeps a text selection when the drag ends on the backdrop',async({page,isMobile})=>{
+  test.skip(isMobile,'Mouse text selection');
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  await page.getByRole('button',{name:'Upload card list',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'Upload collection'});
+  const list=dialog.getByRole('textbox',{name:'Card list or CSV'});
+  await list.fill('1x Arcane Signet (tmc)\n1x Assault Strobe (som)');
+  const text=await list.boundingBox(),modal=await dialog.boundingBox();
+  const outside=modal.x+modal.width+8,y=text.y+20;
+  await page.mouse.move(text.x+15,y);
+  await page.mouse.down();
+  await page.mouse.move(outside,y,{steps:8});
+  await page.mouse.up();
+  await expect(dialog).toBeVisible();
+  expect(await list.evaluate(el=>el.selectionEnd-el.selectionStart)).toBeGreaterThan(0);
+  await page.mouse.click(outside,y);
+  await expect(dialog).toBeHidden();
+});
+
+test('collection upload gives a correction instruction and only Abort import for 83 lookup issues',async({page},testInfo)=>{
+  const initial=(await stored(page)).collection;
+  const queries=[];
+  let nameBatches=0;
+  await page.route('**/api/collection-sets',route=>route.fulfill({json:[{code:'tmc',name:'Smoke Commander'}]}));
+  await page.route('**/api/search?**',route=>{
+    queries.push(new URL(route.request().url()).searchParams.get('q'));
+    return route.fulfill({status:404,json:{error:'No cards found.'}});
+  });
+  await page.route('**/api/collection',route=>{
+    if(!route.request().postDataJSON().names)return route.fallback();
+    nameBatches++;
+    return route.fulfill({json:{data:[],not_found:[]}});
+  });
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  await page.getByRole('button',{name:'Upload card list',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'Upload collection'});
+  await dialog.getByRole('textbox',{name:'Card list or CSV'}).fill(Array.from({length:83},(_,i)=>`1x Unknown Card ${i} (tmc)`).join('\n'));
+  await expect(dialog.locator('.collection-upload-columns')).toContainText('Quantity, Name, Set');
+  await dialog.getByRole('button',{name:'Upload',exact:true}).click();
+  await expect(dialog.getByRole('heading',{name:'Correct the list before importing'})).toBeFocused();
+  await expect(dialog.locator('.collection-upload-blocked')).toContainText('More than 20 rows');
+  await expect(dialog.locator('.collection-upload-blocked')).toContainText('Correct the card names');
+  await expect(dialog.getByRole('listitem')).toHaveText('Can’t find card name · 83');
+  await expect(dialog.getByRole('button')).toHaveText(['Abort import']);
+  expect(queries).toHaveLength(5);
+  expect(queries[0]).toContain('!"Unknown Card 0" set:tmc');
+  expect(nameBatches).toBe(2);
+  await fits(page);
+  await dialog.screenshot({path:testInfo.outputPath('upload-correction-required.png')});
+  await dialog.getByRole('button',{name:'Abort import'}).press('Enter');
+  await expect(dialog).toBeHidden();
+  expect((await stored(page)).collection).toEqual(initial);
+});
+
 test('collection uploads show additive totals, protect replacement and retain unrelated decks',async({page},testInfo)=>{
   const original=(await stored(page)).decks;
   await page.getByRole('button',{name:'Collection',exact:true}).click();
@@ -55,8 +109,8 @@ test('collection upload reviews printing choices and missing names before saving
   await page.getByLabel('Card list or CSV').fill('Quantity,Name,Edition Name\n2,Smoke Card 2,Alternate Edition\n1,Unknown Card,Alternate Edition');
   await page.locator('#collection-upload-submit').click();
   const review=page.locator('#collection-upload-review');
-  await expect(review).toContainText('Printing · 1');
-  await expect(review).toContainText('Card name · 1');
+  await expect(review).toContainText('Can’t find the requested printing · 1');
+  await expect(review).toContainText('Can’t find card name · 1');
   await expect(review).not.toContainText('Smoke Card');
   expect(await stored(page)).toEqual(initial);
 
@@ -215,8 +269,8 @@ test('collection upload separates syntax, omissions, and lookup review for paste
   await submit.press('Enter');
   const review=dialog.locator('#collection-upload-review');
   await expect(review.getByRole('heading',{name:'Import check complete'})).toBeFocused();
-  await expect(review).toContainText('Printing · 1');
-  await expect(review).toContainText('Finish · 1');
+  await expect(review).toContainText('Can’t find the requested printing · 1');
+  await expect(review).toContainText('Requested finish unavailable · 1');
   expect(queries).toHaveLength(1);
   expect(queries[0]).toContain('set:soc lang:ja');
   expect((await stored(page)).collection).toEqual(original);

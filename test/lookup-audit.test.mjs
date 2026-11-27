@@ -121,7 +121,7 @@ test('fallback Collection lookup accepts omitted foil/etched finishes but reject
     w.context.fetch=async url=>({ok:true,json:async()=>url==='/api/collection'?{data:[]}:{data:[url.includes('page=2')?{...first,id:'second',oracle_id:'other'}:first],has_more:mode==='ambiguous'&&!url.includes('page=2')}});
     vm.runInContext('collectionImport()',w.context);const submit=w.node('#collection-import').onsubmit;await submit(event);
     if(mode==='ambiguous'){
-      assert.equal(w.writes.length,0);assert.match(w.node('#collection-upload-review').innerHTML,/Card name · 1/);
+      assert.equal(w.writes.length,0);assert.match(w.node('#collection-upload-review').innerHTML,/Card name matches multiple cards · 1/);
     }else{
       await submit(event);assert.equal(read(w).collection[0]?.finish,mode);
     }
@@ -163,7 +163,7 @@ test('omitted-finish fallback cannot satisfy a later explicit unsupported nonfoi
   const w=workspace();formValues(w,{list:'Quantity,Name,Finish\n2,Exact,\n3,Exact,Normal'});
   w.context.fetch=async url=>({ok:true,json:async()=>url==='/api/collection'?{data:[]}:{data:[{...editorCard('Exact'),finishes:['foil']}],has_more:false}});
   vm.runInContext('collectionImport()',w.context);await w.node('#collection-import').onsubmit(event);
-  assert.equal(w.writes.length,0);assert.match(w.node('#collection-upload-review').innerHTML,/Finish · 1/);
+  assert.equal(w.writes.length,0);assert.match(w.node('#collection-upload-review').innerHTML,/Requested finish unavailable · 1/);
   assert.match(w.node('#collection-upload-review').innerHTML,/2 copies ready/);
 });
 

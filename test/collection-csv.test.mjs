@@ -76,3 +76,13 @@ test('tab-separated mapping retains headerless rows and reports malformed rows a
   assert.match(upload.skipped[1],/^Tab-separated row 5: unknown finish/);
   assert.throws(()=>prepareCollectionUpload('Quantity\tCard name\tSet\r\n1\t"Unclosed name\tSOC'),/Tab-separated row 2: .*closing quote/);
 });
+
+test('Archidekt quantity lines preserve set codes, full card names and optional collector numbers',()=>{
+  const text=['1x Arcane Signet (tmc)','1x Armed // Dangerous (dgm)','1x Assault Strobe (som)','1x Beast Within (eoc) 12a','2 Tatyova, Benthic Druid'].join('\r\n');
+  const upload=prepareCollectionUpload(text);
+  assert.deepEqual(upload.accepted,['Quantity','Name','Set','Collector number']);
+  assert.deepEqual(upload.rows.map(({name,qty,set,collectorNumber})=>[name,qty,set,collectorNumber]),[
+    ['Arcane Signet',1,'tmc',undefined],['Armed // Dangerous',1,'dgm',undefined],['Assault Strobe',1,'som',undefined],
+    ['Beast Within',1,'eoc','12a'],['Tatyova, Benthic Druid',2,undefined,undefined],
+  ]);
+});

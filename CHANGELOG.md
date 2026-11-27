@@ -4,6 +4,7 @@
 
 - Upload or paste tab-separated deck TXT with set, collector number, finish and language. Map unfamiliar columns and review malformed rows before applying copies (#269).
 - The wider Upload collection dialog separates examples, syntax status, processed columns and rows that need attention (#270).
+- Recognize Archidekt TXT set codes, batch fallback lookups, and show clear correction instructions above the review limit. Text selection can end outside the dialog without dismissing it.
 
 ## Cards zone and group controls — 2026-11-27
 

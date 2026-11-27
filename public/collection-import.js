@@ -58,9 +58,20 @@ export function prepareCollectionUpload(text,mapping=null,editMapping=false) {
   const format=collectionUploadFormat(source);
   if(format==='txt'){
     const rows=[],skipped=[];const lines=source.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);if(lines.length>5100)throw Error('Maximum 5000 card rows.');
-    for(const line of lines){try{if(/^(Main deck|Mainboard|Sideboard|Command zone|Commander|Maybeboard):?$/i.test(line))throw Error('Zone heading');rows.push(...parseCollectionImport(line).map(row=>({...row,finishUnspecified:true})));}catch{skipped.push(line);}}
+    for(const line of lines){
+      try{
+        const [,cardLine,set,collectorNumber]=line.match(/^(\d+x?\s+.+?)\s+\(([a-z0-9]{2,8})\)(?:\s+(\S+))?$/i)??[];
+        const [row]=parseCollectionImport(cardLine??line);
+        if(!row||row.zone)throw Error('Expected a card row.');
+        rows.push({...row,finishUnspecified:true,...(set?{set}:{}),...(collectorNumber?{collectorNumber}:{})});
+      }catch{skipped.push(line);}
+    }
     if(!rows.length)throw Error('No valid card rows. Use a quantity followed by a card name.');
-    if(rows.length>5000)throw Error('Maximum 5000 card rows.');return {rows,skipped,accepted:['Quantity','Name'],ignored:[]};
+    if(rows.length>5000)throw Error('Maximum 5000 card rows.');
+    const accepted=['Quantity','Name'];
+    if(rows.some(row=>row.set))accepted.push('Set');
+    if(rows.some(row=>row.collectorNumber))accepted.push('Collector number');
+    return {rows,skipped,accepted,ignored:[]};
   }
   const csv=format==='csv',label=csv?'CSV':'Tab-separated';
   const records=readDelimitedRecords(csv?source.trim():source,csv?',':'\t',label);

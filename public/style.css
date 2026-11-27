@@ -1261,5 +1261,9 @@ dialog:has(.owned-editor){width:900px;max-width:calc(100vw - 32px);padding:28px}
 #collection-upload-inputs:not([hidden]),#collection-resolution-options{display:flex;flex-direction:column;gap:12px}
 #collection-upload-review{overflow-wrap:anywhere}
 #collection-upload-review ul{padding-inline-start:24px}
+#collection-upload-review .collection-upload-blocked{margin-top:12px;padding:12px 16px}
+.collection-upload-blocked p:first-child{font-weight:650}
+#collection-upload-review #collection-abort-upload{margin-top:12px}
+#dialog .dialog-close[hidden],#collection-upload-submit[hidden]{display:none}
 
 #collection-resolution-art img{display:block;width:110px;max-width:100%;border-radius:5px;margin-block:8px}
