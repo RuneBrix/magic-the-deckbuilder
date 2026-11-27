@@ -203,7 +203,7 @@ test('collection TXT reports zones and uploads valid cards after skip confirmati
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
   await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection.length',w.context),0);
-  assert.match(w.node('#collection-notices').innerHTML,/Could not process the following cards/);w.node('#collection-accept-ignored').checked=true;
+  assert.match(w.node('#collection-notices').innerHTML,/Rows to skip/);w.node('#collection-accept-ignored').checked=true;
   await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection[0].qty',w.context),3);
 });
 
@@ -219,7 +219,7 @@ test('CSV ignored columns require confirmation and syntax validation itself send
   const w=workspace();formValues(w,{list:'Quantity,Name,Purchase Price,Tags\n1,Forest,5,personal'});let calls=0;
   w.context.fetch=async()=>{calls++;return {ok:true,json:async()=>({data:[editorCard('Forest')]})};};
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');form.oninput();
-  assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Not counted: Purchase Price, Tags/);assert.equal(w.node('#collection-upload-submit').disabled,true);
+  assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Columns to ignore<\/strong> Purchase Price, Tags/);assert.equal(w.node('#collection-upload-submit').disabled,true);
   await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,0);
   w.node('#collection-accept-ignored').checked=true;await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,1);assert.equal(vm.runInContext('collection.length',w.context),1);
 });
@@ -336,8 +336,17 @@ test('Archidekt Normal rows accept Scryfall nonfoil finish for the reported thre
 
 test('CSV falls back from a foil-only default and a missing double-faced lookup to compatible printings',async()=>{
   const w=workspace(),name='Aang, Air Nomad',double="Aang, Swift Savior // Aang and La, Ocean's Fury";formValues(w,{list:'Quantity,Name,Finish,Condition\n1,"'+name+'",Normal,NM\n1,"'+double+'",Normal,NM'});
-  w.context.fetch=async url=>({ok:true,json:async()=>url==='/api/collection'?{data:[{...editorCard(name),finishes:['foil']}],not_found:[{name:double}]}:{data:[{...editorCard(url.includes('Swift')?double:name),id:url.includes('Swift')?'double-nonfoil':'air-nonfoil',finishes:['nonfoil']}],has_more:false}});
+  const printings=[name,double].map(cardName=>({...editorCard(cardName),id:cardName===name?'air-nonfoil':'double-nonfoil',finishes:['nonfoil']}));
+  let searches=0;
+  w.context.fetch=async url=>{
+    if(url==='/api/collection')return {ok:true,json:async()=>({data:[{...editorCard(name),finishes:['foil']}],not_found:[{name:double}]})};
+    searches++;
+    const q=new URL(url,'http://localhost').searchParams.get('q');
+    const data=printings.filter(card=>q.includes('!"'+card.name.split(' // ')[0]+'"'));
+    return {ok:true,json:async()=>({data,has_more:false})};
+  };
   vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);assert.equal(w.node('#collection-import-error').textContent||'','');assert.equal(vm.runInContext('collection.length',w.context),2);
+  assert.equal(searches,1);
 });
 
 test('live localhost upload resolves the reported Archidekt three-card CSV in a disposable VM', {skip:process.env.ARCANA_LIVE_CSV!=='1'},async()=>{
@@ -377,7 +386,7 @@ test('CSV set and language constraints reject mismatches and can recover from a 
   };
   vm.runInContext('collectionImport()',w.context);await checkAndFinishUpload(w);
   assert.equal(vm.runInContext('collection.length',w.context),0);assert.equal(w.writes.length,0);
-  assert.match(w.node('#collection-upload-review').innerHTML,/Language · 1/);
+  assert.match(w.node('#collection-upload-review').innerHTML,/Can’t find the requested language · 1/);
   assert.equal(w.node('#collection-import-preview').textContent,'');
   fail=false;
   formValues(w,{list:'Count,Card,Language,Edition Name\n1,Forest,Japanese,EXAMPLE   SET'});
@@ -415,8 +424,8 @@ test('upload scans past mismatches, recovers omitted finishes, and stages delibe
   const submit=w.node('#collection-import').onsubmit,event={preventDefault(){}};
   await submit(event);
   const summary=w.node('#collection-upload-review');
-  assert.match(summary.innerHTML,/Finish · 1/);
-  assert.match(summary.innerHTML,/Card name · 1/);
+  assert.match(summary.innerHTML,/Requested finish unavailable · 1/);
+  assert.match(summary.innerHTML,/Can’t find card name · 1/);
   assert.doesNotMatch(summary.innerHTML,/Cultivate|Missing/);
   assert.equal(w.writes.length,0);
   await submit(event);
@@ -433,22 +442,38 @@ test('upload scans past mismatches, recovers omitted finishes, and stages delibe
 });
 
 test('upload caps manual work per category after checking the whole file',async()=>{
-  const w=workspace(),missing=Array.from({length:21},(_,i)=>'1,Missing '+i);
+  const w=workspace(),missing=Array.from({length:83},(_,i)=>'1,Missing '+i);
   formValues(w,{list:'Quantity,Name\n'+[...missing,'1,Found'].join('\n')});
-  w.context.fetch=async url=>url==='/api/collection'
-    ? {ok:true,json:async()=>({data:[editorCard('Found')]})}
-    : {ok:false,status:404,json:async()=>({error:'No cards found.'})};
+  let nameBatches=0,printingBatches=0;
+  w.context.fetch=async url=>{
+    if(url==='/api/collection'){
+      nameBatches++;
+      return {ok:true,json:async()=>({data:[editorCard('Found')]})};
+    }
+    printingBatches++;
+    return {ok:false,status:404,json:async()=>({error:'No cards found.'})};
+  };
   vm.runInContext('collectionImport()',w.context);
   await w.node('#collection-import').onsubmit({preventDefault(){}});
-  assert.match(w.node('#collection-upload-review').innerHTML,/Card name · 21/);
-  assert.match(w.node('#collection-upload-review').innerHTML,/1 copy ready/);
+  assert.equal(nameBatches,2);
+  assert.equal(printingBatches,5);
+  assert.match(w.node('#collection-upload-review').innerHTML,/Can’t find card name · 83/);
+  assert.match(w.node('#collection-upload-review').innerHTML,/Correct the card names/);
+  assert.match(w.node('#collection-upload-review').innerHTML,/1 copy matched/);
+  assert.equal(w.node('#collection-upload-submit').hidden,true);
   assert.equal(w.node('#collection-upload-submit').disabled,true);
+  await w.node('#collection-import').onsubmit({preventDefault(){}});
+  assert.equal(printingBatches,5);
   assert.equal(w.writes.length,0);
 });
 
-test('1183 edition rows use bounded batches and keep set constraints across pages',async()=>{
+for(const format of ['CSV','Archidekt TXT'])test(`${format} edition rows use bounded batches and keep set constraints across pages`,async()=>{
   const w=workspace(),names=Array.from({length:1183},(_,i)=>'Edition Card '+i);
-  formValues(w,{list:'Quantity,Name,Edition Name\n'+names.map((name,i)=>'1,'+name+','+(i%2?'tst':'alt')).join('\n')});
+  const lines=names.map((name,i)=>{
+    const set=i%2?'tst':'alt';
+    return format==='CSV'?`1,${name},${set}`:`1x ${name} (${set})`;
+  });
+  formValues(w,{list:(format==='CSV'?'Quantity,Name,Edition Name\n':'')+lines.join('\n')});
   let searches=0,catalogs=0;
   w.context.fetch=async url=>{
     if(url==='/api/collection-sets'){

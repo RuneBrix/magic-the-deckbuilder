@@ -98,7 +98,7 @@ test('collection upload shows a correctable row error after an edition lookup', 
   await expect(page.locator('#collection-import-preview')).toContainText('Resolving 1 of 1');
   releaseLookup();
   await expect(page.locator('#collection-import-preview')).toBeEmpty();
-  await expect(page.locator('#collection-upload-review')).toContainText('Card name · 1');
+  await expect(page.locator('#collection-upload-review')).toContainText('Can’t find card name · 1');
   await page.getByRole('button',{name:'Resolve errors'}).click();
   await expect(page.locator('#collection-upload-review')).toContainText('CSV row 2 · Unlisted Legendary Creature, With a Very Long Name · Smoke Test');
   await expect(page.getByRole('button',{name:'Skip row'})).toBeEnabled();
