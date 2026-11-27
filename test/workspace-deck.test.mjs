@@ -246,8 +246,8 @@ test('all four deck views share filters, grouping, quantities, printing and menu
   for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']){
     w.node('#editor-layout').change({target:{value:layout}});
     assert.match(w.node('#app').innerHTML,new RegExp('deck-zones '+layout));
-    const headings=[...w.node('#app').innerHTML.matchAll(/<h3>(Command zone|Main deck|Sideboard|Maybeboard) ·/g)].map(m=>m[1]);
-    assert.deepEqual(headings,['Command zone','Main deck','Maybeboard']);
+    const zones=[...w.node('#app').innerHTML.matchAll(/data-toggle-deck-zone="([^"]+)"/g)].map(m=>m[1]);
+    assert.deepEqual(zones,['command','main','maybeboard']);
     if(layout.startsWith('text'))assert.match(w.node('#app').innerHTML,/class="deck-card-name" aria-label="Leader" title="Leader · Unknown set/);
     else {
       assert.match(w.node('#app').innerHTML,/<span class="entry-quantity"[^>]*>\d+<\/span><div class="card-side-controls">[\s\S]*?<\/div><button class="card-art"/);
@@ -281,7 +281,7 @@ test('fixed visual card slots follow visible group entries without changing quan
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 
-test('land groups sort last per zone while cards and all other groups keep their selected order', () => {
+test('group headings sort A–Z per zone while cards keep their selected order', () => {
   const d = editorDeck();
   const cards = [
     [editorCard('A field', 'Land'), 'lands'],
@@ -301,9 +301,7 @@ test('land groups sort last per zone while cards and all other groups keep their
   const check = (group, order, search = '') => {
     const entries = core.deckEntries(d, {order, search}).filter(entry => entry.zone === 'main');
     const nameFor = entry => group === 'role' ? core.primaryRole(entry) : core.category(entry.card);
-    const firstSeen = [...new Set(entries.map(nameFor))];
-    const land = name => /^(land|lands)$/i.test(name);
-    const groups = group === 'none' ? [] : [...firstSeen.filter(name => !land(name)), ...firstSeen.filter(land)];
+    const groups = group === 'none' ? [] : [...new Set(entries.map(nameFor))].sort((a,b) => a.localeCompare(b,'en'));
     const html = vm.runInContext(`editorOptions=${JSON.stringify({layout:'text-horizontal', group, order, search})};deckList(decks[0],true)`,w.context);
     const main = html.split('data-drop-zone="main"><h3>')[1].split('data-drop-zone="sideboard"><h3>')[0];
     const names = markup => [...markup.matchAll(/class="deck-group-name">([^<]+) <span/g)].map(match => match[1]);
@@ -364,19 +362,19 @@ test('optional viewing zones follow stored entries rather than filter matches in
   for(const layout of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']){
     w.context.layout=layout;
     vm.runInContext("editorOptions.layout=layout;editorOptions.search='';",w.context);
-    assert.doesNotMatch(vm.runInContext('deckList(decks[0],true)',w.context),/<h3>(Sideboard|Maybeboard) ·/);
+    assert.doesNotMatch(vm.runInContext('deckList(decks[0],true)',w.context),/data-toggle-deck-zone="(sideboard|maybeboard)"/);
     for(const zone of ['sideboard','maybeboard']){
       w.context.zone=zone;
       vm.runInContext("moveEntry(decks[0],entryKey(decks[0].cards[1]),zone)",w.context);
       const label=core.ZONES[zone];
-      assert.match(vm.runInContext('deckList(decks[0],true)',w.context),new RegExp('<h3>'+label+' ·'));
+      assert.match(vm.runInContext('deckList(decks[0],true)',w.context),new RegExp('data-toggle-deck-zone="'+zone+'"'));
       assert.match(vm.runInContext('deckList(decks[0])',w.context),new RegExp('<h3>'+label+' ·'));
       vm.runInContext("editorOptions.search='no-such-match'",w.context);
       const filtered=vm.runInContext('deckList(decks[0],true)',w.context);
       assert.match(filtered,new RegExp(label+' · 2 · 0 shown'));
       assert.match(filtered,/No cards match these filters/);
       vm.runInContext("moveEntry(decks[0],entryKey(decks[0].cards[1]),'main');editorOptions.search=''",w.context);
-      assert.doesNotMatch(vm.runInContext('deckList(decks[0],true)',w.context),/<h3>(Sideboard|Maybeboard) ·/);
+      assert.doesNotMatch(vm.runInContext('deckList(decks[0],true)',w.context),/data-toggle-deck-zone="(sideboard|maybeboard)"/);
     }
   }
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);

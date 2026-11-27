@@ -74,7 +74,7 @@ let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', or
 let selectionDeck = null;
 const selectedDeckEntries = new Map();
 let showDeckOwnership = false;
-const collapsedDeckGroups = new WeakMap();
+const collapsedDeckSections = new WeakMap();
 let previewKey = '', previewDeck = '', cardActionTrigger = null, cardActionContext = null;
 let cardDrag = null, cardDragPress = null, suppressCardClick = false;
 const legalityStates = new Map();
@@ -1095,7 +1095,11 @@ function deckCards(d) {
 function previewEntry(key) {
   const d=current();if(view!=='deck' || deckTab!=='cards' || !d || previewKey===key)return;
   if(!deckEntries(d,editorOptions).some(e=>entryKey(e)===key))return;
-  previewDeck=d.id;previewKey=key;$('#deck-card-preview').innerHTML=previewMarkup(d);
+  previewDeck=d.id;
+  updateDeckPreview(d,key);
+}
+function updateDeckPreview(d, key) {
+  previewKey=key;$('#deck-card-preview').innerHTML=previewMarkup(d);
   for(const row of document.querySelectorAll('[data-preview-entry]'))row.classList.toggle('is-previewed',row.dataset.previewEntry===key);
 }
 function deckEntry(e, atLimit, coverage) {
@@ -1124,7 +1128,6 @@ function deckGroupName(entry, grouping) {
   return grouping === 'type' ? category(entry.card) : '';
 }
 const deckGroupKey = (zone, grouping, name) => JSON.stringify([zone, grouping, name]);
-const isLandGroup = name => /^lands?$/i.test(name);
 
 const batchActions = { assign:'Assign to function…', move:'Move to zone…', copy:'Copy card names', collection:'Add to Collection…', remove:'Remove from deck…' };
 const selectionSignature = entry => JSON.stringify([entry.card.id,entry.qty,entry.tags,entry.companion]);
@@ -1133,10 +1136,11 @@ const copyCount = qty => `${qty} ${qty === 1 ? 'copy' : 'copies'}`;
 
 function syncDeckSelection(deck) {
   if (!selectedDeckEntries.size) return [];
-  const collapsed = collapsedDeckGroups.get(deck);
+  const collapsed = collapsedDeckSections.get(deck);
   const entries = deckEntries(deck,editorOptions).filter(entry => {
     if (selectedDeckEntries.get(entryKey(entry)) !== selectionSignature(entry)) return false;
     const zone = zoneFor(entry), grouping = editorOptions.group;
+    if (collapsed?.has(zone)) return false;
     return zone === 'command' || !collapsed?.has(deckGroupKey(zone,grouping,deckGroupName(entry,grouping)));
   });
   const visible = new Set(entries.map(entryKey));
@@ -1323,7 +1327,7 @@ function deckList(d, full=false) {
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group).push(entry);
     }
-    const orderedGroups = [...groups].sort(([a], [b]) => Number(isLandGroup(a)) - Number(isLandGroup(b)));
+    const orderedGroups = [...groups].sort(([a], [b]) => a.localeCompare(b,'en'));
     const groupSections = orderedGroups.map(([group,items], index) => {
       const cards = items.map(e => {
         const atLimit=deckCardCopies(d,e.card,zone)>=500;
@@ -1337,7 +1341,7 @@ function deckList(d, full=false) {
       if (!group) return `<section class="deck-group"><div class="deck-group-items">${cards}</div></section>`;
       const id = `deck-group-${zone}-${index}`;
       const key = deckGroupKey(zone, grouping, group);
-      const collapsed = collapsedDeckGroups.get(d)?.has(key) ?? false;
+      const collapsed = collapsedDeckSections.get(d)?.has(key) ?? false;
       const groupQty = count({ cards: items });
       const scope = `${esc(group)} · ${label}`;
       return `<section class="deck-group" data-deck-group="${esc(key)}"${target}>
@@ -1362,25 +1366,37 @@ function deckList(d, full=false) {
     const shown = filtering ? ` · ${count({ cards: entries })} shown` : '';
     const price = full ? `<span class="deck-zone-price"> · ${deckPriceTotal(entries,d)}${filtering ? ' for shown cards' : ''}</span>` : '';
     const empty = `<p class="hint">${full && qty ? 'No cards match these filters.' : 'No cards in this zone.'}</p>`;
-    return `<section class="deck-zone"${full ? ` data-drop-zone="${zone}"` : ''}><h3>${label} · ${qty}${shown}${price}</h3><div class="deck-group-list">${groupSections || empty}</div></section>`;
+    const summary = `${label} · ${qty}${shown}${price}`;
+    const contents = groupSections || empty;
+    if (!full) return `<section class="deck-zone"><h3>${summary}</h3><div class="deck-group-list">${contents}</div></section>`;
+    const id = `deck-zone-${zone}-cards`;
+    const collapsed = collapsedDeckSections.get(d)?.has(zone) ?? false;
+    return `<section class="deck-zone" data-drop-zone="${zone}"><h3><button type="button" data-toggle-deck-zone="${zone}" aria-expanded="${!collapsed}" aria-controls="${id}">${icon('down',16)}<span>${summary}</span></button></h3><div class="deck-group-list" id="${id}"${collapsed ? ' hidden' : ''}>${contents}</div></section>`;
   }).join('');
   return `${full ? '' : `<div class="zone-counts" aria-label="Deck zone counts">${zoneCounts}</div>`}<div class="deck-zones ${full ? esc(editorOptions.layout) : 'tracker-zones'}">${zoneSections}</div>`;
+}
+function toggleDeckSection(button) {
+  const deck = current();
+  const key = button.dataset.toggleDeckZone ?? button.closest('[data-deck-group]').dataset.deckGroup;
+  const collapse = button.getAttribute('aria-expanded') === 'true';
+  const sections = collapsedDeckSections.get(deck) ?? new Set();
+  if (collapse) sections.add(key);
+  else sections.delete(key);
+  collapsedDeckSections.set(deck, sections);
+  const contents = $(`#${button.getAttribute('aria-controls')}`);
+  if (collapse) {
+    if (cardActionTrigger && contents.contains(cardActionTrigger)) closeCardActions(false);
+    contents.querySelector(':popover-open')?.hidePopover();
+    if (contents.querySelector('.is-previewed')) updateDeckPreview(deck,'');
+  }
+  button.setAttribute('aria-expanded', String(!collapse));
+  contents.hidden = collapse;
+  if (selectionDeck === deck) updateBatchControls(deck);
 }
 async function useDeckGroupControl(button) {
   const deck = current();
   const group = button.closest('[data-deck-group]');
   const key = group.dataset.deckGroup;
-  if (button.hasAttribute('data-toggle-deck-group')) {
-    const collapse = button.getAttribute('aria-expanded') === 'true';
-    const groups = collapsedDeckGroups.get(deck) ?? new Set();
-    if (collapse) groups.add(key);
-    else groups.delete(key);
-    collapsedDeckGroups.set(deck, groups);
-    button.setAttribute('aria-expanded', String(!collapse));
-    group.querySelector('.deck-group-items').hidden = collapse;
-    if (selectionDeck === deck) updateBatchControls(deck);
-    return;
-  }
   const [zone, grouping, name] = JSON.parse(key);
   const action = button.dataset.deckGroupAction;
   group.querySelector('.deck-group-actions').hidePopover();
@@ -1489,7 +1505,7 @@ function renameFunctionGroupDialog(deck, zone, name) {
       const staged = structuredClone(deck);
       const renamed = renameFunctionGroup(staged, zone, name, new FormData(event.target).get('name'));
       commitDeckSnapshot(deck, staged);
-      const groups = collapsedDeckGroups.get(deck);
+      const groups = collapsedDeckSections.get(deck);
       const newKey = deckGroupKey(zone, 'role', renamed);
       if (groups?.delete(deckGroupKey(zone, 'role', name))) groups.add(newKey);
       closeDialog();
@@ -2302,7 +2318,8 @@ $('#app').addEventListener('click',async e=>{
     (selected ?? $('#editor-mode'))?.focus();
     return;
   }
-  if(button.dataset.toggleDeckGroup!==undefined || button.dataset.deckGroupAction){await useDeckGroupControl(button);return;}
+  if(button.dataset.toggleDeckZone!==undefined || button.dataset.toggleDeckGroup!==undefined){toggleDeckSection(button);return;}
+  if(button.dataset.deckGroupAction){await useDeckGroupControl(button);return;}
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
   if(button.dataset.clearCategory){clearFilterCategory(button.dataset.clearCategory);return;}

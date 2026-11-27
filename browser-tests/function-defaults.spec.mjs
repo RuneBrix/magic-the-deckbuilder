@@ -119,7 +119,7 @@ test('a scoped function group rename preserves variants and future Ramp defaults
     Object.assign(variant,{card:{...visible.card,id:variant.card.id,collector_number:'2a'},qty:3,finish:'foil',tags:['Ramp']});
     hidden.tags=['Ramp'];
     hidden.qty=500;
-    other.tags=['Interaction'];
+    other.tags=['Momentum'];
     land.tags=['Lands'];
     data.decks[0].cards=[command,visible,variant,hidden,other,{...visible,zone:'sideboard'}, {...land,zone:'maybeboard'}];
     data.decks.push({...data.decks[0],id:'another-deck',name:'Another deck'});
@@ -136,11 +136,13 @@ test('a scoped function group rename preserves variants and future Ramp defaults
   const filter=page.getByRole('searchbox',{name:'Filter cards'});
   const activate=element=>isMobile ? element.tap() : element.press('Enter');
   const before=await saved(page);
+  const mainGroups=page.locator('#deck-zone-main-cards [data-toggle-deck-group]');
 
   await activate(page.getByRole('button',{name:'Group actions for Creature · Main deck',exact:true}));
   await expect(rename).toHaveCount(0);
   await page.keyboard.press('Escape');
   await groupBy.selectOption('role');
+  await expect(mainGroups).toHaveText([/^Momentum ·/, /^Ramp ·/]);
   await activate(page.getByRole('button',{name:'Group actions for Lands · Maybeboard',exact:true}));
   await expect(rename).toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -163,11 +165,13 @@ test('a scoped function group rename preserves variants and future Ramp defaults
   }
   expect(await saved(page)).toEqual(before);
 
+  await activate(mainGroups.filter({hasText:'Momentum'}));
+  await activate(mainGroups.filter({hasText:'Ramp'}));
   await filter.fill('Visible rock');
   await activate(options);
   await activate(rename);
   await expect(dialog).toContainText('505 copies in the whole group, including cards hidden by the filter.');
-  await name.fill(' interaction ');
+  await name.fill(' momentum ');
   await activate(save);
   await expect(dialog.getByRole('alert')).toContainText('already exists in this zone');
   await name.fill('Mana rock');
@@ -193,6 +197,8 @@ test('a scoped function group rename preserves variants and future Ramp defaults
   await expect(renamed).toBeFocused();
   await page.evaluate(()=>document.documentElement.style.fontSize='');
   await filter.fill('');
+  await expect(mainGroups).toHaveText([/^Mana rock ·/, /^Momentum ·/]);
+  for (const heading of await mainGroups.all()) await expect(heading).toHaveAttribute('aria-expanded','false');
   const after=await saved(page);
   expect(after.decks[0].cards).toEqual(before.decks[0].cards.map((entry,index)=>index>=1 && index<=3
     ? {...entry,tags:['Mana rock',...entry.tags.slice(1)]} : entry));
