@@ -290,14 +290,17 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
     const key = 'arcana.workspace.v2';
     const workspace = JSON.parse(localStorage.getItem(key));
     const entries = workspace.decks[0].cards;
-    Object.assign(entries[0].card, { cmc: 9 });
+    Object.assign(entries[0].card, { cmc: 9, color_identity: ['W', 'U', 'G'] });
     entries[0].tags = ['Commander only'];
     entries[2].tags = [label, 'Draw'];
     const token = { id: tokenId, name: 'Beast', type_line: 'Token Creature — Beast', component: 'token' };
-    Object.assign(entries[1].card, { produced_mana: ['U'], all_parts: [token] });
+    Object.assign(entries[1].card, { produced_mana: ['W', 'U', 'B', 'R', 'G'], all_parts: [token] });
     Object.assign(entries[2].card, { cmc: 4, type_line: 'Artifact Creature', colors: ['G', 'U'], power: '0', mana_cost: '{G/U}', produced_mana: ['G', 'U'], all_parts: [token] });
     entries.push({ ...entries[2], qty: 10, zone: 'sideboard' }, { ...entries[2], qty: 10, zone: 'maybeboard' });
     workspace.decks.push({ id: 'empty-statistics', name: 'Empty Statistics', format: 'modern', cards: [] });
+    workspace.decks.push({ id: 'no-commander-statistics', name: 'Commander Deck in Progress', format: 'commander', cards: [
+      { ...entries[1], card: { ...entries[1].card, object: 'card' } },
+    ] });
     localStorage.setItem(key, JSON.stringify(workspace));
   }, { label: longFunction, tokenId });
   await page.reload();
@@ -322,6 +325,14 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await expect(board.getByRole('heading', { name: 'Card functions' })).toBeVisible();
   await expect(board.locator('.mana-pie')).toHaveCount(2);
   const charts = board.locator('.mana-distributions > section');
+  const costs = charts.filter({ has: page.getByRole('heading', { name: 'Mana costs', exact: true }) });
+  const production = charts.filter({ has: page.getByRole('heading', { name: 'Mana production', exact: true }) });
+  await expect(costs.getByRole('listitem')).toHaveText(['White0', 'Blue0.5', 'Black0', 'Red0', 'Green40.5']);
+  await expect(production.getByRole('listitem')).toHaveText(['White2', 'Blue3', 'Green3']);
+  await expect(production.locator('.mana-pie')).toHaveAttribute('style', 'background:conic-gradient(var(--chart-W) 0turn 0.25turn, var(--chart-U) 0.25turn 0.625turn, var(--chart-G) 0.625turn 1turn)');
+  await expect(costs.getByText('Colored symbols per copy.')).toBeVisible();
+  await expect(production.getByText('Possible colors per copy, limited to Command zone color identity.')).toBeVisible();
+  await expect(production.getByText('Data unavailable for 38 copies.')).toBeVisible();
   const [costBox, productionBox] = await Promise.all([charts.nth(0).boundingBox(), charts.nth(1).boundingBox()]);
   if (isMobile) expect(productionBox.y).toBeGreaterThan(costBox.y + costBox.height);
   else expect(productionBox.x).toBeGreaterThan(costBox.x + costBox.width);
@@ -376,7 +387,7 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await expect(board.getByRole('img', { name: /Mana curve for RampRamp.*4 mana: 1/ })).toBeVisible();
   await noPageOverflow(page);
   await page.setViewportSize(originalViewport);
-  const enlarged = await page.addStyleTag({ content: '#deck-statistics :is(.curve span,.curve small,.mana-legend){font-size:1.5rem}' });
+  const enlarged = await page.addStyleTag({ content: '#deck-statistics :is(.curve span,.curve small,.mana-legend,.mana-tool .hint){font-size:1.5rem}' });
   await noPageOverflow(page);
   await board.locator('#curve-chart').scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('statistics-curve.png') });
@@ -390,14 +401,25 @@ test('statistics breakdowns and draw chances work with long labels, keyboard and
   await expect(page.getByText('Add cards to Main deck to calculate draw chances.')).toBeVisible();
   await expect(page.getByText('No referenced tokens.')).toBeVisible();
   await expect(page.getByText('No recorded colored mana costs.')).toBeVisible();
+  await expect(page.getByText('No recorded colored mana sources in this color identity.')).toBeVisible();
+  await expect(production.getByText('Possible colors per copy, limited to Main deck color identity.')).toBeVisible();
   await expect(drawn).toBeDisabled();
+  await noPageOverflow(page);
+
+  await page.getByRole('button', { name: 'Back to library', exact: true }).click();
+  await page.getByRole('button', { name: 'Commander Deck in Progress', exact: true }).click();
+  await page.getByRole('tab', { name: 'Statistics', exact: true }).click();
+  await expect(production.getByRole('listitem')).toHaveText(['Green2']);
+  await expect(production.getByText('Possible colors per copy, limited to Main deck color identity.')).toBeVisible();
+  await expect(production.getByText(/unavailable|incomplete/i)).toHaveCount(0);
   await noPageOverflow(page);
   expect(await savedDeckData()).toEqual(saved);
 });
 
-test('statistics loads exact token art without applying stale results or rewriting the workspace', async ({ page }, testInfo) => {
+test('statistics loads exact token art without applying stale results or rewriting the workspace', async ({ page, isMobile }, testInfo) => {
+  const longName = 'Long token name for narrow screens';
   const [beast, variant, noArt, broken, missing, other] = cards.slice(0, 6).map((card, index) => ({
-    ...card, id: card.id.replace('-4000-', '-4001-'), name: index < 2 ? 'Beast' : ['Clue', 'Map', 'Treasure', 'Food'][index - 2],
+    ...card, id: card.id.replace('-4000-', '-4001-'), name: index < 2 ? 'Beast' : [longName, 'Map', 'Treasure', 'Food'][index - 2],
     type_line: 'Token Artifact', image_uris: index === 2 ? {} : { normal: 'https://cards.scryfall.io/token-' + index + '.jpg' },
   }));
   await page.route('https://cards.scryfall.io/token-3.jpg', route => route.fulfill({ status: 404 }));
@@ -438,6 +460,7 @@ test('statistics loads exact token art without applying stale results or rewriti
   const before = await saved();
   await expect.poll(() => firstAttempts).toBe(1);
   await expect(tokens.getByText('Loading artwork…')).toHaveCount(5);
+  await expect(tokens.locator('.token-name')).toHaveText(['Beast', 'Beast', longName, 'Map', 'Treasure']);
   const staleResponse = page.waitForResponse(response => response.url().endsWith('/api/collection') &&
     response.request().postDataJSON().ids?.includes(beast.id));
   await back();
@@ -450,14 +473,27 @@ test('statistics loads exact token art without applying stale results or rewriti
 
   await back();
   await open('Smoke Garden');
-  await expect(tokens.getByRole('link', { name: 'Beast · Smoke Test · #1 · EN on Scryfall', exact: true })).toHaveAttribute('href', 'https://scryfall.com/card/' + beast.id);
+  const beastLink = tokens.getByRole('link', { name: 'Beast · Smoke Test · #1 · EN on Scryfall', exact: true });
   const variantLink = tokens.getByRole('link', { name: 'Beast · Smoke Test · #2 · EN on Scryfall', exact: true });
-  await variantLink.focus();
-  await expect(variantLink).toBeFocused();
+  await expect(beastLink).toHaveAttribute('href', 'https://scryfall.com/card/' + beast.id);
+  await expect(variantLink).toHaveAttribute('href', 'https://scryfall.com/card/' + variant.id);
   await tokens.locator('.token-list').scrollIntoViewIfNeeded();
+  const following = page.getByRole('heading', { name: 'Draw probability' });
+  const measure = () => Promise.all([variantLink, following].map(locator => locator.evaluate(element => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return { x: x + scrollX, y: y + scrollY, width, height };
+  })));
+  const beforeInspection = await measure();
+  if (!isMobile) await beastLink.hover();
+  await beastLink.focus();
+  await beastLink.press('Tab');
+  await expect(variantLink).toBeFocused();
+  expect(await measure()).toEqual(beforeInspection);
   await expect(tokens.getByRole('img', { name: 'Beast', exact: true })).toHaveCount(2);
   await expect.poll(() => variantLink.getByRole('img').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
   await expect(tokens.getByText('Artwork unavailable', { exact: true })).toHaveCount(3);
+  await expect(tokens.locator('.token-name')).toHaveText(['Beast', 'Beast', longName, 'Map', 'Treasure']);
+  await expect(tokens.getByText(/Smoke Test|Token Artifact/)).toHaveCount(0);
   await noPageOverflow(page);
   await page.screenshot({ path: testInfo.outputPath('statistics-tokens.png') });
   expect(await saved()).toBe(before);

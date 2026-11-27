@@ -314,9 +314,25 @@ export function deckEntries(deck, { type = '', role = '', search = '', order = '
     return compared || a.card.name.localeCompare(b.card.name,'en') || entryKey(a).localeCompare(entryKey(b),'en') || a.card.id.localeCompare(b.card.id,'en');
   });
 }
+const coloredMana = /^[WUBRG]$/;
+
+function summarizeColorIdentity(entries) {
+  const known = new Set();
+  let incomplete = false;
+  for (const { card } of entries) {
+    const identity = card.color_identity;
+    if (Array.isArray(identity) && identity.every(color => typeof color === 'string' && coloredMana.test(color))) {
+      for (const color of identity) known.add(color);
+    } else {
+      incomplete = true;
+    }
+  }
+  return { colors: [...'WUBRG'].filter(color => known.has(color)), incomplete };
+}
+
 export function deckIdentity(deck) {
   const entries = deck.cards.filter(e => zoneFor(e) === (deck.format === 'commander' ? 'command' : 'main'));
-  return [...'WUBRG'].filter(c => entries.some(e => e.card.color_identity.includes(c)));
+  return summarizeColorIdentity(entries).colors;
 }
 export const imageFor = card => card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
 export function safeUrl(value, image = false) {
@@ -367,7 +383,10 @@ export function stats(deck, { detailed = false } = {}) {
     result.draw = { total: 0, types: new Map(), functions: new Map() };
     result.functions = new Map();
     result.manaCosts = manaDistribution();
-    result.manaSources = manaDistribution();
+    const commanders = deck.format === 'commander' ? deck.cards.filter(entry => zoneFor(entry) === 'command') : [];
+    const identityEntries = commanders.length ? commanders : deck.cards.filter(entry => zoneFor(entry) === 'main');
+    const { colors, incomplete } = summarizeColorIdentity(identityEntries);
+    result.manaSources = { ...manaDistribution(colors), zone: commanders.length ? 'command' : 'main', identityIncomplete: incomplete };
     result.tokens = { references: new Map(), unavailable: 0 };
   }
   let value = 0;
@@ -426,8 +445,7 @@ export function stats(deck, { detailed = false } = {}) {
   return result;
 }
 
-const coloredMana = /^[WUBRG]$/;
-const manaDistribution = () => ({ colors: Object.fromEntries([...'WUBRG'].map(color => [color, 0])), unavailable: 0 });
+const manaDistribution = (colors = [...'WUBRG']) => ({ colors: Object.fromEntries(colors.map(color => [color, 0])), unavailable: 0 });
 
 function countMana(card, qty, costs, sources) {
   const faceCosts = card.card_faces?.map(face => face.mana_cost) ?? [];
@@ -440,7 +458,9 @@ function countMana(card, qty, costs, sources) {
     }
   }
   if (Array.isArray(card.produced_mana) && card.produced_mana.every(color => typeof color === 'string' && /^[WUBRGC]$/.test(color))) {
-    for (const color of new Set(card.produced_mana.filter(color => coloredMana.test(color)))) sources.colors[color] += qty;
+    for (const color of new Set(card.produced_mana)) {
+      if (Object.hasOwn(sources.colors, color)) sources.colors[color] += qty;
+    }
   } else if (card.produced_mana !== undefined || card.object !== 'card') {
     sources.unavailable += qty;
   }

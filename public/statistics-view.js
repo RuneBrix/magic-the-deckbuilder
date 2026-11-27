@@ -1,4 +1,4 @@
-import { drawProbability, imageFor, safeUrl } from './core.js';
+import { drawProbability, imageFor, safeUrl, ZONES } from './core.js';
 import { esc, mana, printingLabel } from './view-utils.js';
 
 const breakdowns = {
@@ -43,7 +43,7 @@ function curveChart(s, by, groups, selected) {
 
 const pair = (label, value) => `<div class="stat-pair"><span>${esc(label)}</span><b>${esc(value)}</b></div>`;
 
-function manaPie(title, { colors, unavailable }, empty) {
+function manaPie(title, { colors, unavailable }, empty, caption, identityWarning = '') {
   const counts = Object.entries(colors).filter(([, count]) => count > 0);
   const total = counts.reduce((sum, [, count]) => sum + count, 0);
   let end = 0;
@@ -58,6 +58,8 @@ function manaPie(title, { colors, unavailable }, empty) {
       <div class="mana-pie" aria-hidden="true" style="background:${fill}"></div>
       <ul class="mana-legend">${Object.entries(colors).map(([color, count]) => `<li><span class="mana-swatch" aria-hidden="true" style="--swatch:var(--chart-${color})"></span><span>${colorNames[color]}</span><b>${count}</b></li>`).join('')}</ul>
     </div>` : `<p class="hint">${empty}</p>`}
+    <p class="hint">${caption}</p>
+    ${identityWarning ? `<p class="hint">${identityWarning}</p>` : ''}
     ${unavailable ? `<p class="hint">Data unavailable for ${unavailable} ${unavailable === 1 ? 'copy' : 'copies'}.</p>` : ''}
   </section>`;
 }
@@ -70,9 +72,7 @@ function tokenPanel({ references, unavailable }, scope) {
       <a href="https://scryfall.com/card/${id}" target="_blank" rel="noreferrer" aria-label="${esc(token.name)} on Scryfall">
         <span class="token-art">Loading artwork…</span>
         <strong class="token-name">${esc(token.name)}</strong>
-        <span class="token-printing"></span>
       </a>
-      <span>${esc(token.type)}</span>
     </li>`).join('')}</ul>` : `<p>${unavailable ? 'No token references in the available data.' : 'No referenced tokens.'}</p>`}
     ${unavailable ? `<p class="hint">Token reference data unavailable for ${unavailable} ${unavailable === 1 ? 'copy' : 'copies'}.</p>` : ''}
   </section>`;
@@ -97,7 +97,6 @@ async function bindTokenArtwork(root, loadPrintings) {
     const name = tile.querySelector('.token-name').textContent;
     if (printing) {
       const label = printingLabel(printing);
-      tile.querySelector('.token-printing').textContent = label;
       tile.querySelector('a').setAttribute('aria-label', `${name} · ${label} on Scryfall`);
     }
     const src = printing && !['missing', 'placeholder'].includes(printing.image_status) && safeUrl(imageFor(printing), true);
@@ -117,6 +116,7 @@ export function statPanel(s, deck, previous) {
   const groups = curveGroups(s, by);
   const { total } = s.draw;
   const scope = deck.format === 'commander' ? 'Main deck and Command zone' : 'Main deck';
+  const productionZone = ZONES[s.manaSources.zone];
   const drawCount = saved('draw-count', Math.min(7, total));
   const drawMatches = saved('draw-matches', total ? 1 : 0);
   return `<div class="stats-view" id="deck-statistics" data-statistics-deck="${esc(deck.id)}">
@@ -141,11 +141,11 @@ export function statPanel(s, deck, previous) {
     <section class="stat-tool mana-tool"><h3>Colored mana</h3>
       <p class="hint">${scope}. Generic and colorless mana are excluded.</p>
       <div class="mana-distributions">
-        ${manaPie('Mana costs', s.manaCosts, 'No recorded colored mana costs.')}
-        ${manaPie('Mana production', s.manaSources, 'No recorded colored mana sources.')}
+        ${manaPie('Mana costs', s.manaCosts, 'No recorded colored mana costs.', 'Colored symbols per copy.')}
+        ${manaPie('Mana production', s.manaSources, 'No recorded colored mana sources in this color identity.',
+          `Possible colors per copy, limited to ${productionZone} color identity.`,
+          s.manaSources.identityIncomplete ? `Color identity data is incomplete for the ${productionZone}.` : '')}
       </div>
-      <p class="hint">Costs count printed symbols across all faces for each copy. Two-color hybrid symbols count half toward each color. Phyrexian and two-brid symbols count toward their colored options.</p>
-      <p class="hint">Production counts each Scryfall-listed color once per copy, including lands, spells and other permanents. A multicolor source counts in each listed color. The chart measures possible colors without weighting conditions, amounts or repeat activations.</p>
     </section>
     ${tokenPanel(s.tokens, scope)}
     <section class="stat-tool draw-tool"><h3 id="draw-heading">Draw probability</h3>
