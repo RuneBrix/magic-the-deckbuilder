@@ -561,10 +561,21 @@ test('deck group controls keep copy scope, collapse state and focus across all l
     const collapse = main.locator('[data-toggle-deck-group]').filter({hasText:groupName});
     const price = options.locator('xpath=ancestor::header').locator('.deck-group-price');
     const copy = main.getByRole('button', {name:'Copy cards',exact:true});
+    const headingGeometry = () => collapse.evaluate(button => [button, button.querySelector('.deck-group-name')].map(element => {
+      const { x, y, width, height } = element.getBoundingClientRect();
+      return { x:x + scrollX, y:y + scrollY, width, height };
+    }));
     for (const view of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']) {
       await layout.selectOption(view);
       expect(await main.locator('[data-deck-group]').evaluateAll(groups => groups.map(group => JSON.parse(group.dataset.deckGroup)[2]))).toEqual(names);
-      if (view === 'visual-horizontal') await activate(collapse);
+      if (view !== 'visual-horizontal') await activate(collapse);
+      const expandedHeading = await headingGeometry();
+      await activate(collapse);
+      const collapsedHeading = await headingGeometry();
+      expect.soft(collapsedHeading, `${mode} / ${view} heading stays put on collapse`).toEqual(expandedHeading);
+      await activate(collapse);
+      expect.soft(await headingGeometry(), `${mode} / ${view} heading stays put on expand`).toEqual(collapsedHeading);
+      await activate(collapse);
       const neighbors = main.locator('[data-toggle-deck-group]').filter({hasNotText:groupName});
       for (const button of await neighbors.all()) await activate(button);
       await expect(main.locator('[data-toggle-deck-group][aria-expanded="false"]')).toHaveCount(3);

@@ -965,7 +965,7 @@ html:has(#batch-actions:not([hidden])) #toast{bottom:calc(var(--batch-actions-he
 
 /* Shared deck entries across visual stacks and text views (#41 / #43). */
 .deck-group-list,.deck-group-items{min-width:0}
-.deck-group-header{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:8px 0 6px;min-width:0}
+.deck-group-header{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin:8px 0 0;min-width:0}
 .deck-workspace .deck-group h4{min-width:0;margin:0;color:var(--ink);font-size:1rem;font-weight:650}
 .deck-group-controls{display:flex;align-items:center;gap:4px;min-width:0;max-width:100%}
 .deck-group-controls h4 button,[data-toggle-deck-zone]{display:flex;align-items:center;gap:5px;min-height:36px;padding:4px;text-align:left;font:inherit;max-width:100%}
@@ -992,7 +992,7 @@ html:has(#batch-actions:not([hidden])) #toast{bottom:calc(var(--batch-actions-he
 .deck-workspace .deck-zone>h3{padding-bottom:2px;font-size:.9375rem;color:var(--muted)}
 [data-toggle-deck-zone]{color:inherit;overflow-wrap:anywhere}
 .deck-group-list>.hint{margin:8px 0 0}
-.deck-group:has(>.deck-group-items[hidden])>.deck-group-header{margin-block:0}
+[data-deck-group]>.deck-group-items{margin:6px 0 8px}
 .deck-entry{position:relative;min-width:0}
 .deck-entry:hover,.deck-entry:focus-visible,.deck-entry:has(:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .card-art{display:block;width:100%;padding:0;border-radius:7px;overflow:hidden;background:var(--soft)}
@@ -1021,7 +1021,7 @@ html:has(#batch-actions:not([hidden])) #toast{bottom:calc(var(--batch-actions-he
 .card-quantity button{display:grid;place-items:center;min-width:36px;min-height:36px;padding:0;line-height:1;font-size:17px;border:1px solid transparent;border-radius:3px;background:transparent}
 .card-quantity button:hover{border-color:var(--accent);background:var(--surface)}
 .card-quantity button:disabled{cursor:default}
-.visual-horizontal .deck-group-list,.text-horizontal .deck-group-list{display:flex;flex-direction:column;gap:12px}
+.visual-horizontal .deck-group-list,.text-horizontal .deck-group-list{display:flex;flex-direction:column;gap:4px}
 .visual-horizontal .deck-group-items{display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px 8px;padding:4px 4px 8px}
 .card-slot{position:relative;min-width:0;flex:0 0 190px}
 .stack-card-meta{display:block;height:24px;padding:4px 2px 0;color:var(--muted);font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1029,8 +1029,7 @@ html:has(#batch-actions:not([hidden])) #toast{bottom:calc(var(--batch-actions-he
 .visual-vertical .deck-group-list{display:grid;grid-template-columns:repeat(auto-fill,190px);align-items:start;column-gap:24px;padding:4px 4px 10px}
 .visual-vertical .deck-group,.text-vertical .deck-group{display:grid;grid-template-rows:subgrid;grid-row:span 2;row-gap:0}
 .visual-vertical .deck-group-header,.text-vertical .deck-group-header{display:block}
-:is(.visual-vertical,.text-vertical) [data-deck-group]:has(>.deck-group-items[hidden])>.deck-group-header{margin-block:4px}
-:is(.visual-vertical,.text-vertical) [data-deck-group]>.deck-group-items:not([hidden]){margin-bottom:16px}
+:is(.visual-vertical,.text-vertical) [data-deck-group]>.deck-group-items{margin-bottom:16px}
 .visual-vertical .deck-group-items{display:flex;flex-direction:column;gap:16px}
 .visual-vertical .card-slot{flex:none}
 .preview-art{position:relative;border-radius:7px;overflow:hidden}
