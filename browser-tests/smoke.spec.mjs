@@ -552,24 +552,47 @@ test('deck group controls keep copy scope, collapse state and focus across all l
   const activate = element => isMobile ? element.tap() : element.press('Enter');
 
   await expect(command.locator('[data-toggle-deck-group]')).toHaveCount(0);
-  for (const [mode, names] of [['type',['Artifact','Creature','Land']], ['role',['Ramp',longFunction,'Lands']]]) {
+  for (const [mode, names, groupName] of [
+    ['type',['Artifact','Creature','Land'],'Creature'],
+    ['role',[longFunction,'Lands','Ramp'],longFunction],
+  ]) {
     await grouping.selectOption(mode);
-    const options = main.getByRole('button', {name:`Group actions for ${names[1]} · Main deck`, exact:true});
-    const collapse = main.locator('[data-toggle-deck-group]').nth(1);
-    const price = main.locator('.deck-group-price').nth(1);
+    const options = main.getByRole('button', {name:`Group actions for ${groupName} · Main deck`, exact:true});
+    const collapse = main.locator('[data-toggle-deck-group]').filter({hasText:groupName});
+    const price = options.locator('xpath=ancestor::header').locator('.deck-group-price');
     const copy = main.getByRole('button', {name:'Copy cards',exact:true});
+    const headingGeometry = () => collapse.evaluate(button => [button, button.querySelector('.deck-group-name')].map(element => {
+      const { x, y, width, height } = element.getBoundingClientRect();
+      return { x:x + scrollX, y:y + scrollY, width, height };
+    }));
     for (const view of ['visual-horizontal','visual-vertical','text-horizontal','text-vertical']) {
       await layout.selectOption(view);
       expect(await main.locator('[data-deck-group]').evaluateAll(groups => groups.map(group => JSON.parse(group.dataset.deckGroup)[2]))).toEqual(names);
-      if (view === 'visual-horizontal') {
-        await activate(main.locator('[data-toggle-deck-group]').first());
-        await activate(collapse);
-        await expect(collapse).toBeFocused();
-        await activate(main.locator('[data-toggle-deck-group]').last());
-        await expect(main.locator('[data-toggle-deck-group][aria-expanded="false"]')).toHaveCount(3);
-        await activate(main.locator('[data-toggle-deck-group]').first());
-        await activate(main.locator('[data-toggle-deck-group]').last());
+      if (view !== 'visual-horizontal') await activate(collapse);
+      const expandedHeading = await headingGeometry();
+      await activate(collapse);
+      const collapsedHeading = await headingGeometry();
+      expect.soft(collapsedHeading, `${mode} / ${view} heading stays put on collapse`).toEqual(expandedHeading);
+      await activate(collapse);
+      expect.soft(await headingGeometry(), `${mode} / ${view} heading stays put on expand`).toEqual(collapsedHeading);
+      await activate(collapse);
+      const neighbors = main.locator('[data-toggle-deck-group]').filter({hasNotText:groupName});
+      for (const button of await neighbors.all()) await activate(button);
+      await expect(main.locator('[data-toggle-deck-group][aria-expanded="false"]')).toHaveCount(3);
+      const gaps = await main.locator('.deck-group-header').evaluateAll(headers => headers.slice(1).flatMap((header,i) => {
+        const previous = headers[i].getBoundingClientRect(), next = header.getBoundingClientRect();
+        return next.x === previous.x && next.top > previous.top ? [next.top - previous.bottom] : [];
+      }));
+      if (isMobile || view.endsWith('horizontal')) expect(gaps.length).toBeGreaterThan(0);
+      for (const gap of gaps) {
+        expect(gap).toBeGreaterThanOrEqual(0);
+        expect(gap).toBeLessThanOrEqual(12);
       }
+      await testInfo.attach(`collapsed-header-gaps-${mode}-${view}`, {body:JSON.stringify(gaps),contentType:'application/json'});
+      if (mode === 'role' && view === 'text-vertical') {
+        await main.locator('.deck-group-list').screenshot({path:testInfo.outputPath('collapsed-function-groups.png')});
+      }
+      for (const button of await neighbors.all()) await activate(button);
       await expect(collapse).toHaveAttribute('aria-expanded','false');
       await expect(collapse).toContainText('6 cards');
       await expect(price).toBeVisible();
@@ -583,7 +606,7 @@ test('deck group controls keep copy scope, collapse state and focus across all l
       await activate(options);
       await expect(copy).toBeFocused();
       const menu = main.locator('.deck-group-actions:popover-open');
-      await expect(menu).toContainText(`${names[1]} · Main deck`);
+      await expect(menu).toContainText(`${groupName} · Main deck`);
       const bounds = await menu.boundingBox();
       const {width,height} = page.viewportSize();
       expect(bounds.x).toBeGreaterThanOrEqual(0);
@@ -593,13 +616,13 @@ test('deck group controls keep copy scope, collapse state and focus across all l
       await activate(copy);
       await expect(options).toBeFocused();
       await expect(menu).toHaveCount(0);
-      await expect(toast).toContainText(`Copied 6 copies from ${names[1]} · Main deck`);
+      await expect(toast).toContainText(`Copied 6 copies from ${groupName} · Main deck`);
       expect(await readClipboard()).toBe(`5 ${longName}\n1 Scout of the North`);
       await noPageOverflow(page);
     }
   }
 
-  const collapse = main.locator('[data-toggle-deck-group]').nth(1);
+  const collapse = main.locator('[data-toggle-deck-group]').filter({hasText:longFunction});
   const options = main.getByRole('button', {name:`Group actions for ${longFunction} · Main deck`,exact:true});
   await filter.fill('never matches any group');
   await expect(main.getByText('No cards match these filters.')).toBeVisible();
@@ -650,6 +673,111 @@ test('deck group controls keep copy scope, collapse state and focus across all l
   await grouping.selectOption('role');
   await expect(collapse).toHaveAttribute('aria-expanded','true');
   expect(await page.evaluate(key => localStorage.getItem(key), key)).toBe(saved);
+});
+
+test('deck zone disclosures retain nested groups and prune hidden selections', async ({ page, isMobile }, testInfo) => {
+  const key = 'arcana.workspace.v2';
+  await page.evaluate(key => {
+    const data = JSON.parse(localStorage.getItem(key));
+    const deck = data.decks[0];
+    const [command, main, sideboard, maybeboard] = deck.cards;
+    deck.cards = [command, main, {...sideboard,zone:'sideboard'}, {...maybeboard,zone:'maybeboard',qty:500}];
+    data.decks.push({...deck,id:'other-deck',name:'Other Deck',cards:[command]});
+    localStorage.setItem(key, JSON.stringify(data));
+  }, key);
+  await page.reload();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  const data = () => page.evaluate(key => JSON.parse(localStorage.getItem(key), (field,value) =>
+    field === 'exportedAt' || field === 'legalityUpdatedAt' ? undefined : value), key);
+  const saved = await data();
+  const disclosure = zone => page.locator(`[data-toggle-deck-zone="${zone}"]`);
+  const contents = zone => page.locator(`#deck-zone-${zone}-cards`);
+  const layout = page.locator('#editor-layout');
+  const grouping = page.locator('#editor-group');
+  const filter = page.locator('#editor-search');
+  const activate = button => isMobile ? button.tap() : button.press('Space');
+  const mainGroup = contents('main').locator('[data-toggle-deck-group]');
+  await activate(mainGroup);
+  if (!isMobile) {
+    await contents('command').locator('.deck-entry').focus();
+    await expect(page.locator('#deck-card-preview')).toContainText('Smoke Card 1 · Command zone');
+    await contents('command').getByRole('button',{name:/^Card actions for Smoke Card 1/}).press('Enter');
+    await expect(page.getByRole('menuitem',{name:'Open details',exact:true})).toBeVisible();
+  }
+  for (const zone of ['command','main','sideboard','maybeboard']) {
+    const button = disclosure(zone);
+    await expect(button).toHaveAttribute('aria-controls',`deck-zone-${zone}-cards`);
+    if (isMobile) expect((await button.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    await activate(button);
+    await expect(button).toHaveAttribute('aria-expanded','false');
+    await expect(button).toBeFocused();
+    await expect(contents(zone)).toBeHidden();
+    await expect(contents(zone).getByRole('button')).toHaveCount(0);
+  }
+  if (!isMobile) {
+    await expect(page.getByRole('menuitem',{name:'Open details',exact:true})).toHaveCount(0);
+    await expect(page.locator('#deck-card-preview')).toContainText('Point to a card');
+    await disclosure('command').focus();
+    await page.keyboard.press('Tab');
+    await expect(disclosure('main')).toBeFocused();
+  }
+  await expect(disclosure('maybeboard')).toContainText('Maybeboard · 500');
+  await filter.fill('no matching cards');
+  await expect(disclosure('main')).toContainText('Main deck · 2 · 0 shown');
+  await activate(disclosure('main'));
+  await expect(contents('main').getByText('No cards match these filters.')).toBeVisible();
+  await activate(disclosure('main'));
+  await filter.clear();
+  for (const view of ['visual-vertical','text-horizontal','text-vertical','visual-horizontal']) {
+    await layout.selectOption(view);
+    for (const zone of ['command','main','sideboard','maybeboard']) await expect(disclosure(zone)).toHaveAttribute('aria-expanded','false');
+  }
+  await activate(disclosure('main'));
+  await expect(mainGroup).toHaveAttribute('aria-expanded','false');
+  await grouping.selectOption('none');
+  await activate(disclosure('command'));
+  await expect(contents('command').getByRole('button',{name:/Inspect Smoke Card 1/})).toBeVisible();
+  await expect(mainGroup).toHaveCount(0);
+  await page.locator('#editor-mode').selectOption('select');
+  const bar = page.getByRole('group',{name:'Selected card actions'});
+  const mainCard = contents('main').getByRole('button',{name:/^Select Smoke Card 2/});
+  await activate(contents('command').getByRole('button',{name:/^Select Smoke Card 1/}));
+  await activate(mainCard);
+  await expect(bar.getByRole('status')).toHaveText('2 entries · 3 copies selected');
+  await activate(disclosure('command'));
+  await expect(bar.getByRole('status')).toHaveText('1 entry · 2 copies selected');
+  await expect(mainCard).toHaveAttribute('aria-pressed','true');
+  await activate(disclosure('main'));
+  await expect(bar).toBeHidden();
+  await activate(disclosure('main'));
+  await expect(mainCard).toHaveAttribute('aria-pressed','false');
+
+  const fontSize = () => disclosure('main').evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+  const originalSize = await fontSize();
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.style.fontSize = `${parseFloat(getComputedStyle(root).fontSize) * 2}px`;
+    scrollTo(0,0);
+  });
+  expect(await fontSize()).toBeCloseTo(originalSize * 2);
+  await noPageOverflow(page);
+  await page.screenshot({path:testInfo.outputPath('zone-disclosures-enlarged.png'),fullPage:true});
+  await page.getByRole('button',{name:'Back to library',exact:true}).click();
+  await page.getByRole('button',{name:'Other Deck',exact:true}).click();
+  await expect(disclosure('command')).toHaveAttribute('aria-expanded','true');
+  await expect(disclosure('main')).toContainText('Main deck · 0');
+  await activate(disclosure('main'));
+  await expect(contents('main')).toBeHidden();
+  await activate(disclosure('main'));
+  await expect(contents('main').getByText('No cards in this zone.')).toBeVisible();
+  await page.getByRole('button',{name:'Back to library',exact:true}).click();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  await expect(disclosure('command')).toHaveAttribute('aria-expanded','false');
+  await expect(disclosure('sideboard')).toHaveAttribute('aria-expanded','false');
+  await page.reload();
+  await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  await expect(page.locator('[data-toggle-deck-zone][aria-expanded="true"]')).toHaveCount(4);
+  expect(await data()).toEqual(saved);
 });
 
 test('ownership zones keep every card visible and retain missing costs across scope changes', async ({ page }) => {
@@ -809,6 +937,22 @@ test('deck drag destinations stay still across gaps and let the page scroll outs
   await expect(dock).toBeHidden();
   await expect(page.locator('#deck-drag-help')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(original);
+
+  const mainDisclosure = page.locator('[data-toggle-deck-zone="main"]');
+  await mainDisclosure.click();
+  await startDrag();
+  await expect(mainDeck).toBeVisible();
+  const target = testInfo.project.name === 'desktop-dark' ? mainDeck : mainDisclosure;
+  const bounds = await target.boundingBox();
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  const dropZone = testInfo.project.name === 'desktop-dark' ? mainDeck : page.locator('.deck-zone[data-drop-zone="main"]');
+  await expect(dropZone).toHaveClass(/is-drop-target/);
+  await page.mouse.up();
+  await expect(dock).toBeHidden();
+  await expect(mainDisclosure).toHaveAttribute('aria-expanded','false');
+  await expect(mainDisclosure).toContainText('Main deck · 41');
+  await mainDisclosure.press('Enter');
+  await expect(page.locator('#deck-zone-main-cards').getByRole('button',{name:'Smoke Card 1',exact:true})).toBeVisible();
 });
 
 test('card menus keep deletion available by keyboard and touch', async ({ page, isMobile }) => {

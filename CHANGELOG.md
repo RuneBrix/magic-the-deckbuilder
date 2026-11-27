@@ -1,5 +1,10 @@
 # Changelog
 
+## Cards zone and group controls — 2026-11-27
+
+- Collapse each deck zone independently in all four Cards layouts. Zone summaries and drag destinations stay available, and reopening a zone restores its group disclosures (#264).
+- Sort Type and Function headings A–Z, including Land and Lands. Collapsed groups use less space, and the title and toggle stay in place when opening or closing the group (#262, #272).
+
 ## Function counts in Search cards — 2026-11-23
 
 - Label direct tagging counts on function tiles. Related shows the dated snapshot count and Scryfall's paper search total beside its example cards (#242).
