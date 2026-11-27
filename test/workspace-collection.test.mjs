@@ -203,7 +203,7 @@ test('collection TXT reports zones and uploads valid cards after skip confirmati
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Forest')],not_found:[]})});
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');
   await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection.length',w.context),0);
-  assert.match(w.node('#collection-notices').innerHTML,/Could not process the following cards/);w.node('#collection-accept-ignored').checked=true;
+  assert.match(w.node('#collection-notices').innerHTML,/Rows to skip/);w.node('#collection-accept-ignored').checked=true;
   await checkAndFinishUpload(w,form.onsubmit);assert.equal(vm.runInContext('collection[0].qty',w.context),3);
 });
 
@@ -219,7 +219,7 @@ test('CSV ignored columns require confirmation and syntax validation itself send
   const w=workspace();formValues(w,{list:'Quantity,Name,Purchase Price,Tags\n1,Forest,5,personal'});let calls=0;
   w.context.fetch=async()=>{calls++;return {ok:true,json:async()=>({data:[editorCard('Forest')]})};};
   vm.runInContext('collectionImport()',w.context);const form=w.node('#collection-import');form.oninput();
-  assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Not counted: Purchase Price, Tags/);assert.equal(w.node('#collection-upload-submit').disabled,true);
+  assert.equal(calls,0);assert.match(w.node('#collection-notices').innerHTML,/Columns to ignore<\/strong> Purchase Price, Tags/);assert.equal(w.node('#collection-upload-submit').disabled,true);
   await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,0);
   w.node('#collection-accept-ignored').checked=true;await checkAndFinishUpload(w,form.onsubmit);assert.equal(calls,1);assert.equal(vm.runInContext('collection.length',w.context),1);
 });

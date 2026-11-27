@@ -1,4 +1,4 @@
-import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, relaxationOptions, relaxSearch, stats, collectionReport, parseImport, parseCollectionImport, prepareCollectionUpload, normalizeEdition, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, compactStoredWorkspace, readStoredWorkspace, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
+import { FORMATS, BRACKETS, COMMANDER_BRACKETS, bracketReport, TAGS, TAG_CATALOG, tagById, findTags, resolveTag, count, exportDeckText, ZONES, DEFAULT_BUDGET_ZONES, zoneFor, zoneCount, entryKey, moveEntry, setCompanion, companionCapable, assignEntryFunction, addDeckCopies, deckCardCopies, deckFinishOptions, copyEntryToDeck, removeCardCopies, validatePrinting, setEntryPrinting, legalityReport, imageFor, oracle, relaxationOptions, relaxSearch, stats, collectionReport, parseImport, parseCollectionImport, prepareCollectionUpload, collectionUploadFormat, normalizeEdition, COLLECTION_COLUMNS, resolveImport, validateBackup, validateCollection, workspaceFile, readWorkspaceFile, compactStoredWorkspace, readStoredWorkspace, safeUrl, category, primaryRole, deckEntries, deckIdentity, parseQuery, replaceCondition, conditionQuery, SEARCH_FAMILIES } from './core.js';
 import { esc, mana, printingLabel, icon, money, currencySymbol } from './view-utils.js';
 import { collectionPage, CONDITION_LABELS, collectionChoices } from './collection-view.js';
 import { bindStatistics, statPanel } from './statistics-view.js';
@@ -609,7 +609,34 @@ function collectionLotDialog(card=null,index=null,back=null){
 }
 const importCardPool=new Map();
 function collectionImport(){
-  showDialog('<h2>Upload collection</h2><p>Choose a TXT or CSV file, or paste card data. Check the totals before uploading.</p><form id="collection-import"><div id="collection-upload-inputs"><label>Upload action<select name="mode" id="collection-import-mode"><option value="add">Add copies to current inventory</option><option value="replace">Replace entire inventory</option></select></label><div id="collection-impact" role="status"></div><div id="collection-replace-review" hidden><p>Replacement removes all current inventory lots and stores only this upload. Decks and prices on deck cards are retained.</p><button type="button" class="secondary" id="collection-upload-backup">Save current workspace copy</button><label class="import-confirm"><input type="checkbox" id="collection-confirm-replace"> I confirm replacing the entire inventory with this upload</label></div><label>TXT or CSV file<input id="collection-csv-file" type="file" accept=".txt,.csv,text/plain,text/csv"></label><label>Card list or CSV<textarea name="list" rows="7" required placeholder="Paste your own card data here…"></textarea></label><details class="import-examples"><summary>Examples of accepted text and CSV</summary><p>Examples only — replace them with your cards.</p><pre>2 Sol Ring&#10;12 Forest</pre><pre>Quantity,Name,Finish,Condition&#10;1,&quot;Aang, Air Nomad&quot;,Normal,NM</pre><pre>Quantity,Name,Language,Edition Name&#10;2,Forest,English,Foundations</pre><p>CSV without headers is also supported: assign its columns below. Collection lists have no deck zones.</p></details><div id="collection-mapping"></div><div class="collection-upload-summary"><div id="collection-syntax" role="status"></div><div id="collection-notices"></div></div></div><section id="collection-upload-review" hidden></section><div class="collection-upload-actions"><p id="collection-import-error" role="alert"></p><div id="collection-import-preview" role="status"></div><button type="submit" id="collection-upload-submit" class="primary" disabled>Upload</button></div></form>');
+  showDialog(`<h2>Upload collection</h2><p>Choose a TXT or CSV file, or paste card data. Check the totals before uploading.</p>
+    <form id="collection-import">
+      <div id="collection-upload-inputs">
+        <label>Upload action<select name="mode" id="collection-import-mode"><option value="add">Add copies to current inventory</option><option value="replace">Replace entire inventory</option></select></label>
+        <div id="collection-impact" role="status"></div>
+        <div id="collection-replace-review" hidden>
+          <p>Replacement removes all current inventory lots and stores only this upload. Decks and prices on deck cards are retained.</p>
+          <button type="button" class="secondary" id="collection-upload-backup">Save current workspace copy</button>
+          <label class="import-confirm"><input type="checkbox" id="collection-confirm-replace"> I confirm replacing the entire inventory with this upload</label>
+        </div>
+        <label>TXT or CSV file<input id="collection-csv-file" type="file" accept=".txt,.csv,text/plain,text/csv"></label>
+        <label>Card list or CSV<textarea name="list" rows="7" required placeholder="Paste your own card data here…"></textarea></label>
+        <details class="import-examples">
+          <summary>Examples of accepted text and CSV</summary>
+          <figure><figcaption>Plain TXT</figcaption><pre>2 Sol Ring&#10;12 Forest</pre></figure>
+          <figure><figcaption>CSV</figcaption><pre>Quantity,Name,Finish,Condition&#10;1,&quot;Aang, Air Nomad&quot;,Normal,NM</pre></figure>
+          <figure><figcaption>Tab-separated TXT</figcaption><pre>Quantity&#9;Card name&#9;Set&#10;1&#9;Arcane Signet&#9;SOC</pre></figure>
+        </details>
+        <div id="collection-mapping"></div>
+        <div class="collection-upload-summary"><div id="collection-syntax" role="status"></div><div id="collection-notices"></div></div>
+      </div>
+      <section id="collection-upload-review" hidden></section>
+      <div class="collection-upload-actions">
+        <p id="collection-import-error" role="alert"></p>
+        <div id="collection-import-preview" role="status"></div>
+        <button type="submit" id="collection-upload-submit" class="primary" disabled>Upload</button>
+      </div>
+    </form>`);
   const form=$('#collection-import'),button=$('#collection-upload-submit'),responses=new Map(),cache=new Map();let review=null,plan=null,mapping=null,revision=0,pending=false,applied=false,cooldownUntil=0,inventoryReview='',issues=[],omitted=0;
   const mode=()=>$('#collection-import-mode').value==='replace'?'replace':'add';
   $('#collection-upload-backup').onclick=()=>saveWorkspaceCopy();
@@ -630,8 +657,8 @@ function collectionImport(){
     const copies=review.reduce((sum,lot)=>sum+lot.qty,0);
     reviewPanel.innerHTML='<h3 tabindex="-1" id="collection-review-heading">Import check complete</h3>'+
       '<p>'+issues.length+' '+(issues.length===1?'row needs':'rows need')+' attention. '+copies+(copies===1?' copy':' copies')+' ready to '+(mode()==='replace'?'replace the entire inventory':'add')+'.</p>'+
-      (omitted?'<p>'+omitted+' '+(omitted===1?'row explicitly skipped.':'rows explicitly skipped.')+'</p>':'')+
-      (counts.length?'<ul>'+counts.map(([type,n])=>'<li>'+type+' · '+n+'</li>').join('')+'</ul>':'')+
+      (omitted?'<p class="collection-upload-problems">'+omitted+' '+(omitted===1?'row explicitly skipped.':'rows explicitly skipped.')+'</p>':'')+
+      (counts.length?'<div class="collection-upload-problems"><h4>Lookup issues</h4><ul>'+counts.map(([type,n])=>'<li>'+type+' · '+n+'</li>').join('')+'</ul></div>':'')+
       (overLimit?'<p>More than 20 rows need help in at least one category. Correct those columns in the source file or upload a smaller list.</p>':'')+
       '<button type="button" class="secondary" id="collection-abort-upload">Abort import</button>';
     $('#collection-abort-upload').onclick=()=>closeDialog();
@@ -644,7 +671,7 @@ function collectionImport(){
     const issue=issues[0],{row,card}=issue;
     $('#collection-import-error').textContent='';
     reviewPanel.innerHTML='<h3 tabindex="-1" id="collection-review-heading">'+esc(issue.category)+' issue</h3>'+
-      '<p><strong>'+esc(issue.label)+'</strong></p><p>'+esc(issue.message)+'</p>'+
+      '<div class="collection-upload-problems"><p><strong>'+esc(issue.label)+'</strong></p><p>'+esc(issue.message)+'</p></div>'+
       '<p>'+esc([row.qty+' copies',row.language&&'Language '+row.language,row.collectorNumber&&'Collector number '+row.collectorNumber,!row.finishUnspecified&&'Finish '+row.finish].filter(Boolean).join(' · '))+'</p>'+
       '<p>'+issues.length+' '+(issues.length===1?'row':'rows')+' left to review.</p>'+
       '<div id="collection-resolution-art"></div><div id="collection-resolution-options"></div><div class="settings-actions"><button class="secondary" type="button" id="collection-skip-row">Skip row</button><button class="secondary" type="button" id="collection-abort-upload">Abort import</button></div>';
@@ -694,34 +721,67 @@ function collectionImport(){
       review.push(resolvedLot(choice.printing,row,choice.finish));advance();
     };
   };
+  const showMappingButton=format=>{
+    const label=format==='tsv'?'Change tab-separated columns':'Change CSV columns';
+    $('#collection-mapping').innerHTML='<button type="button" class="secondary" id="csv-edit-mapping">'+label+'</button>';
+    $('#csv-edit-mapping').onclick=()=>{revision++;validate(true);$('#csv-has-header')?.focus();};
+  };
   const validate=(editMapping=false)=>{
+    const syntax=$('#collection-syntax');
     progress('');plan=null;button.disabled=true;$('#collection-import-error').textContent='';$('#collection-notices').innerHTML='';
+    $('#collection-impact').textContent='';$('#collection-replace-review').hidden=true;
+    delete syntax.dataset.valid;
     const text=String(new FormData(form).get('list')||'');
     try{
       const result=prepareCollectionUpload(text,mapping,editMapping);
       if(result.needsMapping){
-        $('#collection-syntax').textContent='Waiting for column mappings. Assign Quantity and Name, then check syntax.';
-        $('#collection-mapping').innerHTML='<h3>Define CSV columns</h3><label><input type="checkbox" id="csv-has-header" '+((mapping?.header??result.suggestHeaders)?'checked':'')+'> First row contains column headings</label>'+Array.from({length:result.width},(_,i)=>'<label>Column '+(i+1)+' · '+esc(result.preview.map(row=>row[i]||'').join(' / ').slice(0,120))+'<select data-csv-column="'+i+'"><option value="">Ignore this column</option>'+COLLECTION_COLUMNS.map(c=>'<option'+(c===(mapping?.columns[i]??result.suggestedColumns[i])?' selected':'')+'>'+c+'</option>').join('')+'</select></label>').join('')+'<button type="button" class="secondary" id="csv-check-mapping">Check syntax</button>';
-        $('#csv-check-mapping').onclick=()=>{mapping={header:$('#csv-has-header').checked,columns:[...form.querySelectorAll('[data-csv-column]')].map(node=>node.value)};validate();};return;
+        syntax.textContent='Waiting for column mappings. Assign Quantity and Name, then check syntax.';
+        const label=result.format==='tsv'?'Define tab-separated columns':'Define CSV columns';
+        const hasHeader=mapping?.header??result.suggestHeaders;
+        const fields=Array.from({length:result.width},(_,i)=>{
+          const sample=esc(result.preview.map(row=>row[i]||'').join(' / ').slice(0,120));
+          const selected=mapping?.columns[i]??result.suggestedColumns[i];
+          return `<label>Column ${i+1} · ${sample}<select data-csv-column="${i}"><option value="">Ignore this column</option>${COLLECTION_COLUMNS.map(c=>`<option${c===selected?' selected':''}>${c}</option>`).join('')}</select></label>`;
+        }).join('');
+        $('#collection-mapping').innerHTML=`<h3>${label}</h3><label class="import-confirm"><input type="checkbox" id="csv-has-header"${hasHeader?' checked':''}> First row contains column headings</label>${fields}<button type="button" class="secondary" id="csv-check-mapping">Check syntax</button>`;
+        $('#csv-check-mapping').onclick=()=>{
+          mapping={header:$('#csv-has-header').checked,columns:[...form.querySelectorAll('[data-csv-column]')].map(node=>node.value)};
+          validate();
+          $('#csv-edit-mapping')?.focus();
+        };
+        return;
       }
-      $('#collection-mapping').innerHTML=result.csv?'<button type="button" class="secondary" id="csv-edit-mapping">Change CSV columns</button>':'';
-      if(result.csv)$('#csv-edit-mapping').onclick=()=>validate(true);
-      if(mode()==='replace' && result.skipped.length)throw Error('Replacement requires every row to be valid collection data. Correct or remove the skipped lines.');
-      inventoryReview=JSON.stringify(collection);plan=result;const copies=result.rows.reduce((n,row)=>n+row.qty,0),current=count({cards:collection});
-      $('#collection-replace-review').hidden=mode()!=='replace';
-      $('#collection-impact').textContent=mode()==='replace'?'Replace '+current+' current copies in '+collection.length+' lots with '+copies+' uploaded copies.':'Add '+copies+' copies: '+current+' → '+(current+copies)+' owned copies. Re-uploading this file adds them again.';
-      $('#collection-syntax').textContent='Syntax valid · '+result.rows.length+' card rows · '+result.rows.reduce((n,r)=>n+r.qty,0)+' copies.';
-      $('#collection-notices').innerHTML='<p>Processed columns: '+result.accepted.map(esc).join(', ')+'.</p>'+(result.ignored.length?'<p>Not counted: '+result.ignored.map(esc).join(', ')+'.</p>':'')+(result.skipped.length?'<h3>Could not process the following cards</h3><ul>'+result.skipped.map(line=>'<li>'+esc(line)+'</li>').join('')+'</ul><p>These lines will be skipped. Valid card rows can still be uploaded.</p>':'')+(result.ignored.length||result.skipped.length?'<label class="import-confirm"><input type="checkbox" id="collection-accept-ignored"> Continue with only the processed columns and valid card rows</label>':'');
-      if(result.rows.some(row=>row.set&&!row.collectorNumber))$('#collection-notices').innerHTML+='<p>With no collector number, Arcana uses a matching printing from the specified edition.</p>';
-      const confirm=$('#collection-accept-ignored'),needsConfirm=result.ignored.length||result.skipped.length;
-      if(needsConfirm)confirm.onchange=()=>{button.disabled=!confirm.checked||pending||Date.now()<cooldownUntil;};
+      if(result.format)showMappingButton(result.format);
+      else $('#collection-mapping').innerHTML='';
+      const replacing=mode()==='replace';
+      const replacementBlocked=replacing&&result.skipped.length>0;
+      const copies=result.rows.reduce((n,row)=>n+row.qty,0),current=count({cards:collection});
+      if(!replacementBlocked){
+        inventoryReview=JSON.stringify(collection);
+        plan=result;
+        $('#collection-replace-review').hidden=!replacing;
+        $('#collection-impact').textContent=replacing?'Replace '+current+' current copies in '+collection.length+' lots with '+copies+' uploaded copies.':'Add '+copies+' copies: '+current+' → '+(current+copies)+' owned copies. Re-uploading this file adds them again.';
+      }else $('#collection-import-error').textContent='Replacement requires every row to be valid. Correct or remove the listed rows.';
+      syntax.textContent='Syntax valid · '+result.rows.length+' '+(result.rows.length===1?'card row':'card rows')+' · '+copyCount(copies)+'.';
+      syntax.dataset.valid='';
+      const needsConfirm=result.ignored.length||result.skipped.length;
+      const notices=$('#collection-notices');
+      notices.innerHTML=`<p class="collection-upload-columns"><strong>Processed columns</strong> ${result.accepted.map(esc).join(', ')}</p>`+
+        (result.rows.some(row=>row.set&&!row.collectorNumber)?'<p>With no collector number, Arcana uses a matching printing from the specified edition.</p>':'')+
+        (needsConfirm?`<div class="collection-upload-problems">
+          ${result.ignored.length?`<p><strong>Columns to ignore</strong> ${result.ignored.map(esc).join(', ')}</p>`:''}
+          ${result.skipped.length?`<h3>${replacementBlocked?'Rows to correct':'Rows to skip'}</h3><ul>${result.skipped.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:''}
+          ${replacementBlocked?'':'<label class="import-confirm"><input type="checkbox" id="collection-accept-ignored"> Upload valid rows using only the processed columns</label>'}
+        </div>`:'');
+      const confirm=$('#collection-accept-ignored');
+      if(confirm)confirm.onchange=()=>{button.disabled=!confirm.checked||pending||Date.now()<cooldownUntil;};
       button.disabled=Boolean(needsConfirm)||pending||Date.now()<cooldownUntil;button.textContent='Upload';
     }catch(error){
-      $('#collection-syntax').textContent='';
+      syntax.textContent='';
       $('#collection-import-error').textContent=error.message;
-      if(!editMapping&&text.trim().split(/\r?\n/,1)[0].includes(',')&&!$('#collection-mapping').innerHTML){
-        $('#collection-mapping').innerHTML='<button type="button" class="secondary" id="csv-edit-mapping">Change CSV columns</button>';
-        $('#csv-edit-mapping').onclick=()=>validate(true);
+      if(!editMapping&&!$('#collection-mapping').innerHTML){
+        const format=collectionUploadFormat(text);
+        if(format!=='txt')showMappingButton(format);
       }
     }
   };
@@ -730,8 +790,8 @@ function collectionImport(){
   form.onsubmit=async e=>{e.preventDefault();if(applied||pending||Date.now()<cooldownUntil||!form.isConnected||$('#dialog').open===false)return;if(review&&issues.length){if(!issueTypes.some(type=>issues.filter(issue=>issue.category===type).length>20))await showIssue();return;}if(review&&!review.length)return;if(!plan)validate();if(!plan)return;if((plan.ignored.length||plan.skipped.length)&&!$('#collection-accept-ignored').checked)return;if(mode()==='replace' && inventoryReview!==JSON.stringify(collection)){revision++;review=null;$('#collection-confirm-replace').checked=false;validate();$('#collection-import-error').textContent='Inventory changed. Review the updated replacement totals and confirm again.';return;}if(mode()==='replace'&&!$('#collection-confirm-replace').checked){$('#collection-import-error').textContent='Confirm replacing the entire inventory before uploading.';return;}const operationMode=mode(),operationRevision=revision,inventorySnapshot=JSON.stringify(collection);pending=true;button.disabled=true;button.textContent='Uploading…';$('#collection-import-error').textContent='';try{
     if(storageError)throw Error('Resolve the workspace storage warning before uploading. '+storageError);
     if(!review){
-      const version=revision,{rows:parsed,csv,firstRow}=plan;
-      issues=[];omitted=0;
+      const version=revision,{rows:parsed,format,firstRow,rowNumbers}=plan;
+      issues=[];omitted=plan.skipped.length;
       const pool=[...importCardPool.values(),...collection.map(l=>l.card),...decks.flatMap(d=>d.cards.map(e=>e.card))];
       const indexCards=values=>{const index=new Map();for(const c of values)for(const name of new Set([c.name,...(c.card_faces||[]).map(f=>f.name)].filter(Boolean))){const key=name.toLowerCase();if(!index.has(key))index.set(key,[]);index.get(key).push(c);}return index;};
       const localIndex=indexCards(pool);
@@ -759,14 +819,15 @@ function collectionImport(){
       const setCode=row=>{
         const edition=normalizeEdition(row.set);
         const matches=editions.get(edition)||[];
-        if(matches.length!==1)throw issueError('Printing',matches.length?'Set name is ambiguous. Use the set code in the CSV.':'Set is unrecognized. Check the edition name or use its set code.');
+        if(matches.length!==1)throw issueError('Printing',matches.length?'Set name is ambiguous. Use the set code in the upload.':'Set is unrecognized. Check the edition name or use its set code.');
         return matches[0];
       };
       const printingTerm=(row,set)=>'!"'+row.name.split(' // ')[0].replace(/["\\]/g,'\\$&')+'"'+(set?' set:'+set:'')+(row.language?' lang:'+row.language:'');
       for(const [rowIndex,row] of parsed.entries()){
         if(!form.isConnected||$('#dialog').open===false)return;
         if(version!==revision)throw Error('List changed; review it again.');
-        const label=(csv?'CSV row '+(firstRow+rowIndex)+' · ':'')+row.name+(row.set?' · '+row.set:'');
+        const sourceRow=format==='tsv'?'Tab-separated row '+rowNumbers[rowIndex]:format==='csv'?'CSV row '+(firstRow+rowIndex):'';
+        const label=[sourceRow,row.name,row.set].filter(Boolean).join(' · ');
         progress('Resolving '+(rowIndex+1)+' of '+parsed.length+' card rows · '+row.name);
         let card=local.get(printingKey(row));
         try {
@@ -776,7 +837,7 @@ function collectionImport(){
             if(cache.has(cacheKey))card=cache.get(cacheKey);else{
               if(row.set&&!editions){
                 const sets=await lookup('/api/collection-sets').catch(error=>{
-                  if(error.status===404)throw Error('The running Arcana server could not load the edition catalog. Restart the Arcana CMD server, refresh this page and upload the CSV again.');
+                  if(error.status===404)throw Error('The running Arcana server could not load the edition catalog. Restart the Arcana CMD server, refresh this page and try the upload again.');
                   throw error;
                 });
                 editions=new Map();

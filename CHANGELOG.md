@@ -1,5 +1,10 @@
 # Changelog
 
+## Collection upload — 2026-11-27
+
+- Upload or paste tab-separated deck TXT with set, collector number, finish and language. Map unfamiliar columns and review malformed rows before applying copies (#269).
+- The wider Upload collection dialog separates examples, syntax status, processed columns and rows that need attention (#270).
+
 ## Cards zone and group controls — 2026-11-27
 
 - Collapse each deck zone independently in all four Cards layouts. Zone summaries and drag destinations stay available, and reopening a zone restores its group disclosures (#264).

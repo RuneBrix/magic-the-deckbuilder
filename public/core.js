@@ -1,5 +1,5 @@
 export { parseImport } from './deck-import.js';
-export { readCollectionCsv, COLLECTION_COLUMNS, prepareCollectionUpload, parseCollectionImport, normalizeEdition } from './collection-import.js';
+export { readCollectionCsv, COLLECTION_COLUMNS, collectionUploadFormat, prepareCollectionUpload, parseCollectionImport, normalizeEdition } from './collection-import.js';
 import { COMMANDER_BRACKETS } from './commander-brackets.js';
 export { COMMANDER_BRACKETS };
 import { TAG_CATALOG } from './tag-catalog.js';

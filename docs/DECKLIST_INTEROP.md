@@ -36,7 +36,7 @@ Section headings can use Zone, Type or Function. Zone sections keep the standard
 
 Owned and missing copies use the same allocation helper and saved matching setting as Ownership & costs. The helper allocates across the selected cards in Main deck, Command zone, Sideboard, Maybeboard order, then current printing ID. Filtering out a category or zone can free owned copies for other exported entries. Options and downloads leave saved decks and inventory intact.
 
-Complete JSON backup always includes the complete deck and remains the recovery format for printings, finishes, ordered functions, companion designation and brackets. The decklist importer supports the plain quantity/name TXT format with optional zone headings. CSV, metadata columns and category headings are for export; the selected Archidekt import contract above still applies.
+Complete JSON backup always includes the complete deck and remains the recovery format for printings, finishes, ordered functions, companion designation and brackets. The decklist importer supports the plain quantity/name TXT format with optional zone headings. **Upload collection** also accepts tab-separated deck TXT with quantities, card names and printing fields. [Collection upload](COLLECTION_WORKFLOW.md#upload)
 
 ## Verification
 
