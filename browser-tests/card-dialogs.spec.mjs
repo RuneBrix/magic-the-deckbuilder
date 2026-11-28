@@ -43,7 +43,7 @@ test('Scryfall tags preserves details on cancel and replaces only the search on 
   }
   await page.locator('#sort').selectOption('name');
   await expect.poll(() => drafts.length).toBe(2);
-  await page.locator('#search-filters > summary').click();
+  await page.locator('#search-tools-heading').click();
   await page.getByRole('button', { name: 'Inspect '+tagged.name, exact: true }).click();
   const details = page.getByRole('dialog', { name: tagged.name+' — Card details' });
   await expect(details.locator('#detail-images img')).toHaveCount(2);
@@ -85,7 +85,7 @@ test('Scryfall tags preserves details on cancel and replaces only the search on 
   await expect(raw).toHaveValue(original);
   await expect(page.locator('#sort')).toHaveValue('name');
   await expect(page.locator('.card-tile')).toHaveCount(3);
-  await expect(page.locator('#search-filters')).toHaveAttribute('open', '');
+  await expect(page.locator('#search-tools')).toHaveAttribute('open', '');
   await expect.poll(() => typeof finishPrintings).toBe('function');
   await tag.press('Enter');
   await warning.getByRole('button', { name: 'Search by tag' }).click();
@@ -99,7 +99,7 @@ test('Scryfall tags preserves details on cancel and replaces only the search on 
   await expect(raw).toBeFocused();
   await expect(page.locator('#tracked-deck')).toHaveValue('smoke-deck');
   await expect(page.locator('#sort')).toHaveValue('edhrec');
-  await expect(page.locator('#search-filters')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#search-tools')).not.toHaveAttribute('open', '');
   await expect(page.locator('.card-tile')).toHaveCount(1);
   expect(drafts).toEqual([original, original, expectedQuery]);
   expect(await page.evaluate(() => localStorage.getItem('arcana.workspace.v2'))).toBe(saved);
@@ -147,7 +147,7 @@ test('Related examples open their own printing and return to the same history, s
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const query = 't:elf otag:ramp';
   await page.locator('#raw').fill(query);
-  await page.locator('#function-tags > summary').click();
+  await page.locator('#search-tools-heading').click();
   await page.getByRole('searchbox', { name: 'Find a function' }).fill('sweeper');
   const trigger = page.getByRole('button', { name: 'Browse sweeper relationships', exact: true });
   await trigger.click();

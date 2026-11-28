@@ -41,20 +41,16 @@ test('category, guided and function clearing preserve unrelated and query-only c
   assert.equal(w.writes.length,0);
 });
 
-test('search disclosures start closed and preserve the opened state and selected filters across renders', () => {
+test('the shared search disclosure starts closed and preserves its state and active filters across renders', () => {
   const w = workspace();
-  assert.doesNotMatch(w.node('#app').innerHTML, /id="search-filters"[^>]*\bopen\b/);
-  assert.doesNotMatch(w.node('#app').innerHTML, /id="function-tags"[^>]*\bopen\b/);
-  w.node('#search-filters').toggle({ target: { open: true, isConnected: true } });
-  w.node('#function-tags').toggle({ target: { open: true, isConnected: true } });
-  w.node('#guided-form').toggle({ target: { open: true, isConnected: true, dataset:{guidedFamily:'oracle'} } });
+  assert.doesNotMatch(w.node('#app').innerHTML, /id="search-tools"[^>]*\bopen\b|data-guided-family=/);
+  w.node('#search-tools').toggle({ target: { open: true, isConnected: true } });
   vm.runInContext("filters=parseQuery('o:\"draw a card\" otag:ramp'); render()", w.context);
   const html = w.node('#app').innerHTML;
-  assert.match(html, /id="search-filters"[^>]*\bopen\b/);
-  assert.match(html, /id="function-tags"[^>]*\bopen\b/);
-  assert.match(html, /data-guided-family="oracle" open/);
-  assert.match(html, /id="applied-filter-summary"[^>]*>Oracle phrase<\/span>/);
-  assert.match(html, /id="applied-function-summary"[^>]*>ramp<\/span>/i);
+  assert.match(html, /id="search-tools"[^>]*\bopen\b/);
+  assert.match(html, /data-guided-family="oracle"/);
+  assert.match(html, /id="applied-filter-summary"[^>]*>Filters · Oracle phrase<\/span>/);
+  assert.match(html, /id="applied-function-summary"[^>]*>Functions · ramp<\/span>/i);
   assert.match(html, /name="oracle-0" value="draw a card"/);
   assert.match(html, /aria-label="Remove ramp filter"/);
   assert.doesNotMatch(html, /data-action="backup"|data-action="restore"/);
@@ -67,8 +63,7 @@ test('tag discovery pages through alias matches with snapshot counts and inline 
   assert.match(html, /Add flicker filter/);
   assert.match(html, /data-browse-tag="flicker"/);
   assert.doesNotMatch(html, /Directly tagged cards|starting points/);
-  assert.match(html, /About function data/);
-  assert.match(html, /Scryfall Oracle Tags snapshot from/);
+  assert.doesNotMatch(html, /About function data/);
   assert.match(html, /class="tag-card-count">1 directly tagged/);
   assert.match(html, /outside this snapshot/);
   assert.match(html, /id="tag-match-count"[^>]*>[\d,.]+ matching tags?/);
@@ -85,11 +80,11 @@ test('tag discovery pages through alias matches with snapshot counts and inline 
   const matching=core.findTags('a').map(tag=>tag.id);
   const pageIds=()=>Array.from(w.node('#tag-options').innerHTML.matchAll(/data-browse-tag="([^"]+)"/g),match=>match[1]);
   assert.match(w.node('#tag-options').innerHTML,/id="tag-page"/);
-  assert.deepEqual(pageIds(),matching.slice(0,40));
+  assert.deepEqual(pageIds(),matching.slice(0,10));
   vm.runInContext('tagPage=2; refreshTagOptions()',w.context);
-  assert.deepEqual(pageIds(),matching.slice(40,80));
+  assert.deepEqual(pageIds(),matching.slice(10,20));
   w.node('#tag-search').input({target:{value:'a '}});
-  assert.deepEqual(pageIds(),matching.slice(0,40));
+  assert.deepEqual(pageIds(),matching.slice(0,10));
   assert.equal(vm.runInContext('tagCardCount({cardCount:0})',w.context),'0 directly tagged');
   assert.equal(vm.runInContext('tagCardCount({})',w.context),'Count unavailable');
   assert.equal(vm.runInContext('tagCardCount({cardCount:-1})',w.context),'Count unavailable');
@@ -180,7 +175,7 @@ test('typed query projects controls without replacing the focused search input; 
   assert.equal(w.node('#app').innerHTML,shell);
   assert.match(w.node('#guided-controls').innerHTML,/data-remove-chip="instant"/);
   assert.match(w.node('#guided-controls').innerHTML,/data-remove-chip="sorcery"/);
-  assert.equal(w.node('#applied-filter-summary').textContent,'Types · 1 query-only expression');
+  assert.equal(w.node('#applied-filter-summary').textContent,'Filters · Types · 1 query-only expression');
   assert.match(w.node('#applied-function-summary').textContent,/ramp.*draw/i);
   assert.match(w.node('#selected-functions').innerHTML,/Remove ramp filter/);
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[],total_cards:0,has_more:false})});
@@ -422,7 +417,7 @@ test('top-navigation Explore starts fresh and invalidates a pending result page'
   assert.equal(vm.runInContext('tracker.id',w.context),'editor');
   assert.equal(vm.runInContext('filters.query',w.context),'');
   w.context.fetch=async()=>({ok:true,json:async()=>({data:[editorCard('Found')],total_cards:100,has_more:true})});
-  vm.runInContext("filters=parseQuery('t:instant mv<=3 otag:ramp');order='name';filtersOpen=true;tagsOpen=true;tagSearch='ramp'",w.context);
+  vm.runInContext("filters=parseQuery('t:instant mv<=3 otag:ramp');order='name';searchToolsOpen=true;tagSearch='ramp'",w.context);
   await vm.runInContext("broaden('mv')",w.context);
   let complete;
   w.context.fetch=()=>new Promise(resolve=>complete=resolve);
@@ -438,7 +433,7 @@ test('top-navigation Explore starts fresh and invalidates a pending result page'
   assert.equal(vm.runInContext('tracker.id',w.context),'');
   assert.equal(vm.runInContext('results.length',w.context),0);
   assert.equal(vm.runInContext('broadening',w.context),null);
-  assert.doesNotMatch(w.node('#app').innerHTML,/id="results-area"|id="broadening-tools"|id="(?:search-filters|function-tags)"[^>]*open/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/id="results-area"|id="broadening-tools"|id="search-tools"[^>]*open/);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),storedDecks);
   assert.deepEqual(w.writes.map(([key])=>key),['arcana.explorer.v1']);
 });
@@ -475,10 +470,10 @@ test('function matching precedes removable chips inside the disclosure without c
   const w=workspace();
   vm.runInContext("filters=parseQuery('t:instant (otag:ramp OR otag:draw)'); render()",w.context);
   const html=w.node('#app').innerHTML;
-  const panel=html.slice(html.indexOf('<details id="function-tags"'),html.indexOf('<div id="search-output"'));
+  const panel=html.slice(html.indexOf('<section id="function-tags"'),html.indexOf('<div id="search-output"'));
   assert.match(panel, /id="selected-functions"[\s\S]*Combine functions by[\s\S]*Matching any \(OR\)[\s\S]*Remove ramp filter[\s\S]*for="tag-search"/);
   const query=vm.runInContext('filters.query',w.context);
-  w.node('#function-tags').toggle({target:{open:false,isConnected:true}});
+  w.node('#search-tools').toggle({target:{open:false,isConnected:true}});
   assert.equal(vm.runInContext('filters.query',w.context),query);
   vm.runInContext("setCondition('tags',{...filters,tags:['draw']},false)",w.context);
   assert.match(vm.runInContext('filters.query',w.context),/t:instant/);

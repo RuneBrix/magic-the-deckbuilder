@@ -17,6 +17,13 @@ export const workspace = {
   decks: [deck], collection: [{ card: cards[1], qty: 3, finish: 'regular' }],
 };
 
+export async function chooseGuidedFilter(page, family) {
+  await page.locator('#add-guided-filter').click();
+  const picker = page.getByRole('group', { name: 'Filter types', exact: true });
+  await picker.locator(`[data-guided-choice="${family}"]`).click();
+  await picker.waitFor({ state: 'hidden' });
+}
+
 export async function prepareApp(page) {
   page.on('pageerror', error => { throw error; });
   await page.addInitScript(data => {

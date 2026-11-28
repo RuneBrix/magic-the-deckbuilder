@@ -395,7 +395,7 @@ test('mana symbols retain accessible colors and distinguish colorless, generic a
   assert.doesNotMatch(html,/<bad>/);
   const statsHtml=vm.runInContext('statPanel(stats(decks[0], { detailed: true }), decks[0])',w.context);
   for(const color of ['White','Blue','Black','Red','Green','Colorless'])assert.match(statsHtml,new RegExp('aria-label="'+color+'"'));
-  assert.match(vm.runInContext('guidedControls()',w.context),/mana-symbol/);
+  assert.match(vm.runInContext("filters=parseQuery('c>=G'); guidedControls()",w.context),/mana-symbol/);
   assert.equal(w.writes.length,0);
 });
 

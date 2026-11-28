@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prepareApp, cards } from './fixtures.mjs';
+import { prepareApp, cards, chooseGuidedFilter } from './fixtures.mjs';
 
 async function noPageOverflow(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1432,7 +1432,7 @@ test('Search cards fills available width and keeps selected functions inside the
   const functions = page.locator('#function-tags');
   const chips = functions.locator('#selected-functions');
   await expect(chips).toBeHidden();
-  const summary = functions.locator(':scope > summary');
+  const summary = page.locator('#search-tools-heading');
   await summary.focus();
   await page.keyboard.press('Space');
   await expect(chips).toBeVisible();
@@ -1477,6 +1477,7 @@ test('Search cards fills available width and keeps selected functions inside the
 });
 
 test('function pages and related browsing preserve the search until a filter is applied', async ({ page }, testInfo) => {
+  const initialQuery = 't:creature (otag:ramp OR otag:discard)';
   const queries = [];
   const exampleQuery = slug => `game:paper otag:${slug}`;
   let removalAttempts = 0;
@@ -1499,33 +1500,55 @@ test('function pages and related browsing preserve the search until a filter is 
   });
   await page.getByRole('button', { name: 'Search cards' }).click();
   const raw = page.locator('#raw');
-  await raw.fill('t:creature (otag:ramp OR otag:draw)');
-  await page.locator('#function-tags > summary').press('Enter');
+  await raw.fill(initialQuery);
+  await page.locator('#search-tools-heading').press('Enter');
   const lookup = page.getByRole('searchbox', { name: 'Find a function' });
   const grid = page.locator('.tag-options');
   const tiles = grid.locator('li');
   const pager = page.locator('#tag-page');
+  const pageNumber = page.locator('#tag-page-number');
   await lookup.fill('a');
-  await expect(tiles).toHaveCount(40);
+  await expect(tiles).toHaveCount(10);
   await expect(tiles.first()).toContainText(/\d+ directly tagged/);
   const phone = page.viewportSize().width < 600;
   const geometry = await tiles.evaluateAll(nodes => nodes.map(node => {
     const { x, y, width, height } = node.getBoundingClientRect();
     return { x, y, width, height };
   }));
-  expect(new Set(geometry.map(rect => rect.x)).size).toBe(phone ? 2 : 5);
-  expect(new Set(geometry.map(rect => rect.y)).size).toBe(phone ? 20 : 8);
+  const columns = new Set(geometry.map(rect => rect.x)).size;
+  expect(columns).toBe(2);
+  expect(new Set(geometry.map(rect => rect.y)).size).toBe(5);
   expect(Math.max(...geometry.map(rect => rect.width)) - Math.min(...geometry.map(rect => rect.width))).toBeLessThan(1);
   expect(Math.max(...geometry.map(rect => rect.height)) - Math.min(...geometry.map(rect => rect.height))).toBeLessThan(1);
+  if (!phone) {
+    const positions = () => page.locator('.tag-choice-actions button, #tag-pagination').evaluateAll(nodes => nodes.map(node => {
+      const { x, y } = node.getBoundingClientRect();
+      return [x + scrollX, y + scrollY];
+    }));
+    const beforeHover = await positions();
+    await tiles.nth(5).getByRole('button', { name: /^Add/ }).hover();
+    expect(await positions()).toEqual(beforeHover);
+    await lookup.focus();
+    expect(await positions()).toEqual(beforeHover);
+  }
   const firstTag = await tiles.first().getByRole('button', { name: /relationships/ }).getAttribute('data-browse-tag');
-  await pager.focus();
-  await pager.press('ArrowDown');
-  await pager.press('Enter');
+  await expect(pager.locator('option').first()).toHaveText('Jump to page');
+  await expect(pager.locator('option').nth(1)).toHaveText(/^1 of \d+$/);
+  await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Next page' }).press('Enter');
+  await expect(pageNumber).toHaveValue('2');
+  await page.getByRole('button', { name: 'Previous page' }).click();
+  await expect(pageNumber).toHaveValue('1');
+  await pageNumber.fill('3');
+  await pageNumber.press('Enter');
+  await expect(pageNumber).toHaveValue('3');
+  await expect(pageNumber).toBeFocused();
+  await pager.selectOption('2');
   await expect(pager).toBeFocused();
-  await expect(pager).toHaveValue('2');
+  await expect(pageNumber).toHaveValue('2');
   await expect(tiles.first().getByRole('button', { name: /relationships/ })).not.toHaveAttribute('data-browse-tag', firstTag);
   await lookup.fill('a ');
-  await expect(pager).toHaveValue('1');
+  await expect(pageNumber).toHaveValue('1');
   await noPageOverflow(page);
   await page.screenshot({ path: testInfo.outputPath('function-grid.png') });
   expect(queries).toEqual([]);
@@ -1565,43 +1588,39 @@ test('function pages and related browsing preserve the search until a filter is 
   await dialog.getByLabel('Narrower functions').selectOption('sweeper');
   await expect(heading).toBeFocused();
   await expect(heading).toHaveText(/board wipes|sweeper/i);
-  await expect(raw).toHaveValue('t:creature (otag:ramp OR otag:draw)');
+  await expect(raw).toHaveValue(initialQuery);
   await page.keyboard.press('Escape');
   await expect(trigger).toBeFocused();
 
   await trigger.click();
   await dialog.getByRole('button', { name: 'Add filter', exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(raw).toHaveValue('t:creature (otag:ramp OR otag:draw OR otag:sweeper)');
-  await expect(trigger).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Remove sweeper filter', exact: true })).toHaveCount(2);
+  await expect(raw).toHaveValue('t:creature (otag:ramp OR otag:discard OR otag:sweeper)');
+  await expect(trigger).toHaveCount(0);
+  await expect(lookup).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Remove sweeper filter', exact: true })).toHaveCount(1);
 });
 
 test('Search cards accepts primary and guided keyboard submission and adds unlisted functions inline', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const filters = page.locator('#search-filters'), raw = page.locator('#raw');
   await raw.fill('name:"Sol Ring" usd<5');
-  await expect(page.locator('#applied-filter-summary')).toHaveText('Card name · 1 query-only expression');
+  await expect(page.locator('#applied-filter-summary')).toHaveText('Filters · Card name · 1 query-only expression');
   await page.locator('#search-submit').click();
   await expect(page.locator('.card-tile')).toHaveCount(3);
-  await expect(filters).not.toHaveAttribute('open', '');
+  await expect(page.locator('#search-tools')).not.toHaveAttribute('open', '');
 
-  await filters.locator(':scope > summary').press('Space');
+  await page.locator('#search-tools-heading').press('Space');
   const nameFilter = filters.locator('.guided-family').first();
-  await expect(nameFilter.locator('summary')).toHaveText('Card name');
+  await expect(nameFilter.getByRole('heading', { name: 'Card name' })).toBeVisible();
   const name = nameFilter.getByLabel('Name phrase', { exact: true });
-  await expect(name).toBeHidden();
-  await nameFilter.locator('summary').press('Enter');
   await expect(name).toHaveValue('Sol Ring');
   await name.fill('Forest');
   await name.press('Enter');
   await expect(raw).toHaveValue('name:"Forest" usd<5');
   await expect(name).toBeVisible();
   await expect(filters.locator('[data-guided-family="type"] input:visible')).toHaveCount(0);
-  const columns = await filters.locator('.guided-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
-  expect(columns > 1).toBe(testInfo.project.name.startsWith('desktop'));
-
-  await page.locator('#function-tags > summary').press('Enter');
+  await expect(filters.locator('.guided-family')).toHaveCount(1);
   const lookup = page.getByRole('searchbox', { name: 'Find a function' });
   const matches = page.locator('#tag-match-count');
   await expect(matches).toBeHidden();
@@ -1620,7 +1639,8 @@ test('Search cards accepts primary and guided keyboard submission and adds unlis
   await add.press('Enter');
   await expect(raw).toHaveValue('name:"Forest" usd<5 otag:arcana-example-function');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Remove arcana-example-function filter', exact: true })).toBeFocused();
+  await expect(lookup).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Remove arcana-example-function filter', exact: true })).toBeVisible();
   await expect(name).toBeVisible();
 });
 
@@ -1628,9 +1648,9 @@ test('type and keyword chips suggest locally, synchronize, and clear independent
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const raw = page.locator('#raw');
   await raw.fill('usd<5 o:/draw a card/');
-  await page.locator('#search-filters > summary').click();
-  await page.locator('#filter-heading-type').click();
-  await page.locator('#filter-heading-keyword').click();
+  await page.locator('#search-tools-heading').click();
+  await chooseGuidedFilter(page, 'type');
+  await chooseGuidedFilter(page, 'keyword');
   const include = page.locator('[name="types"]'), exclude = page.locator('[name="excludedTypes"]');
   const keywords = page.locator('[name="keywords"]');
   await include.fill('e');
@@ -1684,10 +1704,7 @@ test('guided clear controls reset only the requested value and return focus', as
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   const raw = page.locator('#raw');
   await raw.fill('name:"Sol Ring" mv>=2 mv<=5 o:"draw" fo:"flying" c:m id>=W m>={U} m>={C} f:modern usd<5');
-  await page.locator('#search-filters > summary').click();
-  for (const family of ['name', 'mv', 'oracle', 'colors', 'cost', 'legal']) {
-    await page.locator('#filter-heading-' + family).click();
-  }
+  await page.locator('#search-tools-heading').click();
   for (const [label, field] of [
     ['name phrase', 'name'], ['mana value 1', 'mv-0'], ['rules-text phrase 2', 'oracle-1'],
     ['Card color', 'color-mode'], ['mana amount 1', 'cost-0'], ['format legality', 'legal'],
@@ -1706,7 +1723,7 @@ test('guided clear controls reset only the requested value and return focus', as
   await expect(page.locator('[name="identity-W"]')).not.toBeChecked();
   await expect(raw).toHaveValue('mv<=5 o:"draw" m>={C} usd<5');
   await expect(page.locator('#applied-filter-summary')).toBeHidden();
-  await page.locator('#filters-heading').press('Enter');
+  await page.locator('#search-tools-heading').press('Enter');
   await expect(page.locator('#applied-filter-summary')).toContainText('Mana values');
   await noPageOverflow(page);
 });
@@ -1718,10 +1735,9 @@ test('one Colors panel and repeatable mana costs preserve query semantics', asyn
     if(url.pathname==='/api/search')queries.push(url.searchParams.get('q'));
   });
   await page.getByRole('button', {name:'Search cards',exact:true}).click();
-  await page.locator('#search-filters > summary').click();
+  await page.locator('#search-tools-heading').click();
   const raw=page.locator('#raw');
   await raw.fill('id:w usd<5');
-  await page.locator('#filter-heading-colors').click();
   const target=page.getByRole('combobox',{name:'Match by',exact:true});
   const matching=page.getByRole('combobox',{name:'Matching mode',exact:true});
   await expect(target).toHaveValue('identity');
@@ -1732,7 +1748,7 @@ test('one Colors panel and repeatable mana costs preserve query semantics', asyn
   await expect(raw).toHaveValue('id:w usd<5 c:m');
   await expect(page.getByRole('checkbox',{name:'White',exact:true})).toBeDisabled();
 
-  await page.locator('#filter-heading-cost').click();
+  await chooseGuidedFilter(page, 'cost');
   await page.getByLabel('Mana amount 1',{exact:true}).fill('0');
   await expect(page.locator('#guided-error')).toContainText('from 1 to 20');
   await expect(raw).toHaveValue('id:w usd<5 c:m');
@@ -1766,9 +1782,9 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
   page.on('request', request => {const url=new URL(request.url());if(url.pathname==='/api/search')queries.push(url.searchParams.get('q'));});
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await page.locator('#tracked-deck').selectOption('');
-  await page.locator('#search-filters > summary').click();
-  await page.locator('#filter-heading-mv').click();
-  await page.locator('#filter-heading-oracle').click();
+  await page.locator('#search-tools-heading').click();
+  await chooseGuidedFilter(page, 'mv');
+  await chooseGuidedFilter(page, 'oracle');
   const mv=page.locator('[data-family="mv"]'), oracle=page.locator('[data-family="oracle"]');
   await expect(mv.locator('input')).toHaveCount(1);
   await expect(oracle.locator('input')).toHaveCount(1);
@@ -1807,16 +1823,14 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
   await mv.locator('[name="mv-2"]').fill('4');
   await expect(page.locator('#raw')).toHaveValue('fo:/draw (one|two)/ (mv>=1 mv<=5 mv!=4)');
   await page.getByRole('button',{name:'Clear search and filters',exact:true}).click();
-  await expect(mv.locator('input')).toHaveCount(1);
-  await expect(oracle.locator('input')).toHaveCount(1);
+  await expect(mv.locator('input')).toHaveCount(0);
+  await expect(oracle.locator('input')).toHaveCount(0);
 });
 
 test('additional mana and Oracle rows can be removed by keyboard without changing other filters', async ({ page }, testInfo) => {
   await page.getByRole('button',{name:'Search cards',exact:true}).click();
   await page.locator('#raw').fill('(mv=1 OR mv=2 OR mv=3) (o:"draw" fo:"flying" o:"~ attacks") usd<5');
-  await page.locator('#search-filters > summary').click();
-  await page.locator('#filter-heading-mv').click();
-  await page.locator('#filter-heading-oracle').click();
+  await page.locator('#search-tools-heading').click();
   const mv=page.locator('[data-family="mv"]'),oracle=page.locator('[data-family="oracle"]');
   for(const section of [mv,oracle]){
     await expect(section.locator('.filter-column-head')).toHaveCount(1);
@@ -1875,16 +1889,14 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   await page.getByRole('button', {name:'Search cards',exact:true}).click();
   const raw=page.locator('#raw');
   await raw.fill('t:elf t:creature -t:artifact keyword:flying mv>=2 mv<=5 c>=G id<=GU o:"draw" otag:ramp usd<5');
-  const filtersPanel=page.locator('#search-filters');
+  const filtersPanel=page.locator('#search-tools');
   await filtersPanel.evaluate(panel=>{
-    // Change the filter before either disclosure's queued toggle event runs.
+    // Change the filter before the shared disclosure's queued toggle event runs.
     panel.querySelector(':scope > summary').click();
-    panel.querySelector('#filter-heading-activation').click();
-    const activation=panel.querySelector('select[name="activation-kind"]');
-    activation.value='tap';
-    activation.dispatchEvent(new Event('input',{bubbles:true}));
-    activation.dispatchEvent(new Event('change',{bubbles:true}));
+    panel.querySelector('#add-guided-filter').click();
   });
+  await page.getByRole('group', { name: 'Filter types' }).getByRole('button', { name: 'Activated abilities' }).click();
+  await page.getByLabel('Activation cost includes').selectOption('tap');
   await expect(filtersPanel).toHaveJSProperty('open',true);
   await expect(page.getByLabel('Activation cost includes')).toBeVisible();
   await expect(page.locator('#result-count')).toHaveText('3 cards found');
@@ -1903,13 +1915,11 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   await expect(raw).toHaveValue(submitted);
   await payment.fill('3U');
   await expect(page.locator('#guided-error')).toBeEmpty();
-  await page.locator('#filter-heading-mv').click();
-  await page.getByRole('button',{name:'Clear mana value',exact:true}).press('Enter');
-  await expect(page.locator('#filter-heading-mv')).toBeFocused();
+  await page.getByRole('button',{name:'Remove mana value filter',exact:true}).press('Enter');
+  await expect(page.locator('#add-guided-filter')).toBeFocused();
   await expect(raw).not.toHaveValue(/mv[<>=]/);
   await expect(raw).toHaveValue(/otag:ramp/);
-  await page.locator('#filter-heading-colors').click();
-  await page.getByRole('button',{name:'Clear colors',exact:true}).click();
+  await page.getByRole('button',{name:'Remove colors filter',exact:true}).click();
   await expect(raw).not.toHaveValue(/c>=G|id<=GU/);
   await page.locator('#filter-heading-activation').scrollIntoViewIfNeeded();
   const ability=page.locator('[data-guided-family="activation"]');
@@ -1924,9 +1934,8 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   }
   const clearGuided=page.getByRole('button',{name:'Clear all guided filters',exact:true});
   if(isMobile)await clearGuided.tap();else await clearGuided.click();
-  await expect(page.getByRole('button',{name:'Clear all guided filters',exact:true})).toBeFocused();
+  await expect(page.locator('#add-guided-filter')).toBeFocused();
   await expect(raw).toHaveValue('otag:ramp usd<5');
-  await page.locator('#function-tags > summary').click();
   const lookup=page.getByRole('searchbox',{name:'Find a function'});
   await lookup.fill('removal');
   await page.getByRole('button',{name:'Clear function filters',exact:true}).press('Enter');

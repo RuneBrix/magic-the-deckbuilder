@@ -1,78 +1,237 @@
 import { test, expect } from '@playwright/test';
-import { cards, prepareApp } from './fixtures.mjs';
+import { cards, chooseGuidedFilter, prepareApp } from './fixtures.mjs';
+import { findTags } from '../public/core.js';
 
 test.beforeEach(async ({ page }) => {
   await prepareApp(page);
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
 });
 
-test('empty Explore panels balance their headings and show function selections only when present', async ({ page }, testInfo) => {
+test('Explore keeps ten starter slots and a stable Selected functions area', async ({ page, isMobile }, testInfo) => {
   const raw = page.locator('#raw');
-  const filters = page.locator('#filters-heading');
-  const functions = page.locator('#function-tags-heading');
-  expect(Math.abs((await filters.boundingBox()).height - (await functions.boundingBox()).height)).toBeLessThan(2);
+  const tools = page.locator('#search-tools-heading');
   await expect(page.locator('#applied-filter-summary')).toBeHidden();
-  await functions.press('Enter');
-  await expect(page.locator('.selected-functions')).toHaveCount(0);
+  await tools.press('Enter');
+  await expect(page.locator('#add-guided-filter')).toBeVisible();
+  await expect(page.locator('.guided-family')).toHaveCount(0);
+  const selections = page.locator('.selected-functions');
+  await expect(selections.getByText('No functions selected.')).toBeVisible();
+  await expect(selections.getByLabel('Combine functions by')).toBeDisabled();
   await expect(page.locator('#tag-match-count')).toBeHidden();
   await expect(page.locator('#function-tags')).not.toContainText(/starting points|Directly tagged cards/);
 
+  const candidates = page.locator('.tag-choice [data-tag]');
+  const geometry = () => page.locator('.search-panel-columns > section, .selected-functions, #tag-search, .tag-results')
+    .evaluateAll(nodes => nodes.map(node => {
+      const { x, y, width, height } = node.getBoundingClientRect();
+      return [x + scrollX, y + scrollY, width, height];
+    }));
+  const before = await geometry();
+  const initial = await candidates.evaluateAll(nodes => nodes.map(node => node.dataset.tag));
+  expect(initial).toHaveLength(10);
+  const starterBottomGap = await page.locator('#function-tags').evaluate(panel =>
+    panel.getBoundingClientRect().bottom - panel.querySelector('.tag-options').getBoundingClientRect().bottom);
+  expect(starterBottomGap).toBeLessThanOrEqual(20);
+  for (const slot of [0, 1, 2, 3, 4]) {
+    const add = candidates.nth(slot);
+    const selected = await add.getAttribute('data-tag');
+    await add.scrollIntoViewIfNeeded();
+    const scrollBefore = await page.evaluate(() => scrollY);
+    if (isMobile) await add.tap(); else await add.press('Enter');
+    const chip = selections.getByRole('button', { name: `Remove ${selected} filter`, exact: true });
+    await expect(chip).toBeAttached();
+    if (slot === 0) {
+      const clear = selections.getByRole('button', { name: 'Clear function filters' });
+      const [chipBox, clearBox] = await Promise.all([chip.boundingBox(), clear.boundingBox()]);
+      expect(clearBox.y - (chipBox.y + chipBox.height)).toBeLessThanOrEqual(16);
+    }
+    await expect(candidates).toHaveCount(10);
+    await expect(add).not.toHaveAttribute('data-tag', selected);
+    await expect(add).toBeFocused();
+    expect(await geometry()).toEqual(before);
+    expect(await page.evaluate(() => scrollY)).toBeCloseTo(scrollBefore, 0);
+  }
+  await selections.getByRole('button', { name: 'Clear function filters' }).click();
+  await expect(selections.getByText('No functions selected.')).toBeVisible();
+  expect(await geometry()).toEqual(before);
+  await page.locator('#search-tools').evaluate(panel => panel.scrollIntoView({ block: 'end' }));
+  await page.screenshot({ path: testInfo.outputPath('search-tools-bottom.png') });
   await raw.fill('usd<5 (otag:ramp OR otag:draw)');
-  const selections = page.locator('.selected-functions');
   await expect(selections).toBeVisible();
   await expect(selections.getByLabel('Combine functions by')).toHaveValue('any');
-  expect(await page.locator('.tag-search-label').evaluate(el => parseFloat(getComputedStyle(el).fontSize)))
-    .toBeGreaterThan(await selections.locator('h3').evaluate(el => parseFloat(getComputedStyle(el).fontSize)));
   await selections.getByRole('button', { name: 'Remove ramp filter', exact: true }).press('Enter');
   await expect(raw).toHaveValue('usd<5 otag:draw');
   await selections.getByRole('button', { name: 'Remove draw filter', exact: true }).press('Enter');
-  await expect(selections).toHaveCount(0);
+  await expect(selections.getByText('No functions selected.')).toBeVisible();
   await expect(page.getByLabel('Find a function')).toBeFocused();
   await expect(raw).toHaveValue('usd<5');
   await page.locator('#function-tags').screenshot({ path: testInfo.outputPath('function-empty.png') });
-  await functions.press('Enter');
-  await functions.press('Enter');
-  await expect(page.locator('.selected-functions')).toHaveCount(0);
-  await page.getByText('About function data', { exact: true }).press('Enter');
-  await expect(page.locator('.function-data-help')).toContainText(/Scryfall|snapshot/);
-  await page.screenshot({ path: testInfo.outputPath('function-empty-and-help.png') });
+  await tools.press('Enter');
+  await tools.press('Enter');
+  await expect(selections.getByText('No functions selected.')).toBeVisible();
+  await expect(page.getByText('About function data', { exact: true })).toHaveCount(0);
 });
 
-test('collapsed Explore headings describe only their own active selections', async ({ page }, testInfo) => {
+test('one disclosure exposes both applied summaries when collapsed', async ({ page }, testInfo) => {
   const raw = page.locator('#raw');
-  const filters = page.locator('#filters-heading');
-  const functions = page.locator('#function-tags-heading');
+  const tools = page.locator('#search-tools-heading');
   const filterSummary = page.locator('#applied-filter-summary');
   const functionSummary = page.locator('#applied-function-summary');
-  await expect(filters).toHaveAccessibleDescription('');
-  await expect(functions).toHaveAccessibleDescription('');
+  await expect(tools).toHaveAccessibleDescription('');
   await raw.fill('otag:ramp');
   await expect(filterSummary).toBeHidden();
-  await expect(functions).toHaveAccessibleDescription(/ramp/i);
+  await expect(tools).toHaveAccessibleDescription('Functions · Ramp');
   await raw.fill('t:elf (o:draw OR o:discard mv<=3) usd<5 otag:ramp otag:draw otag:very-long-unlisted-function-name');
-  await expect(filters).toHaveAccessibleName('Filters');
-  await expect(filters).toHaveAccessibleDescription('Types · 2 query-only expressions');
-  await expect(functions).toHaveAccessibleName('Browse by function');
-  await expect(functions).toHaveAccessibleDescription(/ramp.*draw.*very long unlisted function name/i);
+  await expect(tools).toHaveAccessibleName('Filters and functions');
+  await expect(tools).toHaveAccessibleDescription(/Filters · Types · 2 query-only expressions Functions · ramp.*draw.*very long unlisted function name/i);
   await expect(filterSummary).toBeVisible();
   await expect(functionSummary).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('collapsed-search-summaries.png') });
-  await filters.press('Enter');
-  await expect(filters).toHaveAccessibleDescription('');
+  await tools.press('Enter');
+  await expect(tools).toHaveAccessibleDescription('');
   await expect(filterSummary).toBeHidden();
-  await expect(functionSummary).toBeVisible();
-  await expect(page.locator('#filter-heading-oracle')).toContainText('Query only');
-  await functions.press('Space');
-  await expect(functions).toHaveAccessibleDescription('');
   await expect(functionSummary).toBeHidden();
+  const add = page.locator('#add-guided-filter');
+  await add.click();
+  const picker = page.getByRole('group', { name: 'Filter types', exact: true });
+  await expect(picker.locator('[data-guided-choice="oracle"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(add).toBeFocused();
+  await expect(page.locator('#query-notes')).toContainText('Query-only expressions');
   await expect(page.locator('#selected-functions').getByRole('button', { name: 'Remove ramp filter' })).toBeVisible();
-  await filters.press('Enter');
+  await tools.press('Space');
   await expect(filterSummary).toBeVisible();
-  await expect(functionSummary).toBeHidden();
-  await functions.press('Space');
+  await expect(functionSummary).toBeVisible();
   await page.getByRole('button', { name: 'Clear search and filters' }).click();
   await expect(filterSummary).toBeHidden();
   await expect(functionSummary).toBeHidden();
+});
+
+test('Add a filter opens an anchored menu and fills the next reserved slot', async ({ page, isMobile }, testInfo) => {
+  const queries = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/search') queries.push(url.searchParams.get('q'));
+  });
+  const raw = page.locator('#raw');
+  const toggle = page.locator('#search-tools-heading');
+  const add = page.locator('#add-guided-filter');
+  const panels = page.locator('.search-panel-columns > section');
+  const boxes = () => panels.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()));
+  await toggle.press('Enter');
+  await toggle.press('Tab');
+  await expect(add).toBeFocused();
+  const layoutPosition = locator => locator.evaluate(element => {
+    const { x, y, width } = element.getBoundingClientRect();
+    return { x: x + scrollX, y: y + scrollY, width };
+  });
+  const beforeOpen = await boxes();
+  await expect(add).toHaveAccessibleName('Add a filter');
+  await add.press('ArrowDown');
+  const menu = page.getByRole('group', { name: 'Filter types', exact: true });
+  await expect(menu).toBeVisible();
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  const [menuBox, labelBox] = await Promise.all([menu.boundingBox(), add.locator('.add-guided-filter-label').boundingBox()]);
+  expect(menuBox.y).toBeCloseTo(labelBox.y + labelBox.height + 4, 0);
+  expect(menuBox.x + menuBox.width / 2).toBeCloseTo(labelBox.x + labelBox.width / 2, 0);
+  expect((await boxes()).map(({ width, height }) => [width, height])).toEqual(beforeOpen.map(({ width, height }) => [width, height]));
+  await expect(menu.getByRole('button', { name: 'Card name', exact: true })).toBeFocused();
+  await menu.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('filter-dropdown.png') });
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(add).toBeFocused();
+  if (isMobile) await add.tap(); else await add.click();
+  await expect(menu).toBeVisible();
+  await raw.click();
+  await expect(menu).toBeHidden();
+  await expect(raw).toBeFocused();
+  const order = [];
+  for (const [family, firstField] of [
+    ['name', 'name'], ['type', 'types'], ['keyword', 'keywords'], ['mv', 'mv-op-0'], ['colors', 'color-target'],
+    ['oracle', 'oracle-mode-0'], ['activation', 'activation-kind'], ['cost', 'cost-symbol-0'], ['legal', 'legal'],
+  ]) {
+    const slot = await layoutPosition(add);
+    await chooseGuidedFilter(page, family);
+    order.push(family);
+    const filter = page.locator(`[data-guided-family="${family}"]`);
+    await expect(filter.locator(`[name="${firstField}"]`)).toBeFocused();
+    expect(await layoutPosition(filter)).toEqual(slot);
+    expect(await page.locator('.guided-family').evaluateAll(nodes => nodes.map(node => node.dataset.guidedFamily))).toEqual(order);
+  }
+  await expect(page.locator('.guided-family > summary')).toHaveCount(0);
+  await expect(add).toHaveCount(0);
+  await expect(raw).toHaveValue('');
+  expect(queries).toEqual([]);
+  const [filters, functions] = await boxes();
+  if (isMobile) {
+    expect(functions.y).toBeGreaterThanOrEqual(filters.bottom - 1);
+  } else {
+    expect(functions.y).toBeCloseTo(filters.y, 0);
+    expect(functions.height).toBeCloseTo(filters.height, 0);
+    expect(functions.width).toBeCloseTo(filters.width, 0);
+    expect(functions.x - filters.right).toBeGreaterThanOrEqual(12);
+    const columns = await page.locator('.guided-grid').evaluate(grid => getComputedStyle(grid).gridTemplateColumns.split(' ').filter(width => width !== '0px').length);
+    expect(columns).toBe(2);
+    await page.setViewportSize({ width: 820, height: 900 });
+    const [stackedFilters, stackedFunctions] = await boxes();
+    expect(stackedFunctions.y).toBeGreaterThanOrEqual(stackedFilters.bottom - 1);
+    await page.setViewportSize({ width: 1280, height: 900 });
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('on-demand-filters.png'), fullPage: true });
+
+  await raw.fill('otag:ramp    usd<5');
+  await page.getByRole('button', { name: 'Remove card name filter', exact: true }).press('Enter');
+  await expect(add).toBeFocused();
+  await expect(add).toBeEnabled();
+  await expect(raw).toHaveValue('otag:ramp    usd<5');
+  expect(queries).toEqual([]);
+  await raw.fill('(t:elf OR keyword:flying) f:modern otag:ramp usd<5');
+  await expect(page.getByLabel('Legal in format')).toHaveValue('modern');
+  await expect(page.locator('[name="types"]')).toBeDisabled();
+  await page.getByRole('button', { name: 'Clear all guided filters', exact: true }).click();
+  await expect(add).toBeFocused();
+  await expect(raw).toHaveValue('(t:elf OR keyword:flying) otag:ramp usd<5');
+  await expect(page.locator('.guided-family')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remove ramp filter', exact: true })).toBeVisible();
+  await raw.fill('(name:unfinished');
+  await expect(add).toBeDisabled();
+  await expect(page.locator('#query-error')).toContainText('Guided edits are paused');
+});
+
+test('Find a function excludes selections and recovers from an empty last page', async ({ page, isMobile }) => {
+  const matches = findTags('ramp');
+  const selected = matches.slice(0, matches.length - 11);
+  const last = matches.at(-1).id;
+  const raw = page.locator('#raw');
+  await raw.fill(['t:artifact', ...selected.map(tag => `otag:${tag.id}`)].join(' '));
+  await page.locator('#search-tools-heading').press('Enter');
+  const lookup = page.getByLabel('Find a function', { exact: true });
+  const pager = page.locator('#tag-page');
+  await lookup.fill('ramp');
+  await expect(page.locator('#tag-match-count')).toHaveText('11 matching tags');
+  await pager.selectOption('2');
+  const candidate = page.getByRole('button', { name: `Add ${last} filter`, exact: true });
+  await expect(candidate).toHaveText('Add');
+  const card = candidate.locator('xpath=../..');
+  const related = card.getByRole('button', { name: `Browse ${last} relationships`, exact: true });
+  await expect(related).toHaveText('Related');
+  await expect(related.locator('svg')).toBeVisible();
+  if (isMobile) await candidate.tap(); else await candidate.press('Enter');
+  await expect(lookup).toBeFocused();
+  await expect(pager).toHaveCount(0);
+  await expect(page.locator('.tag-options li')).toHaveCount(10);
+  await expect(candidate).toHaveCount(0);
+  const chip = page.getByRole('button', { name: `Remove ${last} filter`, exact: true });
+  await chip.press('Enter');
+  await expect(lookup).toBeFocused();
+  await pager.selectOption('2');
+  await expect(candidate).toBeVisible();
+  await raw.fill(`otag:${findTags('connive')[0].id}`);
+  await lookup.fill('connive');
+  await expect(page.getByText('All matching functions are selected.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /unlisted function/ })).toHaveCount(0);
 });
 
 test('Explore ignores empty search submits and retains results until clear', async ({ page }) => {
@@ -119,8 +278,7 @@ test('Explore pins the query within setup and leaves results and focused control
   });
   const raw = page.locator('#raw');
   const queryForm = page.locator('#search-form');
-  const filters = page.locator('#filters-heading');
-  const functions = page.locator('#function-tags-heading');
+  const tools = page.locator('#search-tools-heading');
   const results = page.locator('#search-output');
   const geometry = () => page.evaluate(() => ({
     form: document.querySelector('#search-form').getBoundingClientRect().toJSON(),
@@ -134,8 +292,7 @@ test('Explore pins the query within setup and leaves results and focused control
     }).toBeLessThan(2);
   };
   await raw.fill('t:elf otag:ramp otag:draw usd<5');
-  await filters.press('Enter');
-  await functions.press('Enter');
+  await tools.press('Enter');
   await page.evaluate(() => window.scrollTo(0, 0));
   const original = (await geometry()).form.top;
   await page.evaluate(() => {
@@ -186,10 +343,8 @@ test('populated guided filters leave room for focus rings and reachable repeated
   const query = '(t:creature OR t:elf OR t:druid OR t:legendary) -t:artifact (keyword:flying OR keyword:trample) (mv>=1 mv<=8) (o:"draw a card" fo:"add mana") (m>={U} m>={G}) otag:ramp usd<5';
   const raw = page.locator('#raw');
   await raw.fill(query);
-  await page.locator('#filters-heading').press('Enter');
-  for (const family of ['type', 'keyword', 'mv', 'colors', 'oracle', 'cost']) {
-    await page.locator(`#filter-heading-${family}`).press('Enter');
-  }
+  await page.locator('#search-tools-heading').press('Enter');
+  await chooseGuidedFilter(page, 'colors');
   for (const family of ['mv', 'oracle', 'cost']) {
     const panel = page.locator(`[data-guided-family="${family}"]`);
     for (let i = 0; i < 5; i++) await panel.locator(`[data-add-filter="${family}"]`).click();
@@ -232,8 +387,7 @@ test('guided filters reflow at intermediate widths and enlarged text without cha
   const query = 't:"an extremely long custom type name for testing selected chips" (mv>=2 mv<=6) o:"whenever ~ attacks, draw a card" m>={U} otag:ramp';
   const raw = page.locator('#raw');
   await raw.fill(query);
-  await page.locator('#filters-heading').press('Enter');
-  for (const family of ['type', 'mv', 'oracle', 'cost']) await page.locator(`#filter-heading-${family}`).press('Enter');
+  await page.locator('#search-tools-heading').press('Enter');
   const evidence = [];
   for (const width of [1920, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -241,6 +395,7 @@ test('guided filters reflow at intermediate widths and enlarged text without cha
     await page.evaluate(zoom => document.documentElement.style.zoom = zoom, zoom);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await page.locator('.filter-rows').evaluateAll(nodes => nodes.every(el => el.scrollWidth <= el.clientWidth))).toBe(true);
+    expect(await page.locator('.guided-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBeLessThanOrEqual(2);
     await expect(raw).toHaveValue(query);
     const phrase = page.locator('[name="oracle-0"]');
     await phrase.focus();
