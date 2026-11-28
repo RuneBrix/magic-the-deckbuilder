@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prepareApp, cards } from './fixtures.mjs';
+import { prepareApp, cards, chooseGuidedFilter } from './fixtures.mjs';
 
 async function noPageOverflow(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -1506,8 +1506,9 @@ test('function pages and related browsing preserve the search until a filter is 
   const grid = page.locator('.tag-options');
   const tiles = grid.locator('li');
   const pager = page.locator('#tag-page');
+  const pageNumber = page.locator('#tag-page-number');
   await lookup.fill('a');
-  await expect(tiles).toHaveCount(12);
+  await expect(tiles).toHaveCount(10);
   await expect(tiles.first()).toContainText(/\d+ directly tagged/);
   const phone = page.viewportSize().width < 600;
   const geometry = await tiles.evaluateAll(nodes => nodes.map(node => {
@@ -1515,12 +1516,12 @@ test('function pages and related browsing preserve the search until a filter is 
     return { x, y, width, height };
   }));
   const columns = new Set(geometry.map(rect => rect.x)).size;
-  expect(columns).toBe(phone ? 2 : 3);
-  expect(new Set(geometry.map(rect => rect.y)).size).toBe(Math.ceil(12 / columns));
+  expect(columns).toBe(2);
+  expect(new Set(geometry.map(rect => rect.y)).size).toBe(5);
   expect(Math.max(...geometry.map(rect => rect.width)) - Math.min(...geometry.map(rect => rect.width))).toBeLessThan(1);
   expect(Math.max(...geometry.map(rect => rect.height)) - Math.min(...geometry.map(rect => rect.height))).toBeLessThan(1);
   if (!phone) {
-    const positions = () => page.locator('.tag-choice-actions button, .function-data-help').evaluateAll(nodes => nodes.map(node => {
+    const positions = () => page.locator('.tag-choice-actions button, #tag-pagination').evaluateAll(nodes => nodes.map(node => {
       const { x, y } = node.getBoundingClientRect();
       return [x + scrollX, y + scrollY];
     }));
@@ -1531,14 +1532,23 @@ test('function pages and related browsing preserve the search until a filter is 
     expect(await positions()).toEqual(beforeHover);
   }
   const firstTag = await tiles.first().getByRole('button', { name: /relationships/ }).getAttribute('data-browse-tag');
-  await pager.focus();
-  await pager.press('ArrowDown');
-  await pager.press('Enter');
+  await expect(pager.locator('option').first()).toHaveText('Jump to page');
+  await expect(pager.locator('option').nth(1)).toHaveText(/^1 of \d+$/);
+  await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Next page' }).press('Enter');
+  await expect(pageNumber).toHaveValue('2');
+  await page.getByRole('button', { name: 'Previous page' }).click();
+  await expect(pageNumber).toHaveValue('1');
+  await pageNumber.fill('3');
+  await pageNumber.press('Enter');
+  await expect(pageNumber).toHaveValue('3');
+  await expect(pageNumber).toBeFocused();
+  await pager.selectOption('2');
   await expect(pager).toBeFocused();
-  await expect(pager).toHaveValue('2');
+  await expect(pageNumber).toHaveValue('2');
   await expect(tiles.first().getByRole('button', { name: /relationships/ })).not.toHaveAttribute('data-browse-tag', firstTag);
   await lookup.fill('a ');
-  await expect(pager).toHaveValue('1');
+  await expect(pageNumber).toHaveValue('1');
   await noPageOverflow(page);
   await page.screenshot({ path: testInfo.outputPath('function-grid.png') });
   expect(queries).toEqual([]);
@@ -1602,7 +1612,7 @@ test('Search cards accepts primary and guided keyboard submission and adds unlis
 
   await page.locator('#search-tools-heading').press('Space');
   const nameFilter = filters.locator('.guided-family').first();
-  await expect(nameFilter.locator('summary')).toHaveText('Card name');
+  await expect(nameFilter.getByRole('heading', { name: 'Card name' })).toBeVisible();
   const name = nameFilter.getByLabel('Name phrase', { exact: true });
   await expect(name).toHaveValue('Sol Ring');
   await name.fill('Forest');
@@ -1639,9 +1649,8 @@ test('type and keyword chips suggest locally, synchronize, and clear independent
   const raw = page.locator('#raw');
   await raw.fill('usd<5 o:/draw a card/');
   await page.locator('#search-tools-heading').click();
-  const addFilter = page.getByLabel('Add filter', { exact: true });
-  await addFilter.selectOption('type');
-  await addFilter.selectOption('keyword');
+  await chooseGuidedFilter(page, 'type');
+  await chooseGuidedFilter(page, 'keyword');
   const include = page.locator('[name="types"]'), exclude = page.locator('[name="excludedTypes"]');
   const keywords = page.locator('[name="keywords"]');
   await include.fill('e');
@@ -1739,7 +1748,7 @@ test('one Colors panel and repeatable mana costs preserve query semantics', asyn
   await expect(raw).toHaveValue('id:w usd<5 c:m');
   await expect(page.getByRole('checkbox',{name:'White',exact:true})).toBeDisabled();
 
-  await page.getByLabel('Add filter', { exact: true }).selectOption('cost');
+  await chooseGuidedFilter(page, 'cost');
   await page.getByLabel('Mana amount 1',{exact:true}).fill('0');
   await expect(page.locator('#guided-error')).toContainText('from 1 to 20');
   await expect(raw).toHaveValue('id:w usd<5 c:m');
@@ -1774,8 +1783,8 @@ test('repeatable mana and Oracle filters synchronize, scroll locally and preserv
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
   await page.locator('#tracked-deck').selectOption('');
   await page.locator('#search-tools-heading').click();
-  await page.getByLabel('Add filter', { exact: true }).selectOption('mv');
-  await page.getByLabel('Add filter', { exact: true }).selectOption('oracle');
+  await chooseGuidedFilter(page, 'mv');
+  await chooseGuidedFilter(page, 'oracle');
   const mv=page.locator('[data-family="mv"]'), oracle=page.locator('[data-family="oracle"]');
   await expect(mv.locator('input')).toHaveCount(1);
   await expect(oracle.locator('input')).toHaveCount(1);
@@ -1884,14 +1893,10 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   await filtersPanel.evaluate(panel=>{
     // Change the filter before the shared disclosure's queued toggle event runs.
     panel.querySelector(':scope > summary').click();
-    const picker=panel.querySelector('#add-guided-filter');
-    picker.value='activation';
-    picker.dispatchEvent(new Event('change',{bubbles:true}));
-    const activation=panel.querySelector('select[name="activation-kind"]');
-    activation.value='tap';
-    activation.dispatchEvent(new Event('input',{bubbles:true}));
-    activation.dispatchEvent(new Event('change',{bubbles:true}));
+    panel.querySelector('#add-guided-filter').click();
   });
+  await page.getByRole('dialog', { name: 'Add a filter' }).getByRole('button', { name: 'Activated abilities' }).click();
+  await page.getByLabel('Activation cost includes').selectOption('tap');
   await expect(filtersPanel).toHaveJSProperty('open',true);
   await expect(page.getByLabel('Activation cost includes')).toBeVisible();
   await expect(page.locator('#result-count')).toHaveText('3 cards found');
@@ -1911,7 +1916,7 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   await payment.fill('3U');
   await expect(page.locator('#guided-error')).toBeEmpty();
   await page.getByRole('button',{name:'Remove mana value filter',exact:true}).press('Enter');
-  await expect(page.getByLabel('Add filter', { exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Add a filter', exact: true })).toBeFocused();
   await expect(raw).not.toHaveValue(/mv[<>=]/);
   await expect(raw).toHaveValue(/otag:ramp/);
   await page.getByRole('button',{name:'Remove colors filter',exact:true}).click();
@@ -1929,7 +1934,7 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   }
   const clearGuided=page.getByRole('button',{name:'Clear all guided filters',exact:true});
   if(isMobile)await clearGuided.tap();else await clearGuided.click();
-  await expect(page.getByLabel('Add filter', { exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Add a filter', exact: true })).toBeFocused();
   await expect(raw).toHaveValue('otag:ramp usd<5');
   const lookup=page.getByRole('searchbox',{name:'Find a function'});
   await lookup.fill('removal');

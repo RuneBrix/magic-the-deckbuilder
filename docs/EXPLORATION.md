@@ -16,7 +16,7 @@ Selection, visibility and preferred width persist separately under `arcana.explo
 ## Search hierarchy and states
 
 - **Sort results** offers **$: low first** and **$: high first**. Each page uses the completed search's query and direction. Card tiles show the regular USD quote or **Price unavailable**. Scryfall determines the order and placement of results without a regular quote. A late response from a previous search or sort is ignored.
-- **Browse by function** shows selected chips below **Combine functions by**. Changing the matching mode keeps focus on its selector. Adding or removing a function moves focus to **Find a function**, where it stays as results load.
+- **Browse by function** reserves space for selected chips below **Combine functions by**, even when no functions are selected. Changing the matching mode keeps focus on its selector. Adding a starting function focuses its replacement tile. Other additions and removing a chip return focus to **Find a function**.
 
 Search leads the explorer. [Filters and functions](UNIFIED_SEARCH.md#one-query) opens and closes both tools together below the editable query. Search cards fills the available page width. Result columns adapt to the space left by the optional tracker (200px minimum on desktop, two columns on phones). The results area uses an ordinary heading and labeled sort control when a search has run; initial Discover cards starters are removed. The competing decorative welcome heading/icon is removed. Format legality remains in Filters and is independent of the tracked deck.
 

@@ -48,7 +48,7 @@ test('the shared search disclosure starts closed and preserves its state and act
   vm.runInContext("filters=parseQuery('o:\"draw a card\" otag:ramp'); render()", w.context);
   const html = w.node('#app').innerHTML;
   assert.match(html, /id="search-tools"[^>]*\bopen\b/);
-  assert.match(html, /data-guided-family="oracle" open/);
+  assert.match(html, /data-guided-family="oracle"/);
   assert.match(html, /id="applied-filter-summary"[^>]*>Filters · Oracle phrase<\/span>/);
   assert.match(html, /id="applied-function-summary"[^>]*>Functions · ramp<\/span>/i);
   assert.match(html, /name="oracle-0" value="draw a card"/);
@@ -63,8 +63,7 @@ test('tag discovery pages through alias matches with snapshot counts and inline 
   assert.match(html, /Add flicker filter/);
   assert.match(html, /data-browse-tag="flicker"/);
   assert.doesNotMatch(html, /Directly tagged cards|starting points/);
-  assert.match(html, /About function data/);
-  assert.match(html, /Scryfall Oracle Tags snapshot from/);
+  assert.doesNotMatch(html, /About function data/);
   assert.match(html, /class="tag-card-count">1 directly tagged/);
   assert.match(html, /outside this snapshot/);
   assert.match(html, /id="tag-match-count"[^>]*>[\d,.]+ matching tags?/);
@@ -81,11 +80,11 @@ test('tag discovery pages through alias matches with snapshot counts and inline 
   const matching=core.findTags('a').map(tag=>tag.id);
   const pageIds=()=>Array.from(w.node('#tag-options').innerHTML.matchAll(/data-browse-tag="([^"]+)"/g),match=>match[1]);
   assert.match(w.node('#tag-options').innerHTML,/id="tag-page"/);
-  assert.deepEqual(pageIds(),matching.slice(0,12));
+  assert.deepEqual(pageIds(),matching.slice(0,10));
   vm.runInContext('tagPage=2; refreshTagOptions()',w.context);
-  assert.deepEqual(pageIds(),matching.slice(12,24));
+  assert.deepEqual(pageIds(),matching.slice(10,20));
   w.node('#tag-search').input({target:{value:'a '}});
-  assert.deepEqual(pageIds(),matching.slice(0,12));
+  assert.deepEqual(pageIds(),matching.slice(0,10));
   assert.equal(vm.runInContext('tagCardCount({cardCount:0})',w.context),'0 directly tagged');
   assert.equal(vm.runInContext('tagCardCount({})',w.context),'Count unavailable');
   assert.equal(vm.runInContext('tagCardCount({cardCount:-1})',w.context),'Count unavailable');
