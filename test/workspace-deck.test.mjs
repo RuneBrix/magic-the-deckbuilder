@@ -52,7 +52,7 @@ test('only removing the last command-zone copy asks first and confirms for that 
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(decks[0].cards)',w.context)),d.cards.slice(1));
 });
 
-test('the full deck editor retains its tab and query through page navigation',async()=>{
+test('the full deck editor returns to the library without clearing the query or tracker',async()=>{
   const w=workspace({savedDecks:JSON.stringify([editorDeck()])});vm.runInContext("filters=parseQuery('draw')",w.context);
   const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
   await click({view:'decks'});
@@ -70,8 +70,7 @@ test('the full deck editor retains its tab and query through page navigation',as
   await click({tab:'stats'});assert.match(w.node('#app').innerHTML,/Mana curve/);
   await click({view:'collection'});
   await click({view:'decks'});
-  assert.equal(vm.runInContext('view',w.context),'deck');
-  assert.equal(vm.runInContext('deckTab',w.context),'stats');
+  assert.equal(vm.runInContext('view',w.context),'decks');
   assert.equal(vm.runInContext('filters.query',w.context),'draw');
   assert.equal(vm.runInContext('tracker.id',w.context),'editor');
 });
@@ -426,38 +425,32 @@ test('sticky heights track wrapped navigation and the query form without touchin
   assert.equal(w.writes.length,0);
 });
 
-test('My decks remembers only deliberately opened session decks and falls back safely after deletion',async()=>{
+test('My decks opens the library from each surface regardless of the last opened deck',async()=>{
   const a=editorDeck(),b={...editorDeck(),id:'second',name:'Second deck'};
   const w=workspace({savedDecks:JSON.stringify([a,b]),initialView:null});
   const click=dataset=>w.node('#app').click({target:{closest:()=>({dataset})}});
-  await click({view:'collection'});await click({view:'decks'});
-  assert.equal(vm.runInContext('view',w.context),'decks');
   await click({deck:'editor'});await click({tab:'stats'});
-  for(const destination of ['collection','explore']) {
-    await click({view:destination});
+  assert.match(w.node('#app').innerHTML,/data-view="decks"[^>]*>.*Back to library/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/Find cards to add/);
+  for(const destination of ['deck','decks','collection','explore','settings']) {
+    if(destination==='settings')vm.runInContext('settings()',w.context);
+    else if(destination!=='deck')await click({view:destination});
     if(destination==='explore')vm.runInContext("trackDeck('second');filters=parseQuery('otag:ramp')",w.context);
     await click({view:'decks'});
-    assert.equal(vm.runInContext('view',w.context),'deck');
-    assert.equal(vm.runInContext('active',w.context),'editor');
-    assert.equal(vm.runInContext('deckTab',w.context),'stats');
+    assert.equal(vm.runInContext('view',w.context),'decks');
+    assert.match(w.node('#app').innerHTML,/data-view="decks" class="nav-item selected"[^>]*aria-current="page"/);
   }
-  vm.runInContext('settings()',w.context);await click({view:'decks'});
-  assert.equal(vm.runInContext('active',w.context),'editor');
   assert.equal(vm.runInContext('tracker.id',w.context),'second');
   assert.equal(vm.runInContext('filters.query',w.context),'otag:ramp');
-  assert.match(w.node('#app').innerHTML,/data-home data-view="decks"[^>]*>.*Back to library/);
-  assert.doesNotMatch(w.node('#app').innerHTML,/Find cards to add/);
-  await click({view:'decks',home:''});
-  assert.equal(vm.runInContext('view',w.context),'decks');
-  await click({deck:'second'});await click({view:'collection'});await click({view:'decks'});
+  await click({deck:'second'});
+  assert.equal(vm.runInContext('view',w.context),'deck');
   assert.equal(vm.runInContext('active',w.context),'second');
+  await click({view:'decks'});
+  assert.equal(vm.runInContext('view',w.context),'decks');
   assert.ok(w.writes.every(([key])=>key==='arcana.explorer.v1'));
   vm.runInContext('deleteDeck(decks[1])',w.context);w.node('#confirm-delete').onclick();
   await click({view:'collection'});await click({view:'decks'});
   assert.equal(vm.runInContext('view',w.context),'decks');
-  const reloaded=workspace({savedDecks:JSON.stringify([a,b]),initialView:null});
-  assert.equal(vm.runInContext('rememberedDeck',reloaded.context),'');
-  assert.equal(vm.runInContext('view',reloaded.context),'decks');
 });
 
 test('visual ownership markers use the existing allocation before filtering and never change stored data',()=>{
@@ -468,7 +461,7 @@ test('visual ownership markers use the existing allocation before filtering and 
   const w=workspace({savedWorkspace:JSON.stringify(core.workspaceFile([d],lots))});
   vm.runInContext("openDeck('editor')",w.context);
   const before=vm.runInContext('JSON.stringify({decks,collection})',w.context);
-  assert.doesNotMatch(w.node('#app').innerHTML,/data-ownership/);
+  assert.doesNotMatch(w.node('#app').innerHTML,/<span class="entry-quantity" role="img" data-ownership/);
   w.node('#show-deck-ownership').change({target:{checked:true}});
   assert.match(w.node('#editor-card-area').outerHTML,/data-ownership="partial"/);
   const badge=(id,zone)=>vm.runInContext(`entryBadge(decks[0].cards.find(e=>e.card.id==='${id}'&&e.zone==='${zone}'),true,ownershipBadge(collectionReport(decks[0],collection).rows.find(r=>r.entry.card.id==='${id}'&&r.zone==='${zone}')))`,w.context);

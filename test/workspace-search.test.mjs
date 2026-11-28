@@ -423,7 +423,7 @@ test('top-navigation Explore starts fresh and invalidates a pending result page'
   w.context.fetch=()=>new Promise(resolve=>complete=resolve);
   const pending=vm.runInContext('search(true)',w.context);
   await click({view:'decks'});
-  assert.match(w.node('#app').innerHTML,/id="deck-title"/);
+  assert.match(w.node('#app').innerHTML,/id="library-title"/);
   await click({view:'explore'});
   complete({ok:true,json:async()=>({data:[editorCard('Obsolete')],total_cards:100,has_more:false})});
   await pending;
