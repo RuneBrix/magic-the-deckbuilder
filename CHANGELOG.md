@@ -1,5 +1,10 @@
 # Changelog
 
+## Companion and Commander Checks — 2026-11-28
+
+- Designate or clear a companion from its Sideboard card options on Cards. Checks continues to evaluate the companion’s restrictions (#275).
+- Commander Checks shows a compact Game Changer count, matching cards, and a short discussion suggestion with the bracket data review date and official source (#278).
+
 ## Deck library and visual cards — 2026-11-28
 
 - My decks opens and focuses the library from any page (#263).

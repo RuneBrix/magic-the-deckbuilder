@@ -924,7 +924,6 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .bracket-review p,.bracket-review ul{margin-top:14px;line-height:1.7;overflow-wrap:anywhere}
 .bracket-review .bracket-suggestion{padding:14px 16px;border-radius:4px}
 .bracket-review .bracket-conflict{color:var(--warning)}
-.bracket-review h4{margin-top:22px;font-size:13px;font-weight:650}
 
 @media(max-width:600px){.explorer .page-heading{align-items:flex-start;flex-wrap:wrap}.bracket-control{max-width:none}}
 
@@ -1093,7 +1092,7 @@ html:has(#batch-actions:not([hidden])) #toast{bottom:calc(var(--batch-actions-he
 #card-actions [aria-checked="true"]{font-weight:600;background:var(--soft)}
 #card-actions [aria-expanded="true"]{background:var(--soft)}
 #card-actions button:hover,#card-actions button:focus-visible{background:var(--soft)}
-#card-actions button:disabled{cursor:default}
+#card-actions button:is(:disabled,[aria-disabled="true"]){cursor:default}
 #card-actions [data-card-action="remove"]{color:var(--danger);border-top:1px solid var(--line);margin-top:4px}
 @media(max-width:600px),(hover:none),(pointer:coarse){#card-actions button{min-height:44px}}
 

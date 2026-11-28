@@ -288,26 +288,97 @@ test('collection upload separates syntax, omissions, and lookup review for paste
   expect((await stored(page)).collection.at(-1)).toMatchObject({qty:2,finish:'foil',card:{id:printing.id,collector_number:'12a',lang:'ja'}});
 });
 
-test('Checks companion designation persists and keeps unsupported restrictions explicit',async({page},testInfo)=>{
+test('Cards companion actions persist and Checks reports the selected companion',async({page,isMobile},testInfo)=>{
   await page.evaluate(()=>{
     const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key));
     const card={...data.decks[0].cards[1].card,id:'companion',oracle_id:'companion',name:'Zirda, the Dawnwaker',keywords:['Companion'],oracle_text:'Companion — Each permanent card in your starting deck has an activated ability.'};
     data.decks[0].cards.push({card,qty:1,tags:[],zone:'sideboard'});localStorage.setItem(key,JSON.stringify(data));
   });
+  const openDeck=async()=>{
+    await page.reload();
+    await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
+  };
+  const trigger=page.getByRole('button',{name:'Card actions for Zirda, the Dawnwaker in Sideboard',exact:true});
+  const checks=page.getByRole('tab',{name:'Checks',exact:true});
+  const issue=page.getByText('Zirda, the Dawnwaker: companion predicate is unsupported; review the starting deck manually.',{exact:true});
+  const activate=(locator,keyboard)=>keyboard?locator.press('Enter'):isMobile?locator.tap():locator.click();
+  await openDeck();
+  for(const layout of ['visual-horizontal','text-vertical']){
+    await page.locator('#editor-layout').selectOption(layout);
+    for(const keyboard of [true,false]){
+      await trigger.scrollIntoViewIfNeeded();
+      const before=await trigger.boundingBox();
+      await activate(trigger,keyboard);
+      const designate=page.getByRole('menuitem',{name:'Designate as companion',exact:true});
+      if(keyboard){
+        await expect(page.getByRole('menuitem',{name:'Open details',exact:true})).toBeFocused();
+        await page.getByRole('menuitem',{name:'Assign card to function…'}).dispatchEvent('pointerover',{pointerType:'mouse'});
+        await expect(page.locator('#card-submenu')).toBeVisible();
+        for(let i=0;i<3;i++)await page.keyboard.press('ArrowDown');
+        await expect(designate).toBeFocused();
+        await expect(page.locator('#card-submenu')).toBeHidden();
+      }
+      expect(await trigger.boundingBox()).toEqual(before);
+      const menu=await page.locator('#card-actions').boundingBox();
+      expect(menu.x>=0 && menu.y>=0 && menu.x+menu.width<=page.viewportSize().width && menu.y+menu.height<=page.viewportSize().height).toBe(true);
+      if(layout==='visual-horizontal'&&keyboard)await page.screenshot({path:testInfo.outputPath('companion-card-options.png')});
+      await activate(designate,keyboard);
+      await expect(trigger).toBeFocused();
+      expect((await stored(page)).decks[0].cards.at(-1).companion).toBe(true);
+      await activate(trigger,keyboard);
+      await activate(page.getByRole('menuitem',{name:'Remove as companion',exact:true}),keyboard);
+      await expect(trigger).toBeFocused();
+      expect((await stored(page)).decks[0].cards.at(-1)).toMatchObject({zone:'sideboard',qty:1});
+      expect((await stored(page)).decks[0].cards.at(-1).companion).toBeUndefined();
+    }
+  }
+
+  await activate(trigger,true);
+  await activate(page.getByRole('menuitem',{name:'Designate as companion',exact:true}),true);
+  await openDeck();
+  await checks.click();
+  await expect(issue).toBeVisible();
+  await expect(page.getByText('Companion · Zirda, the Dawnwaker',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('Designated companion')).toHaveCount(0);
+  await page.getByText('About these checks',{exact:true}).press('Enter');
+  await expect(page.getByText('On Cards, open the card options for a Sideboard entry to designate it as a companion.',{exact:true})).toBeVisible();
+  await fits(page);
+  await page.evaluate(()=>scrollTo(0,0));
+  await page.screenshot({path:testInfo.outputPath('companion-checks.png'),fullPage:true});
+});
+
+test('Commander bracket notes show the count, source and stale-data status at narrow widths',async({page,isMobile},testInfo)=>{
+  if(isMobile)await page.setViewportSize({width:320,height:720});
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key));
+    const deck=data.decks[0];
+    deck.bracket=2;
+    deck.cards[0].card.name='The One Ring';
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.clock.setFixedTime(new Date('2026-11-28T12:00:00Z'));
   await page.reload();
   await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();
-  await page.getByRole('tab',{name:'Checks',exact:true}).click();
-  const select=page.getByLabel('Designated companion');
-  const issue=page.getByText('Zirda, the Dawnwaker: companion predicate is unsupported; review the starting deck manually.',{exact:true});
-  await expect(issue).toBeHidden();
-  await select.selectOption({label:'Zirda, the Dawnwaker'});
-  await expect(page.getByLabel('Designated companion')).toBeFocused();
-  await expect(issue).toBeVisible();
-  expect((await stored(page)).decks[0].cards.at(-1).companion).toBe(true);
-  await fits(page);await page.screenshot({path:testInfo.outputPath('companion-checks.png'),fullPage:true});
-  await page.reload();await page.getByRole('button',{name:'Smoke Garden',exact:true}).click();await page.getByRole('tab',{name:'Checks',exact:true}).click();
-  await expect(page.getByLabel('Designated companion')).toHaveValue(/companion/);
-  await page.getByLabel('Designated companion').selectOption('');
-  await expect(issue).toBeHidden();
-  expect((await stored(page)).decks[0].cards.at(-1).companion).toBeUndefined();
+  const guidance=page.getByRole('link',{name:'Bracket discussion guidance',exact:true});
+  await guidance.press('Enter');
+  const panel=page.getByRole('region',{name:'Commander bracket discussion'});
+  await expect(panel).toBeFocused();
+  await expect(panel).toContainText('Bracket 2 · Core');
+  await expect(panel).toContainText('1 Game Changer in deck');
+  await expect(panel.getByRole('listitem')).toHaveText('The One Ring · 1 copy · Command zone');
+  await expect(panel).toContainText('Suggested discussion range · Brackets 3–5');
+  await expect(panel.locator('time')).toHaveAttribute('datetime','2026-10-29');
+  await expect(panel.getByRole('link',{name:'Official Commander guidance'})).toHaveAttribute('href','https://magic.wizards.com/en/formats/commander');
+  await fits(page);
+  await panel.screenshot({path:testInfo.outputPath('bracket-guidance.png')});
+
+  await page.clock.setFixedTime(new Date('2027-02-01T12:00:00Z'));
+  await page.getByRole('tab',{name:'Cards',exact:true}).click();
+  await guidance.press('Enter');
+  await expect(panel).toContainText('Bracket data is outdated');
+  await expect(panel).not.toContainText('Suggested discussion range');
+  await expect(panel).toContainText('1 Game Changer in deck');
+  await expect(panel).toContainText('Bracket 2 · Core');
+  await fits(page);
+  await panel.screenshot({path:testInfo.outputPath('bracket-guidance-stale.png')});
 });

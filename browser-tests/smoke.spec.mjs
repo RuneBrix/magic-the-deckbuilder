@@ -272,8 +272,9 @@ test('deck navigation, sticky header, statistics and ownership fit the viewport'
   await expect(page.getByRole('heading', { name: 'Ownership & costs', exact: true })).toBeVisible();
   await noPageOverflow(page);
   await page.getByRole('tab', { name: 'Checks', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'About bracket data' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Current official Commander brackets and Game Changers' })).toBeVisible();
+  const bracket=page.getByRole('region',{name:'Commander bracket discussion'});
+  await expect(bracket.getByText('0 Game Changers in deck',{exact:true})).toBeVisible();
+  await expect(bracket.getByRole('link',{name:'Official Commander guidance'})).toBeVisible();
   await noPageOverflow(page);
   await page.getByRole('button', { name: 'Back to library', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'My decks', exact: true })).toBeVisible();
