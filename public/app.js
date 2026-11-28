@@ -57,8 +57,8 @@ let settingsReturn='decks', settingsScroll=0;
 let view = 'decks', deckTab = 'cards', results = [], total = 0, page = 1, more = false, loading = false, error = '', requestId = 0, searched = false;
 let filters = parseQuery('');
 let colorTarget = '';
-let filtersOpen = false, tagsOpen = false;
-const openFilterFamilies = new Set();
+let searchToolsOpen = false;
+const addedFilterFamilies = new Set(), collapsedFilterFamilies = new Set();
 const SEARCH_SORTS = {
   edhrec: { label: 'Popular first', params: { order: 'edhrec' } },
   cmc: { label: 'Mana value', params: { order: 'cmc' } },
@@ -67,7 +67,7 @@ const SEARCH_SORTS = {
   'usd-desc': { label: '$: high first', params: { order: 'usd', dir: 'desc' } },
 };
 let order = 'edhrec', tagSearch = '', visibleLimit = 24;
-const TAG_PAGE_SIZE = 40;
+const TAG_PAGE_SIZE = 12;
 let tagPage = 1;
 let broadeningOpen = false, broadening = null, resultContext = null;
 let editorOptions = { layout: 'visual-horizontal', group: 'type', search: '', order: 'name' };
@@ -207,18 +207,23 @@ function appliedFiltersSummary() {
   return labels.join(' · ');
 }
 const appliedFunctionsSummary = () => filters.tags.map(tagName).join(' · ');
-function searchPanelHeading(id,title,summaryId,summary,open) {
-  return `<summary id="${id}" aria-labelledby="${id}-label"${!open&&summary?` aria-describedby="${summaryId}"`:''}><span id="${id}-label" class="search-panel-title">${title}</span><span id="${summaryId}" class="search-panel-summary">${esc(summary)}</span></summary>`;
-}
-function refreshPanelSummary(id,summaryId,summary,open) {
-  const text=$('#'+summaryId),heading=$('#'+id);
-  if(text.textContent!==summary)text.textContent=summary;
-  if(!open&&summary)heading.setAttribute('aria-describedby',summaryId);
-  else heading.removeAttribute('aria-describedby');
+function searchPanelSummaries() {
+  const guided = appliedFiltersSummary(), functions = appliedFunctionsSummary();
+  return {
+    'applied-filter-summary': guided ? `Filters · ${guided}` : '',
+    'applied-function-summary': functions ? `Functions · ${functions}` : '',
+  };
 }
 function refreshPanelSummaries() {
-  refreshPanelSummary('filters-heading','applied-filter-summary',appliedFiltersSummary(),$('#search-filters').open);
-  refreshPanelSummary('function-tags-heading','applied-function-summary',appliedFunctionsSummary(),$('#function-tags').open);
+  const summaries = searchPanelSummaries();
+  for (const [id, value] of Object.entries(summaries)) {
+    const node = $('#'+id);
+    if (node.textContent !== value) node.textContent = value;
+  }
+  const heading = $('#search-tools-heading');
+  const describedBy = Object.keys(summaries).filter(id => summaries[id]).join(' ');
+  if (!$('#search-tools').open && describedBy) heading.setAttribute('aria-describedby', describedBy);
+  else heading.removeAttribute('aria-describedby');
 }
 const clearFilterButton = (name, label) => `<button type="button" class="guided-clear" data-clear-filter="${name}" aria-label="Clear ${esc(label)}" title="Clear ${esc(label)}">${icon('close',16)}</button>`;
 const clearable = (name, label, control) => `<div class="guided-entry">${control}${clearFilterButton(name,label)}</div>`;
@@ -226,6 +231,13 @@ const colorNames = {W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'};
 const colorTargets = [['color','Card color'],['identity','Color identity']];
 const colorOptions = [['all','Contains all selected colors'],['any','Contains any selected color'],['exact','Exactly the selected colors'],['subset','Only these colors, including colorless'],['multi','Multicolor only'],['colorless','Colorless only']];
 const colorSelectionDisabled = mode => mode==='multi'||mode==='colorless';
+const guidedFamilies = {
+  name: 'Card name', type: 'Types and subtypes', keyword: 'Keywords', mv: 'Mana value', colors: 'Colors',
+  oracle: 'Oracle text', activation: 'Activated abilities', cost: 'Mana cost', legal: 'Format legality',
+};
+const queryFamilies = panel => panel === 'colors' ? ['color', 'identity'] : [panel];
+const activeGuidedFamily = family => !filters.locked.includes(family) && filters.parts.some(part => part.condition?.family === family);
+const visibleGuidedFamily = panel => addedFilterFamilies.has(panel) || queryFamilies(panel).some(activeGuidedFamily);
 const repeatableFilters = {
   mv:{key:'values',label:'mana value',empty:()=>({op:'>=',value:''})},
   oracle:{key:'oracle',label:'oracle',empty:()=>({mode:'o',text:''})},
@@ -249,18 +261,20 @@ function guidedControls() {
   const selected=(value,current)=>value===current?'selected':'';
   const mode=(name,current,options,label='')=>`<select name="${name}" ${label?`aria-label="${label}"`: ''}>${options.map(([v,l])=>`<option value="${v}" ${selected(v,current)}>${l}</option>`).join('')}</select>`;
   const match=(name,current)=>mode(name,current,[['all','Matching all (AND)'],['any','Matching any (OR)']]);
-  const field=(family,title,content,{panel=family,before=''}={})=>{
+  const field=(family,content,{panel=family,before=''}={})=>{
+    if (!visibleGuidedFamily(panel)) return '';
     const locked=filters.locked.includes(family),summaryId=`filter-heading-${panel}`;
-    return `<details class="guided-family" data-guided-family="${panel}" ${openFilterFamilies.has(panel)?'open':''}><summary id="${summaryId}">${title}${locked?' <span>Query only</span>':''}</summary>${before}<fieldset data-family="${family}" aria-labelledby="${summaryId}" ${locked?'disabled':''}>${locked?'<p class="hint">Edit this condition in the query above.</p>':''}${content}<button type="button" class="text-button clear-filter-category" data-clear-category="${panel}">${family==='legal'?'Clear format filter':'Clear '+title.toLowerCase()}</button></fieldset></details>`;
+    const title = guidedFamilies[panel];
+    return `<details class="guided-family" data-guided-family="${panel}" ${collapsedFilterFamilies.has(panel)?'':'open'}><summary id="${summaryId}">${title}${locked?' <span>Query only</span>':''}</summary>${before}${locked?'<p class="hint guided-locked">Edit this condition in the query above.</p>':''}<fieldset data-family="${family}" aria-labelledby="${summaryId}" ${locked?'disabled':''}>${content}</fieldset><button type="button" class="text-button remove-guided-family" data-clear-category="${panel}" aria-label="Remove ${title.toLowerCase()} filter" ${filters.error?'disabled':''}>Remove filter</button></details>`;
   };
   const removeRow=(family,i,total)=>`<button type="button" class="remove-filter-row" data-remove-filter="${family}" data-filter-index="${i}" aria-label="Remove ${repeatableFilters[family].label} filter ${i+1}" title="Remove ${repeatableFilters[family].label} filter ${i+1}" ${total===1?'disabled':''}>${icon('close',16)}</button>`;
   const values=filters.values.length?filters.values:[repeatableFilters.mv.empty()],phrases=filters.oracle.length?filters.oracle:[repeatableFilters.oracle.empty()];
   const valueRows=`<div class="filter-rows" role="region" aria-label="Mana-value comparisons" tabindex="0"><div class="filter-column-head mana-columns" aria-hidden="true"><span>Comparison</span><span>Mana value</span><span></span></div>${values.map((row,i)=>`<div class="repeatable-filter-row mana-columns">${mode('mv-op-'+i,row.op,[['<=','At most (≤)'],['<','Less than (<)'],['=','Exactly (=)'],['>=','At least (≥)'],['>','More than (>)'],['!=','Not equal (≠)']],'Comparison '+(i+1))}${clearable('mv-'+i,'mana value '+(i+1),`<input type="number" min="0" step="any" name="mv-${i}" value="${esc(row.value)}" aria-label="Mana value ${i+1}" placeholder="Any">`)}${removeRow('mv',i,values.length)}</div>`).join('')}</div>`;
   const oracleRows=`<div class="filter-rows" role="region" aria-label="Oracle phrases" tabindex="0"><div class="filter-column-head oracle-columns" aria-hidden="true"><span>Text source</span><span>Rules-text phrase</span><span></span></div>${phrases.map((row,i)=>`<div class="repeatable-filter-row oracle-columns"><label class="oracle-source"><span class="filter-row-label">Text source</span>${mode('oracle-mode-'+i,row.mode,[['o','Oracle'],['fo','Full oracle']],'Text source '+(i+1))}</label>${clearable('oracle-'+i,'rules-text phrase '+(i+1),`<label><span class="filter-row-label">Rules-text phrase</span><input name="oracle-${i}" value="${esc(row.text)}" aria-label="Rules-text phrase ${i+1}" maxlength="300" placeholder="e.g. whenever ~ attacks"></label>`)}${removeRow('oracle',i,phrases.length)}</div>`).join('')}</div><p class="hint">Full oracle includes reminder text.</p>`;
-  const colorFamily=colorTarget||colorTargets.find(([family])=>filters.parts.some(part=>part.affected.includes(family)))?.[0]||'color';
+  const colorFamily=colorTarget||queryFamilies('colors').find(activeGuidedFamily)||queryFamilies('colors').find(family=>!filters.locked.includes(family))||'color';
   const colorTitle=colorTargets.find(([family])=>family===colorFamily)[1];
   const {mode:colorMode,values:colors}=filters[colorFamily];
-  const colorPanel=field(colorFamily,'Colors',`${clearable(colorFamily+'-mode',colorTitle,`<label>Matching mode${mode(colorFamily+'-mode',colorMode,colorOptions)}</label>`)}
+  const colorPanel=field(colorFamily,`${clearable(colorFamily+'-mode',colorTitle,`<label>Matching mode${mode(colorFamily+'-mode',colorMode,colorOptions)}</label>`)}
     <div class="guided-colors">${Object.entries(colorNames).map(([color,label])=>`<label><input type="checkbox" name="${colorFamily}-${color}" ${colors.includes(color)?'checked':''} ${colorSelectionDisabled(colorMode)?'disabled':''}>${mana('{'+color+'}',true)} ${label}</label>`).join('')}</div>`,
     {panel:'colors',before:`<label class="color-target">Match by${mode('color-target',colorFamily,colorTargets)}</label>`});
   const costs=filters.cost.length?filters.cost:[repeatableFilters.cost.empty()];
@@ -274,17 +288,21 @@ function guidedControls() {
       ${removeRow('cost',i,costs.length)}
     </div>`).join('')}</div>`;
   const formats=uniqueFormats().map(f=>`<option value="${esc(f)}" ${selected(f,filters.legal)}>${esc(f)}</option>`).join('');
-  return `<form id="guided-form"><button type="button" class="text-button" data-clear-category="guided" ${filters.error?'disabled':''}>Clear all guided filters</button><div class="guided-grid">
-    ${field('name','Card name',clearable('name','name phrase',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`))}
-    ${field('type','Types and subtypes',`${chipPicker('types')}<label>Combine types by${match('type-match',filters.typeMatch)}</label>${chipPicker('excludedTypes')}`)}
-    ${field('keyword','Keywords',`${chipPicker('keywords')}<label>Combine keywords by${match('keyword-match',filters.keywordMatch)}</label>`)}
-    ${field('mv','Mana value',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}
+  const options = Object.entries(guidedFamilies).map(([panel, title]) => {
+    const disabled = visibleGuidedFamily(panel) || queryFamilies(panel).every(family => filters.locked.includes(family));
+    return `<option value="${panel}" ${disabled?'disabled':''}>${title}</option>`;
+  }).join('');
+  return `<form id="guided-form"><div class="guided-tools"><div class="guided-picker"><label for="add-guided-filter">Add filter</label><select id="add-guided-filter" ${filters.error?'disabled':''}><option value="">Choose a filter</option>${options}</select></div>${Object.keys(guidedFamilies).some(visibleGuidedFamily)?`<button type="button" class="text-button" data-clear-category="guided" ${filters.error?'disabled':''}>Clear all guided filters</button>`:''}</div><div class="guided-grid">
+    ${field('name',clearable('name','name phrase',`<label>Name phrase<input name="name" value="${esc(filters.name)}" maxlength="200" placeholder="e.g. Sol Ring"></label>`))}
+    ${field('type',`${chipPicker('types')}<label>Combine types by${match('type-match',filters.typeMatch)}</label>${chipPicker('excludedTypes')}`)}
+    ${field('keyword',`${chipPicker('keywords')}<label>Combine keywords by${match('keyword-match',filters.keywordMatch)}</label>`)}
+    ${field('mv',`${valueRows}<button type="button" class="text-button" data-add-filter="mv">Add additional mana value filter</button><label>Combine mana value filter by${match('value-match',filters.valueMatch)}</label>`)}
     ${colorPanel}
-    ${field('oracle','Oracle text',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}
-    ${field('activation','Activated abilities',`<label>Activation cost includes${mode('activation-kind',filters.activation.kind,[['','Any'],['tap','Tap'],['mana','Mana payment'],['both','Tap and mana payment']])}</label><label>Mana symbols in cost (optional)<input name="activation-mana" value="${esc(filters.activation.mana)}" maxlength="40" placeholder="e.g. 3U or GG" ${['mana','both'].includes(filters.activation.kind)?'':'disabled'} aria-describedby="activation-help"></label><details class="query-help"><summary>About ability cost search</summary><p id="activation-help">Leave mana symbols blank for any mana payment. 3U matches {3}{U} within a cost; additional costs may apply. Searches symbols before the first colon in an Oracle paragraph. Keyword costs without a colon, reminder text and granted abilities in quotes are outside this aid.</p></details>`)}
-    ${field('cost','Mana cost',`${costRows}<button type="button" class="text-button" data-add-filter="cost">Add mana cost</button><label>Combine mana cost filter by${match('cost-match',filters.costMatch)}</label>
+    ${field('oracle',`${oracleRows}<button type="button" class="text-button" data-add-filter="oracle">Add additional oracle filter</button><label>Combine oracle filter by${match('oracle-match',filters.oracleMatch)}</label>`)}
+    ${field('activation',`<label>Activation cost includes${mode('activation-kind',filters.activation.kind,[['','Any'],['tap','Tap'],['mana','Mana payment'],['both','Tap and mana payment']])}</label><label>Mana symbols in cost (optional)<input name="activation-mana" value="${esc(filters.activation.mana)}" maxlength="40" placeholder="e.g. 3U or GG" ${['mana','both'].includes(filters.activation.kind)?'':'disabled'} aria-describedby="activation-help"></label><details class="query-help"><summary>About ability cost search</summary><p id="activation-help">Leave mana symbols blank for any mana payment. 3U matches {3}{U} within a cost; additional costs may apply. Searches symbols before the first colon in an Oracle paragraph. Keyword costs without a colon, reminder text and granted abilities in quotes are outside this aid.</p></details>`)}
+    ${field('cost',`${costRows}<button type="button" class="text-button" data-add-filter="cost">Add mana cost</button><label>Combine mana cost filter by${match('cost-match',filters.costMatch)}</label>
       <p class="hint"><span class="generic-mana" aria-hidden="true">X</span> Generic counts the printed number. ${mana('{C}',true)} Colorless counts {C} symbols. Choose {X} for a variable cost. Hybrid and Phyrexian symbols count separately.</p>`)}
-    ${field('legal','Format legality',`${clearable('legal','format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${formats}</select></label>`)}<p class="hint">Chosen independently of the tracked deck.</p>`)}
+    ${field('legal',`${clearable('legal','format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${formats}</select></label>`)}<p class="hint">Chosen independently of the tracked deck.</p>`)}
     </div><p id="guided-error" role="alert"></p></form>`;
 }
 function uniqueFormats(){return [...new Set([...FORMATS,...(filters.legal?[filters.legal]:[])])];}
@@ -293,22 +311,23 @@ function selectedFunctions() {
   return `<section class="selected-functions" aria-label="Selected function filters"><div class="selected-functions-heading"><h3>Selected functions</h3><label>Combine functions by<select id="tag-match"><option value="all" ${filters.match==='all'?'selected':''}>Matching all (AND)</option><option value="any" ${filters.match==='any'?'selected':''}>Matching any (OR)</option></select></label></div><div class="active-tags">${filters.tags.map(t=>`<button class="tag-option selected" data-tag="${esc(t)}" aria-label="Remove ${esc(t)} filter">${esc(t.replaceAll('-',' '))} ${icon('close',12)}</button>`).join('')}</div><button type="button" class="text-button" data-clear-category="tags">Clear function filters</button></section>`;
 }
 function searchPanels() {
-  const matches=tagMatches();
-  return `<details id="search-filters" class="search-panel" ${filtersOpen?'open':''}>
-    ${searchPanelHeading('filters-heading','Filters','applied-filter-summary',appliedFiltersSummary(),filtersOpen)}
-    <div id="guided-controls">${guidedControls()}</div>
-  </details>
-  <details id="function-tags" class="tag-browser search-panel" ${tagsOpen?'open':''}>
-    ${searchPanelHeading('function-tags-heading','Browse by function','applied-function-summary',appliedFunctionsSummary(),tagsOpen)}
+  const { available, hasCatalogMatches } = tagMatches();
+  const summaries = searchPanelSummaries();
+  const describedBy = Object.keys(summaries).filter(id => summaries[id]).join(' ');
+  return `<details id="search-tools" class="search-panel" ${searchToolsOpen?'open':''}>
+    <summary id="search-tools-heading" aria-labelledby="search-tools-label"${!searchToolsOpen&&describedBy?` aria-describedby="${describedBy}"`:''}><span id="search-tools-label" class="search-panel-title">Filters and functions</span><span class="search-panel-summaries">${Object.entries(summaries).map(([id, value])=>`<span id="${id}" class="search-panel-summary">${esc(value)}</span>`).join('')}</span></summary>
+    <div class="search-panel-columns">
+    <section id="search-filters" aria-labelledby="filters-heading"><h2 id="filters-heading">Filters</h2><div id="guided-controls">${guidedControls()}</div></section>
+    <section id="function-tags" aria-labelledby="function-tags-heading"><h2 id="function-tags-heading">Browse by function</h2>
     <div class="tag-browser-content">
       <div id="selected-functions">${selectedFunctions()}</div>
       <label class="tag-search-label" for="tag-search">Find a function</label>
       <input id="tag-search" type="search" value="${esc(tagSearch)}" maxlength="200" placeholder="e.g. ramp or removal" aria-describedby="tag-match-count">
-      <p id="tag-match-count" role="status">${tagMatchCount(matches)}</p>
-      <div id="tag-options">${tagOptions(matches)}</div>
+      <p id="tag-match-count" role="status">${tagMatchCount(available)}</p>
+      <div id="tag-options">${tagOptions(available, hasCatalogMatches)}</div>
       <details class="query-help function-data-help"><summary>About function data</summary><p>Direct counts come from the <a href="${esc(TAG_CATALOG.source)}" target="_blank" rel="noreferrer">Scryfall Oracle Tags snapshot from ${esc(TAG_CATALOG.updated.slice(0,10))}</a>. Scryfall searches can also match cards tagged with related functions.</p></details>
     </div>
-  </details>`;
+    </section></div></details>`;
 }
 function explorer() {
   const d=current();
@@ -330,7 +349,9 @@ function searchResults(){
   ${(more||visibleLimit<results.length)&&!error?`<button class="load-more secondary" data-action="more" ${loading?'disabled':''}>${loading?'Loading…':'Load more cards'}</button>`:''}<footer>Card data and images by <a href="https://scryfall.com" target="_blank" rel="noreferrer">Scryfall</a>. Magic: The Gathering © Wizards of the Coast.</footer></section>`;
 }
 function tagMatches() {
-  return tagSearch.trim()?findTags(tagSearch):TAGS.map(([id])=>tagById.get(id)||resolveTag(id)).filter(Boolean);
+  const matches = tagSearch.trim() ? findTags(tagSearch) : TAGS.map(([id]) => resolveTag(id)).filter(Boolean);
+  const selected = new Set(filters.tags.map(tag => resolveTag(tag)?.id ?? tag));
+  return { available: matches.filter(tag => !selected.has(tag.id)), hasCatalogMatches: matches.length > 0 };
 }
 function tagMatchCount(matches) {
   return tagSearch.trim()?`${matches.length.toLocaleString()} matching ${matches.length===1?'tag':'tags'}`:'';
@@ -342,9 +363,9 @@ function unlistedFunctionOption(locked) {
   return `<div class="unlisted-function"><button type="button" class="secondary" data-tag="${esc(slug)}" ${locked?'disabled':''}>Add “${esc(value)}” as an unlisted function</button><p class="hint">Searches for this tag on Scryfall. It may be unsupported or return no cards.</p></div>`;
 }
 function refreshTagOptions() {
-  const matches=tagMatches();
-  $('#tag-match-count').textContent=tagMatchCount(matches);
-  $('#tag-options').innerHTML=tagOptions(matches);
+  const { available, hasCatalogMatches } = tagMatches();
+  $('#tag-match-count').textContent = tagMatchCount(available);
+  $('#tag-options').innerHTML = tagOptions(available, hasCatalogMatches);
 }
 function refreshFunctionFilters() {
   $('#selected-functions').innerHTML = selectedFunctions();
@@ -353,27 +374,29 @@ function refreshFunctionFilters() {
 function applySelectedFunctions(model, focusSelector) {
   if (!setCondition('tags', model, true, true)) return;
   refreshFunctionFilters();
-  $(focusSelector)?.focus({ preventScroll: true });
+  $(focusSelector)?.focus();
 }
 const tagName = id => TAGS.find(([slug])=>slug===id)?.[1] || id.replaceAll('-',' ');
-const tagFilterAction = id => filters.tags.includes(id) ? 'Remove' : 'Add';
-const toggleFunction = id => ({...filters,tags:filters.tags.includes(id)?filters.tags.filter(tag=>tag!==id):[...filters.tags,id]});
+const selectedTag = id => filters.tags.includes(id) ? id : filters.tags.find(tag => resolveTag(tag)?.id === id);
+const tagFilterAction = id => selectedTag(id) ? 'Remove' : 'Add';
+function toggleFunction(id) {
+  const selected = selectedTag(id);
+  return { ...filters, tags: selected ? filters.tags.filter(tag => tag !== selected) : [...filters.tags, id] };
+}
 function tagCardCount(tag) {
   return Number.isSafeInteger(tag.cardCount) && tag.cardCount>=0 ? `${tag.cardCount.toLocaleString()} directly tagged` : 'Count unavailable';
 }
-function tagOptions(matches) {
+function tagOptions(matches, hasCatalogMatches) {
   const pages=Math.max(1,Math.ceil(matches.length/TAG_PAGE_SIZE));
   tagPage=Math.min(tagPage,pages);
   const start=(tagPage-1)*TAG_PAGE_SIZE,shown=matches.slice(start,start+TAG_PAGE_SIZE);
   const locked=filters.locked.includes('tags');
   return `${locked?'<p class="hint">Function expressions in a complex query group must be edited in the query above.</p>':''}
     ${shown.length?`${pages>1?`<div class="tag-grid-heading"><label for="tag-page">Page <select id="tag-page">${Array.from({length:pages},(_,i)=>`<option value="${i+1}" ${i+1===tagPage?'selected':''}>${i+1} of ${pages}</option>`).join('')}</select></label></div>`:''}
-    <ul class="tag-options">${shown.map(tag=>{
-      const action=tagFilterAction(tag.id);
-      return `<li class="tag-choice"><strong>${esc(tagName(tag.id))}</strong><span class="tag-card-count">${tagCardCount(tag)}</span>
-        <div class="tag-choice-actions"><button class="tag-option ${action==='Remove'?'selected':''}" data-tag="${esc(tag.id)}" aria-pressed="${action==='Remove'}" aria-label="${action} ${esc(tag.id)} filter" ${locked?'disabled':''}>${action} filter</button>
-        <button class="tag-browse" data-browse-tag="${esc(tag.id)}" aria-label="Browse ${esc(tag.id)} relationships">Related ${icon('arrow',14)}</button></div></li>`;
-    }).join('')}</ul>`:unlistedFunctionOption(locked)}
+    <ul class="tag-options">${shown.map(tag=>`<li class="tag-choice"><strong>${esc(tagName(tag.id))}</strong><span class="tag-card-count">${tagCardCount(tag)}</span>
+        <div class="tag-choice-actions"><button class="primary" data-tag="${esc(tag.id)}" aria-label="Add ${esc(tag.id)} filter" ${locked?'disabled':''}>Add</button>
+        <button class="text-button tag-browse" data-browse-tag="${esc(tag.id)}" aria-label="Browse ${esc(tag.id)} relationships">Related</button></div></li>`).join('')}</ul>`
+      : hasCatalogMatches ? '<p class="hint">All matching functions are selected.</p>' : unlistedFunctionOption(locked)}
     ${filters.tags.filter(t=>!tagById.has(t)).map(t=>`<p class="hint">Existing tag “${esc(t)}” is outside this snapshot. Scryfall may accept it, reject it, or return no cards.</p>`).join('')}`;
 }
 
@@ -461,7 +484,7 @@ function browseFunctions(id) {
   dialog.onclose=()=>{
     if(dialog.open)return;
     cancelExamples();
-    (document.querySelector(`[data-browse-tag="${id}"]`) || $('#tag-search'))?.focus({preventScroll:true});
+    (document.querySelector(`[data-browse-tag="${id}"]`) || $('#tag-search'))?.focus();
   };
   showTag();
 }
@@ -2059,6 +2082,8 @@ function readFilters() {
 function resetResults(){++requestId;loading=false;results=[];total=0;more=false;searched=false;error='';resultContext=null;broadening=null;}
 function clearSearch(){
   filters=parseQuery('');
+  addedFilterFamilies.clear();
+  collapsedFilterFamilies.clear();
   colorTarget='';
   tagSearch='';
   tagPage=1;
@@ -2067,13 +2092,16 @@ function clearSearch(){
 function resetExplore({keepTracker=false}={}){
   clearSearch();
   if(!keepTracker)tracker.id='';
-  filtersOpen=tagsOpen=broadeningOpen=false;
-  openFilterFamilies.clear();
+  searchToolsOpen=broadeningOpen=false;
   page=1;
   visibleLimit=24;
   order='edhrec';
 }
 function runGuidedSearch(keepForm=false){if(!filters.query.trim()){resetResults();renderSearchState(keepForm);}else search(false,false,keepForm);}
+const guidedFields = {
+  type: ['types', 'excludedTypes', 'typeMatch'], keyword: ['keywords', 'keywordMatch'], mv: ['values', 'valueMatch'],
+  oracle: ['oracle', 'oracleMatch'], cost: ['cost', 'costMatch'], tags: ['tags', 'match'],
+};
 function setCondition(family,model,run=true,keepForm=false){
   try{
     const previous=filters,clause=conditionQuery(model,family),next=replaceCondition(filters,family,clause);
@@ -2084,9 +2112,9 @@ function setCondition(family,model,run=true,keepForm=false){
     for(const key of SEARCH_FAMILIES){
       if(filters.locked.includes(key))continue;
       const source=family===key?model:previous;
-      const fields=key==='type'?['types','excludedTypes','typeMatch']:key==='keyword'?['keywords','keywordMatch']:key==='mv'?['values','valueMatch']:key==='oracle'?['oracle','oracleMatch']:key==='cost'?['cost','costMatch']:key==='tags'?['tags','match']:[key];
-      for(const field of fields)filters[field]=source[field];
+      for(const field of guidedFields[key] ?? [key]) filters[field]=source[field];
     }
+    if (family !== 'tags') addedFilterFamilies.add(family === 'color' || family === 'identity' ? 'colors' : family);
     const guidedError=$('#guided-error');
     if(guidedError)guidedError.textContent='';
     if(run)runGuidedSearch(keepForm);
@@ -2117,16 +2145,29 @@ function applyGuided(family,run=true,keepForm=false){
   return setCondition(family,model,run,keepForm);
 }
 function clearFilterCategory(category) {
-  const families=category==='guided'?SEARCH_FAMILIES.filter(key=>key!=='tags'):category==='colors'?['color','identity']:[category];
+  const families=category==='guided'?SEARCH_FAMILIES.filter(key=>key!=='tags'):queryFamilies(category);
   if(filters.error)return;
+  const previous = filters;
   for(const family of families){
-    if(!filters.locked.includes(family))filters=replaceCondition(filters,family,'');
+    if(activeGuidedFamily(family))filters=replaceCondition(filters,family,'');
   }
-  colorTarget='';
+  const defaults = parseQuery('');
+  for (const family of SEARCH_FAMILIES) {
+    if (filters.locked.includes(family)) continue;
+    const source = families.includes(family) ? defaults : previous;
+    for (const field of guidedFields[family] ?? [family]) filters[field] = source[field];
+  }
+  if (category === 'guided') {
+    addedFilterFamilies.clear();
+    collapsedFilterFamilies.clear();
+  } else {
+    addedFilterFamilies.delete(category);
+    collapsedFilterFamilies.delete(category);
+  }
+  if (category === 'guided' || category === 'colors') colorTarget='';
   renderSearchState();
-  runGuidedSearch(true);
-  const selector=category==='tags'?'#tag-search':category==='guided'?'[data-clear-category="guided"]':'#filter-heading-'+category;
-  $(selector)?.focus({preventScroll:true});
+  if (filters.query !== previous.query) runGuidedSearch(true);
+  $(category==='tags'?'#tag-search':'#add-guided-filter')?.focus();
 }
 function showChipSuggestions(input) {
   const list = document.getElementById(input.getAttribute('aria-controls'));
@@ -2168,7 +2209,7 @@ function bindGuided(){
   $('#guided-form')?.addEventListener('toggle',e=>{
     const family=e.target.dataset.guidedFamily;
     if(!family||!e.target.isConnected)return;
-    if(e.target.open)openFilterFamilies.add(family);else openFilterFamilies.delete(family);
+    if(e.target.open)collapsedFilterFamilies.delete(family);else collapsedFilterFamilies.add(family);
   },true);
   $('#guided-form')?.addEventListener('input',e=>{
     if(e.target.hasAttribute('data-chip-input')){showChipSuggestions(e.target);return;}
@@ -2176,6 +2217,15 @@ function bindGuided(){
   });
   $('#guided-form')?.addEventListener('change',e=>{
     if(e.target.hasAttribute('data-chip-input'))return;
+    if (e.target.id === 'add-guided-filter') {
+      const panel = e.target.value;
+      if (!Object.hasOwn(guidedFamilies, panel) || e.target.selectedOptions[0].disabled) return;
+      addedFilterFamilies.add(panel);
+      collapsedFilterFamilies.delete(panel);
+      refreshGuidedControls();
+      $(`[data-guided-family="${panel}"] :is(input,select):enabled`)?.focus();
+      return;
+    }
     if(e.target.name==='color-target'){
       colorTarget=e.target.value;
       refreshSearchTools();
@@ -2185,7 +2235,7 @@ function bindGuided(){
     const field=e.target.closest('[data-family]'),family=field?.dataset.family;
     // A change can rebuild the form before the disclosure's queued toggle arrives.
     const panel=field?.closest('[data-guided-family]');
-    if(panel?.open)openFilterFamilies.add(panel.dataset.guidedFamily);
+    if(panel?.open)collapsedFilterFamilies.delete(panel.dataset.guidedFamily);
     const color=family==='color'||family==='identity';
     if(color&&e.target.name===family+'-mode'){
       const disabled=colorSelectionDisabled(e.target.value);
@@ -2240,10 +2290,13 @@ function bindGuided(){
   });
   $('#guided-form')?.addEventListener('submit',e=>{e.preventDefault();const family=document.activeElement?.closest('[data-family]')?.dataset.family;if(family)applyGuided(family,true,true);else search(false,false,true);});
 }
-function refreshSearchTools(){
-  refreshQueryNotes();refreshPanelSummaries();$('#guided-controls').innerHTML=guidedControls();refreshFunctionFilters();
-  refreshSearchOutput();
+function refreshGuidedControls() {
+  $('#guided-controls').innerHTML = guidedControls();
   bindGuided();
+}
+function refreshSearchTools(){
+  refreshQueryNotes();refreshPanelSummaries();refreshGuidedControls();refreshFunctionFilters();
+  refreshSearchOutput();
 }
 function refreshSearchOutput(){
   const focusSort = document.activeElement?.id === 'sort';
@@ -2322,8 +2375,7 @@ function bind() {
     }catch(error){toast(error.message);}
     render();$('#deck-currency')?.focus();
   });
-  $('#search-filters')?.addEventListener('toggle',e=>{if(e.target.isConnected){filtersOpen=e.target.open;refreshPanelSummaries();}});
-  $('#function-tags')?.addEventListener('toggle',e=>{if(e.target.isConnected){tagsOpen=e.target.open;refreshPanelSummaries();}});
+  $('#search-tools')?.addEventListener('toggle',e=>{if(e.target.isConnected){searchToolsOpen=e.target.open;refreshPanelSummaries();}});
   $('#search-form')?.addEventListener('submit',e=>{e.preventDefault();readFilters();return search(false,false,true);});
   $('#raw')?.addEventListener('input',e=>{filters=parseQuery(e.target.value);colorTarget='';++requestId;loading=false;error='';broadening=null;refreshSearchTools();});
   $('#tag-search')?.addEventListener('input',e=>{tagSearch=e.target.value;tagPage=1;refreshTagOptions();});
@@ -2365,7 +2417,7 @@ for(const event of ['pointerout','focusout'])$('#app').addEventListener(event,e=
 $('#app').addEventListener('change',e=>{
   if(e.target.dataset?.collectionPageSelect){changeCollectionPage(Number(e.target.value));return;}
   if(e.target.id==='tag-page'){
-    tagPage=Number(e.target.value);refreshTagOptions();$('#tag-page').focus({preventScroll:true});
+    tagPage=Number(e.target.value);refreshTagOptions();$('#tag-page')?.focus({preventScroll:true});
     return;
   }
   if(e.target.id==='tag-match'){
@@ -2447,9 +2499,7 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.relax){await broaden(button.dataset.relax);return;}
   if(button.dataset.browseTag){browseFunctions(button.dataset.browseTag);return;}
   if(button.dataset.tag){
-    const model=toggleFunction(button.dataset.tag);
-    if(button.closest?.('#selected-functions')) applySelectedFunctions(model, '#tag-search');
-    else setCondition('tags',model);
+    applySelectedFunctions(toggleFunction(button.dataset.tag), '#tag-search');
     return;
   }
 
@@ -2508,8 +2558,7 @@ function renderSearchState(keepForm=false){
   if(view!=='explore'){render();return;}
   if(!keepForm){
     // Read disclosures before replacing them. Their queued toggle events may still be pending.
-    filtersOpen=$('#search-filters')?.open ?? filtersOpen;
-    tagsOpen=$('#function-tags')?.open ?? tagsOpen;
+    searchToolsOpen=$('#search-tools')?.open ?? searchToolsOpen;
     render();return;
   }
   $('#raw').value=filters.query;refreshQueryNotes();refreshPanelSummaries();

@@ -1,5 +1,11 @@
 # Changelog
 
+## Search cards setup — 2026-11-28
+
+- Open Filters and Browse by function together. The panels align side by side on wide screens, stack in narrower spaces and summarize applied conditions when closed (#286).
+- Use Add filter to show the guided controls you need. Existing query conditions reveal their controls automatically, and Remove filter clears just that type’s editable conditions (#285).
+- Browse compact function tiles with separate Add and Related actions. Picked functions move to Selected functions and return to the lookup when removed (#284).
+
 ## Statistics charts and tokens — 2026-11-28
 
 - Limit colored mana production to the combined Command zone identity in Commander, or Main deck identity when no commander is designated or in other formats. Use short chart captions and keep missing-data warnings visible (#271, #288).

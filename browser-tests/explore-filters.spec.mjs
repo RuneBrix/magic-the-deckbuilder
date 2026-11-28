@@ -1,18 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { cards, prepareApp } from './fixtures.mjs';
+import { findTags } from '../public/core.js';
 
 test.beforeEach(async ({ page }) => {
   await prepareApp(page);
   await page.getByRole('button', { name: 'Search cards', exact: true }).click();
 });
 
-test('empty Explore panels balance their headings and show function selections only when present', async ({ page }, testInfo) => {
+test('empty Explore tools show only the available actions and no function selections', async ({ page }, testInfo) => {
   const raw = page.locator('#raw');
-  const filters = page.locator('#filters-heading');
-  const functions = page.locator('#function-tags-heading');
-  expect(Math.abs((await filters.boundingBox()).height - (await functions.boundingBox()).height)).toBeLessThan(2);
+  const tools = page.locator('#search-tools-heading');
   await expect(page.locator('#applied-filter-summary')).toBeHidden();
-  await functions.press('Enter');
+  await tools.press('Enter');
+  await expect(page.getByLabel('Add filter', { exact: true })).toBeVisible();
+  await expect(page.locator('.guided-family')).toHaveCount(0);
   await expect(page.locator('.selected-functions')).toHaveCount(0);
   await expect(page.locator('#tag-match-count')).toBeHidden();
   await expect(page.locator('#function-tags')).not.toContainText(/starting points|Directly tagged cards/);
@@ -30,49 +31,134 @@ test('empty Explore panels balance their headings and show function selections o
   await expect(page.getByLabel('Find a function')).toBeFocused();
   await expect(raw).toHaveValue('usd<5');
   await page.locator('#function-tags').screenshot({ path: testInfo.outputPath('function-empty.png') });
-  await functions.press('Enter');
-  await functions.press('Enter');
+  await tools.press('Enter');
+  await tools.press('Enter');
   await expect(page.locator('.selected-functions')).toHaveCount(0);
   await page.getByText('About function data', { exact: true }).press('Enter');
   await expect(page.locator('.function-data-help')).toContainText(/Scryfall|snapshot/);
   await page.screenshot({ path: testInfo.outputPath('function-empty-and-help.png') });
 });
 
-test('collapsed Explore headings describe only their own active selections', async ({ page }, testInfo) => {
+test('one disclosure exposes both applied summaries when collapsed', async ({ page }, testInfo) => {
   const raw = page.locator('#raw');
-  const filters = page.locator('#filters-heading');
-  const functions = page.locator('#function-tags-heading');
+  const tools = page.locator('#search-tools-heading');
   const filterSummary = page.locator('#applied-filter-summary');
   const functionSummary = page.locator('#applied-function-summary');
-  await expect(filters).toHaveAccessibleDescription('');
-  await expect(functions).toHaveAccessibleDescription('');
+  await expect(tools).toHaveAccessibleDescription('');
   await raw.fill('otag:ramp');
   await expect(filterSummary).toBeHidden();
-  await expect(functions).toHaveAccessibleDescription(/ramp/i);
+  await expect(tools).toHaveAccessibleDescription('Functions · Ramp');
   await raw.fill('t:elf (o:draw OR o:discard mv<=3) usd<5 otag:ramp otag:draw otag:very-long-unlisted-function-name');
-  await expect(filters).toHaveAccessibleName('Filters');
-  await expect(filters).toHaveAccessibleDescription('Types · 2 query-only expressions');
-  await expect(functions).toHaveAccessibleName('Browse by function');
-  await expect(functions).toHaveAccessibleDescription(/ramp.*draw.*very long unlisted function name/i);
+  await expect(tools).toHaveAccessibleName('Filters and functions');
+  await expect(tools).toHaveAccessibleDescription(/Filters · Types · 2 query-only expressions Functions · ramp.*draw.*very long unlisted function name/i);
   await expect(filterSummary).toBeVisible();
   await expect(functionSummary).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('collapsed-search-summaries.png') });
-  await filters.press('Enter');
-  await expect(filters).toHaveAccessibleDescription('');
+  await tools.press('Enter');
+  await expect(tools).toHaveAccessibleDescription('');
   await expect(filterSummary).toBeHidden();
-  await expect(functionSummary).toBeVisible();
-  await expect(page.locator('#filter-heading-oracle')).toContainText('Query only');
-  await functions.press('Space');
-  await expect(functions).toHaveAccessibleDescription('');
   await expect(functionSummary).toBeHidden();
+  await expect(page.locator('#add-guided-filter option[value="oracle"]')).toHaveJSProperty('disabled', true);
+  await expect(page.locator('#query-notes')).toContainText('Query-only expressions');
   await expect(page.locator('#selected-functions').getByRole('button', { name: 'Remove ramp filter' })).toBeVisible();
-  await filters.press('Enter');
+  await tools.press('Space');
   await expect(filterSummary).toBeVisible();
-  await expect(functionSummary).toBeHidden();
-  await functions.press('Space');
+  await expect(functionSummary).toBeVisible();
   await page.getByRole('button', { name: 'Clear search and filters' }).click();
   await expect(filterSummary).toBeHidden();
   await expect(functionSummary).toBeHidden();
+});
+
+test('Add filter opens each supported type without adding an empty constraint', async ({ page, isMobile }, testInfo) => {
+  const queries = [];
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/search') queries.push(url.searchParams.get('q'));
+  });
+  const raw = page.locator('#raw');
+  const toggle = page.locator('#search-tools-heading');
+  const add = page.getByLabel('Add filter', { exact: true });
+  const panels = page.locator('.search-panel-columns > section');
+  const boxes = () => panels.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()));
+  await toggle.press('Enter');
+  await toggle.press('Tab');
+  await expect(add).toBeFocused();
+  for (const [family, firstField] of [
+    ['name', 'name'], ['type', 'types'], ['keyword', 'keywords'], ['mv', 'mv-op-0'], ['colors', 'color-target'],
+    ['oracle', 'oracle-mode-0'], ['activation', 'activation-kind'], ['cost', 'cost-symbol-0'], ['legal', 'legal'],
+  ]) {
+    await add.selectOption(family);
+    await expect(page.locator(`[data-guided-family="${family}"] [name="${firstField}"]`)).toBeFocused();
+    await expect(add.locator(`option[value="${family}"]`)).toHaveJSProperty('disabled', true);
+  }
+  await expect(raw).toHaveValue('');
+  expect(queries).toEqual([]);
+  const [filters, functions] = await boxes();
+  if (isMobile) {
+    expect(functions.y).toBeGreaterThanOrEqual(filters.bottom - 1);
+  } else {
+    expect(functions.y).toBeCloseTo(filters.y, 0);
+    expect(functions.height).toBeCloseTo(filters.height, 0);
+    expect(functions.x).toBeGreaterThanOrEqual(filters.right - 1);
+    const columns = await page.locator('.guided-grid').evaluate(grid => getComputedStyle(grid).gridTemplateColumns.split(' ').filter(width => width !== '0px').length);
+    expect(columns).toBe(2);
+    await page.setViewportSize({ width: 820, height: 900 });
+    const [stackedFilters, stackedFunctions] = await boxes();
+    expect(stackedFunctions.y).toBeGreaterThanOrEqual(stackedFilters.bottom - 1);
+    await page.setViewportSize({ width: 1280, height: 900 });
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('on-demand-filters.png'), fullPage: true });
+
+  await raw.fill('otag:ramp    usd<5');
+  await page.getByRole('button', { name: 'Remove card name filter', exact: true }).press('Enter');
+  await expect(add).toBeFocused();
+  await expect(add.locator('option[value="name"]')).toHaveJSProperty('disabled', false);
+  await expect(raw).toHaveValue('otag:ramp    usd<5');
+  expect(queries).toEqual([]);
+  await raw.fill('(t:elf OR keyword:flying) f:modern otag:ramp usd<5');
+  await expect(page.getByLabel('Legal in format')).toHaveValue('modern');
+  await expect(page.locator('[name="types"]')).toBeDisabled();
+  await page.getByRole('button', { name: 'Clear all guided filters', exact: true }).click();
+  await expect(add).toBeFocused();
+  await expect(raw).toHaveValue('(t:elf OR keyword:flying) otag:ramp usd<5');
+  await expect(page.locator('.guided-family')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Remove ramp filter', exact: true })).toBeVisible();
+  await raw.fill('(name:unfinished');
+  await expect(add).toBeDisabled();
+  await expect(page.locator('#query-error')).toContainText('Guided edits are paused');
+});
+
+test('Find a function excludes selections and recovers from an empty last page', async ({ page, isMobile }) => {
+  const matches = findTags('ramp');
+  const selected = matches.slice(0, matches.length - 13);
+  const last = matches.at(-1).id;
+  const raw = page.locator('#raw');
+  await raw.fill(['t:artifact', ...selected.map(tag => `otag:${tag.id}`)].join(' '));
+  await page.locator('#search-tools-heading').press('Enter');
+  const lookup = page.getByLabel('Find a function', { exact: true });
+  const pager = page.locator('#tag-page');
+  await lookup.fill('ramp');
+  await expect(page.locator('#tag-match-count')).toHaveText('13 matching tags');
+  await pager.selectOption('2');
+  const candidate = page.getByRole('button', { name: `Add ${last} filter`, exact: true });
+  await expect(candidate).toHaveText('Add');
+  const card = candidate.locator('xpath=../..');
+  await expect(card.getByRole('button', { name: `Browse ${last} relationships`, exact: true })).toHaveText('Related');
+  if (isMobile) await candidate.tap(); else await candidate.press('Enter');
+  await expect(lookup).toBeFocused();
+  await expect(pager).toHaveCount(0);
+  await expect(page.locator('.tag-options li')).toHaveCount(12);
+  await expect(candidate).toHaveCount(0);
+  const chip = page.getByRole('button', { name: `Remove ${last} filter`, exact: true });
+  await chip.press('Enter');
+  await expect(lookup).toBeFocused();
+  await pager.selectOption('2');
+  await expect(candidate).toBeVisible();
+  await raw.fill(`otag:${findTags('connive')[0].id}`);
+  await lookup.fill('connive');
+  await expect(page.getByText('All matching functions are selected.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /unlisted function/ })).toHaveCount(0);
 });
 
 test('Explore ignores empty search submits and retains results until clear', async ({ page }) => {
@@ -119,8 +205,7 @@ test('Explore pins the query within setup and leaves results and focused control
   });
   const raw = page.locator('#raw');
   const queryForm = page.locator('#search-form');
-  const filters = page.locator('#filters-heading');
-  const functions = page.locator('#function-tags-heading');
+  const tools = page.locator('#search-tools-heading');
   const results = page.locator('#search-output');
   const geometry = () => page.evaluate(() => ({
     form: document.querySelector('#search-form').getBoundingClientRect().toJSON(),
@@ -134,8 +219,7 @@ test('Explore pins the query within setup and leaves results and focused control
     }).toBeLessThan(2);
   };
   await raw.fill('t:elf otag:ramp otag:draw usd<5');
-  await filters.press('Enter');
-  await functions.press('Enter');
+  await tools.press('Enter');
   await page.evaluate(() => window.scrollTo(0, 0));
   const original = (await geometry()).form.top;
   await page.evaluate(() => {
@@ -186,10 +270,8 @@ test('populated guided filters leave room for focus rings and reachable repeated
   const query = '(t:creature OR t:elf OR t:druid OR t:legendary) -t:artifact (keyword:flying OR keyword:trample) (mv>=1 mv<=8) (o:"draw a card" fo:"add mana") (m>={U} m>={G}) otag:ramp usd<5';
   const raw = page.locator('#raw');
   await raw.fill(query);
-  await page.locator('#filters-heading').press('Enter');
-  for (const family of ['type', 'keyword', 'mv', 'colors', 'oracle', 'cost']) {
-    await page.locator(`#filter-heading-${family}`).press('Enter');
-  }
+  await page.locator('#search-tools-heading').press('Enter');
+  await page.getByLabel('Add filter', { exact: true }).selectOption('colors');
   for (const family of ['mv', 'oracle', 'cost']) {
     const panel = page.locator(`[data-guided-family="${family}"]`);
     for (let i = 0; i < 5; i++) await panel.locator(`[data-add-filter="${family}"]`).click();
@@ -232,8 +314,7 @@ test('guided filters reflow at intermediate widths and enlarged text without cha
   const query = 't:"an extremely long custom type name for testing selected chips" (mv>=2 mv<=6) o:"whenever ~ attacks, draw a card" m>={U} otag:ramp';
   const raw = page.locator('#raw');
   await raw.fill(query);
-  await page.locator('#filters-heading').press('Enter');
-  for (const family of ['type', 'mv', 'oracle', 'cost']) await page.locator(`#filter-heading-${family}`).press('Enter');
+  await page.locator('#search-tools-heading').press('Enter');
   const evidence = [];
   for (const width of [1920, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
