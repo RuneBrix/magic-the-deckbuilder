@@ -55,8 +55,30 @@ test('collection pagination keeps global ordering, filtered totals and valid pag
   const top = page.getByRole('navigation', { name: 'Collection pages (top)', exact: true });
   const bottom = page.getByRole('navigation', { name: 'Collection pages (bottom)', exact: true });
   const rows = page.locator('[data-owned-row]'), total = page.locator('.collection-total');
+  const expectCentered = async () => {
+    const grids = await page.locator('.collection-view-visual').evaluateAll(nodes => nodes.map(grid => {
+      const { left, right } = grid.getBoundingClientRect();
+      const cards = Array.from(grid.children, card => card.getBoundingClientRect());
+      const firstRow = cards.filter(card => card.top === cards[0].top);
+      return {
+        marginDifference: Math.abs((firstRow[0].left - left) - (right - firstRow.at(-1).right)),
+        aligned: cards.every((card, i) => card.left === firstRow[i % firstRow.length].left),
+      };
+    }));
+    expect(grids.length).toBeGreaterThan(0);
+    for (const grid of grids) {
+      expect(grid.marginDifference).toBeLessThanOrEqual(1);
+      expect(grid.aligned).toBe(true);
+    }
+  };
   await expect(total).toHaveText('194 copies total');
   await expect(rows).toHaveCount(48);
+  const viewport = page.viewportSize();
+  for (const width of [1080, 1120, 1280, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectCentered();
+  }
+  await page.setViewportSize(viewport);
   await expect(top.getByRole('button', { name: 'Previous' })).toBeDisabled();
   // A keyboard page change keeps the next action focused and above the sticky header.
   const next = top.getByRole('button', { name: 'Next', exact: true });
@@ -66,8 +88,14 @@ test('collection pagination keeps global ordering, filtered totals and valid pag
   expect(await next.evaluate(node => node.getBoundingClientRect().top >= document.querySelector('.workspace-nav').getBoundingClientRect().bottom)).toBe(true);
   await bottom.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(rows).toHaveCount(1); await expect(top.getByRole('combobox')).toHaveValue('3');
+  await expectCentered();
   await expect(top.getByRole('combobox')).toBeFocused();
   await expect(next).toBeDisabled(); await expect(top).toContainText('Lots 97–97 of 97');
+  const actions = rows.getByRole('button', { name: 'Card actions for owned Lot 097' });
+  await actions.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Edit', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(actions).toBeFocused();
   // Edit the final lot using its real inventory index, then remove it and clamp the page.
   await rows.locator('[data-owned-plus]').click(); await expect(total).toHaveText('195 copies total');
   await page.locator('#collection-view').selectOption('text');
@@ -88,11 +116,15 @@ test('collection pagination keeps global ordering, filtered totals and valid pag
   await expect(page.locator('#collection-filter')).toBeFocused();
   await expect(total).toHaveText('18 copies match · 192 copies total'); await expect(rows).toHaveCount(9);
   await expect(top.getByRole('combobox')).toHaveValue('1');
+  await page.locator('#collection-view').selectOption('visual');
+  await expect(page.locator('.collection-view-visual')).toHaveCount(2);
+  await expectCentered();
   await page.locator('#collection-filter').fill('no matches');
   await expect(total).toHaveText('0 copies match · 192 copies total'); await expect(rows).toHaveCount(0);
   await expect(next).toBeDisabled(); await expect(top.getByRole('button', { name: 'Previous' })).toBeDisabled();
   await page.locator('#collection-filter').fill('');
   await page.locator('#collection-view').selectOption('visual');
+  await expectCentered();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('collection-paginated-visual.png') });
   await page.reload(); await page.getByRole('button', { name: 'Collection', exact: true }).click();

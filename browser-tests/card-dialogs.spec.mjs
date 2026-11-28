@@ -126,7 +126,9 @@ test('Scryfall tags starts a clean canonical search from the deck', async ({ pag
   await expect(page.locator('#tag-search-confirmation')).toBeHidden();
   await expect(page.locator('#raw')).toHaveValue('otag:swap-removal');
   await page.getByRole('button', { name: 'My decks', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Smoke Garden', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'My decks', level: 1 })).toBeFocused();
+  await page.getByRole('button', { name: 'Smoke Garden', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Smoke Garden', exact: true, level: 1 })).toBeFocused();
 });
 
 test('Related examples open their own printing and return to the same history, scroll and focus', async ({ page, isMobile }, testInfo) => {

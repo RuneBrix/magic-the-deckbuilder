@@ -81,13 +81,17 @@ test('finish treatments and ownership markers preserve quotes, inventory and con
   const saved=()=>page.evaluate(()=>localStorage.getItem('arcana.workspace.v2')),before=await saved();
   const card=n=>page.locator('.deck-entry.visual-card').filter({has:page.locator(`.card-art[data-inspect="00000000-0000-4000-8000-${String(n).padStart(12,'0')}"]`)});
   const toggle=page.getByRole('checkbox',{name:'Show ownership'});
+  const legend=page.locator('.deck-ownership-legend');
   const badge=n=>card(n).locator('.entry-quantity');
   const badgeStyles=()=>badge(2).evaluate(el=>({bg:getComputedStyle(el).backgroundColor,clip:getComputedStyle(el).clipPath,width:el.offsetWidth,height:el.offsetHeight}));
   await expect(toggle).not.toBeChecked();
+  await expect(legend).toBeHidden();
   const neutral=await badgeStyles();
   expect(neutral.clip).toBe('none');
   if(isMobile)await toggle.tap();else await toggle.press('Space');
   await expect(toggle).toBeChecked();
+  await expect(legend).toBeVisible();
+  await expect(legend.getByRole('listitem')).toHaveText(['All in this printing','Covered with other printings','Copies missing']);
   if(!isMobile)await expect(toggle).toBeFocused();
   const colored=await badgeStyles();
   expect(colored.bg).not.toBe(neutral.bg);
@@ -102,12 +106,27 @@ test('finish treatments and ownership markers preserve quotes, inventory and con
   await expect(card(4).locator('.stack-card-meta')).toHaveText('$2.00');
   for(const layout of ['visual-horizontal','visual-vertical']) {
     await page.locator('#editor-layout').selectOption(layout);
+    await expect(legend).toBeVisible();
     await card(2).focus();
     await expect(page.locator('#deck-card-preview .preview-art')).toHaveAttribute('data-finish','foil');
     await expect(card(2)).toHaveAccessibleName(/Foil/);
     for(const [n,expected] of [[1,'none'],[2,'""'],[4,'""']])expect(await card(n).locator('.card-art').evaluate(el=>getComputedStyle(el,'::after').content)).toBe(expected);
   }
+  for(const layout of ['text-horizontal','text-vertical']) {
+    await page.locator('#editor-layout').selectOption(layout);
+    await expect(legend).toHaveCount(0);
+  }
   await page.locator('#editor-layout').selectOption('visual-horizontal');
+  await expect(toggle).toBeChecked();
+  const zones=page.locator('[data-toggle-deck-zone]');
+  for(const zone of await zones.all())await zone.click();
+  await expect(legend).toBeHidden();
+  for(const zone of await zones.all())await zone.click();
+  await expect(legend).toBeVisible();
+  const swatchColors=element=>element.evaluate(el=>{
+    const {backgroundColor,borderColor}=getComputedStyle(el);
+    return [backgroundColor,borderColor];
+  });
   for(const theme of ['light','dark'])for(const palette of ['green','blue','white','orange','rose','teal','sepia']) {
     await page.evaluate(({theme,palette})=>Object.assign(document.documentElement.dataset,{theme,palette}),{theme,palette});
     await card(2).focus();
@@ -116,14 +135,25 @@ test('finish treatments and ownership markers preserve quotes, inventory and con
       const values=[lum(style.color),lum(style.backgroundColor)].sort((a,b)=>b-a);return (values[0]+.05)/(values[1]+.05);
     }));
     expect(Math.min(...contrast)).toBeGreaterThanOrEqual(4.5);
+    for(const [state,n] of [['owned',1],['alternate',3],['missing',2],['missing',4]]) {
+      expect(await swatchColors(legend.locator(`[data-ownership="${state}"]`))).toEqual(await swatchColors(badge(n)));
+    }
     await page.screenshot({path:testInfo.outputPath(`finishes-${theme}-${palette}.png`)});
   }
+  await page.addStyleTag({content:'.deck-ownership-legend,.deck-ownership-toggle{font-size:24px}'});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  await legend.scrollIntoViewIfNeeded();
+  await page.screenshot({path:testInfo.outputPath('ownership-legend-enlarged.png')});
   await page.emulateMedia({reducedMotion:'reduce'});
   expect(await card(2).locator('.card-art').evaluate(el=>getComputedStyle(el,'::after').animationName)).toBe('none');
+  await page.locator('#editor-search').fill('No matching card');
+  await expect(legend).toBeHidden();
   await page.locator('#editor-search').fill('Smoke Card 2');
   await expect(badge(5)).toHaveAttribute('data-ownership','missing');
+  await expect(legend).toBeVisible();
   await toggle.uncheck();
-  await expect(page.locator('[data-ownership]')).toHaveCount(0);
+  await expect(legend).toBeHidden();
+  await expect(page.locator('.deck-entry [data-ownership]')).toHaveCount(0);
   await expect(card(2).locator('.card-art')).not.toHaveAttribute('aria-description');
   expect(await saved()).toBe(before);
   await page.getByRole('button',{name:'Collection',exact:true}).click();

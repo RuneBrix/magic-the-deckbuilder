@@ -1,5 +1,11 @@
 # Changelog
 
+## Deck library and visual cards — 2026-11-28
+
+- My decks opens and focuses the library from any page (#263).
+- Show ownership in either visual deck layout displays a swatch key for the visible ownership colors (#265).
+- Collection centers its visual card columns, including sparse groups and pages (#287).
+
 ## Search cards setup — 2026-11-28
 
 - Open Filters and Browse by function together in visually distinct panels. The panels split the width evenly on wide screens, stack in narrower spaces and summarize applied conditions when closed (#286).

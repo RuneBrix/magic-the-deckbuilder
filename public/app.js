@@ -43,7 +43,7 @@ try {
 }
 catch { decks = []; collection=[];storageError = 'Saved workspace could not be read. Restore a JSON backup before making changes.'; }
 for (const deck of decks) for (const entry of deck.cards) entry.zone = zoneFor(entry);
-let active = decks[0]?.id, rememberedDeck='';
+let active = decks[0]?.id;
 let tracker = { id: active || '', visible: true, width: 340 };
 try {
   const saved = JSON.parse(localStorage.getItem('arcana.explorer.v1'));
@@ -177,7 +177,7 @@ function render() {
   const previousStatistics = statistics ? $('#deck-statistics') : null;
   $('#app').style.setProperty('--tracker-width', tracker.width+'px');
   $('#app').classList.toggle('has-tracker', view==='explore' && Boolean(d) && tracker.visible);
-  $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-home data-view="decks" aria-label="Arcana home — My decks"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Search cards</button><button data-view="collection" class="nav-item ${view==='collection'?'selected':''}" ${view==='collection'?'aria-current="page"':''}>Collection</button><button class="nav-item ${view==='settings'?'selected':''}" data-action="settings" ${view==='settings'?'aria-current="page"':''}>Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
+  $('#app').innerHTML = `<header class="workspace-nav"><a class="brand" href="/" data-view="decks" aria-label="Arcana home — My decks"><span class="brand-mark">${icon('cards',25)}</span>arcana</a><nav aria-label="Main navigation"><button data-view="decks" class="nav-item ${view==='decks'||view==='deck'?'selected':''}" ${view==='deck'?'aria-current="location"':view==='decks'?'aria-current="page"':''}>My decks</button><button data-view="explore" class="nav-item ${view==='explore'?'selected':''}" ${view==='explore'?'aria-current="page"':''}>Search cards</button><button data-view="collection" class="nav-item ${view==='collection'?'selected':''}" ${view==='collection'?'aria-current="page"':''}>Collection</button><button class="nav-item ${view==='settings'?'selected':''}" data-action="settings" ${view==='settings'?'aria-current="page"':''}>Settings</button></nav><span class="local-status">${storageError?'Unsaved changes':'Saved in this browser'}</span><button class="icon-button" data-action="help" aria-label="Help">${icon('book',17)}</button></header>
   <main>${storageError ? `<div class="storage-warning" role="alert">${esc(storageError)} <button data-action="backup">Export backup</button></div>` : ''}${view === 'decks' ? library() : view === 'deck' ? deckWorkspace(d, statistics, previousStatistics) : view==='collection'?collectionPage(collection,collectionOptions):view==='settings'?settingsPage():explorer()}</main>${view === 'explore' && d && tracker.visible ? `<button class="mobile-deck-jump primary" data-action="jump-deck">View tracker · ${esc(d.name)}</button><aside id="deck-tracker" class="deck-panel" aria-label="Tracked deck: ${esc(d.name)}"><div id="tracker-resize" role="separator" tabindex="0" aria-label="Resize deck tracker" aria-orientation="vertical" aria-controls="deck-tracker" aria-valuemin="280" aria-valuemax="480" aria-valuenow="${tracker.width}" aria-valuetext="${tracker.width} pixels, subject to available space" title="Drag to resize. Left widens; Right narrows; Home and End set limits."></div>${deckPanel(d)}</aside>` : ''}`;
   updateStickyHeights();
   stickyObserver?.disconnect();
@@ -569,7 +569,7 @@ function identitySummary(d, compact=false) {
 }
 function openDeck(id) {
   if(!decks.some(d=>d.id===id))return;
-  const changed=active!==id;active=id;rememberedDeck=id;view='deck';deckTab='cards';
+  const changed=active!==id;active=id;view='deck';deckTab='cards';
   if(changed){editorOptions={layout:'visual-horizontal',group:'type',search:'',order:'name'};previewKey='';}
   render();$('#deck-title')?.focus();
 
@@ -1076,7 +1076,7 @@ function deckWorkspace(d, statistics, previousStatistics) {
   const s=statistics ?? stats(d), report=legalityReport(d);
   const tabs=[['cards','Cards'],['stats','Statistics'],['planning','Ownership & costs'],['checks','Checks']];
   const select=(key,label,values)=>`<label>${label}<select id="editor-${key}">${values.map(([v,l])=>`<option value="${esc(v)}" ${editorOptions[key]===v?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
-  return `<div class="deck-workspace"><header class="deck-editor-header"><button class="text-button library-back" data-home data-view="decks">${icon('arrow',16)} Back to library</button><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions">${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual cards'],['visual-vertical','Vertical visual cards'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price '+currencySymbol(deckCurrency(d))+' (low first)'],['price-desc','Price '+currencySymbol(deckCurrency(d))+' (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<div class="deck-filter-mode"><label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><label class="deck-mode">Mode<select id="editor-mode"><option value="default">Default</option><option value="select"${selectionDeck === d ? ' selected' : ''}>Select</option></select></label></div><button class="text-button" data-action="clear-deck-filters">Clear filter</button>${editorOptions.layout.startsWith('visual')?`<label class="deck-ownership-toggle"><input id="show-deck-ownership" type="checkbox" ${showDeckOwnership?'checked':''}> Show ownership</label>`:''}</div>${selectionDeck === d ? '<p class="hint deck-selection-hint" id="deck-selection-hint">Select cards to include all copies of each entry, across any zone.</p>' : ''}${deckCards(d)}${selectionDeck === d ? batchBar() : ''}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
+  return `<div class="deck-workspace"><header class="deck-editor-header"><button class="text-button library-back" data-view="decks">${icon('arrow',16)} Back to library</button><div class="deck-title-row"><h1 id="deck-title" tabindex="-1">${esc(d.name)}</h1><div class="workspace-actions">${deckMenu(d)}</div></div><div class="deck-editor-meta"><span class="format-badge">${esc(formatLabel(d.format))}</span><span aria-label="Deck zone counts">${s.total} in playing deck${d.format==='commander'?` (${zoneCount(d,'command')} command + ${zoneCount(d,'main')} main)`:` · ${zoneCount(d,'main')} main · ${zoneCount(d,'command')} command`} · ${zoneCount(d,'sideboard')} sideboard · ${zoneCount(d,'maybeboard')} maybeboard</span>${identitySummary(d,true)}${bracketControl(d)}</div></header><div class="deck-tabs" role="tablist" aria-label="Deck sections">${tabs.map(([key,label])=>`<button role="tab" id="deck-tab-${key}" aria-controls="deck-panel-${key}" aria-selected="${deckTab===key}" tabindex="${deckTab===key?0:-1}" data-tab="${key}">${label}</button>`).join('')}</div><div class="editor-content" id="deck-panel-${deckTab}" role="tabpanel" aria-labelledby="deck-tab-${deckTab}" tabindex="0">${deckTab==='stats'?statPanel(s, d, previousStatistics?.dataset.statisticsDeck === d.id ? previousStatistics : null):deckTab==='planning'?budgetPanel(d,collection,priceStates.get(d),cheapestPriceStates.get(d),costSorts.get(d)):deckTab==='checks'?checksPanel(d,report):`${quickAddMarkup(d)}<div class="editor-controls">${select('layout','View',[['visual-horizontal','Horizontal visual cards'],['visual-vertical','Vertical visual cards'],['text-horizontal','Horizontal text'],['text-vertical','Vertical text']])}${select('group','Group by',[['type','Type'],['role','Function'],['none','No grouping']])}${select('order','Sort by',[['name','Name (A–Z)'],['mana','Mana value (low first)'],['quantity','Quantity (most first)'],['price','Price '+currencySymbol(deckCurrency(d))+' (low first)'],['price-desc','Price '+currencySymbol(deckCurrency(d))+' (high first)'],['power','Power (low first)'],['power-desc','Power (high first)'],['toughness','Toughness (low first)'],['toughness-desc','Toughness (high first)']])}<div class="deck-filter-mode"><label class="deck-text-filter" for="editor-search">Filter cards<input id="editor-search" type="search" value="${esc(editorOptions.search)}" placeholder="Name, type or function" maxlength="300"></label><label class="deck-mode">Mode<select id="editor-mode"><option value="default">Default</option><option value="select"${selectionDeck === d ? ' selected' : ''}>Select</option></select></label></div><button class="text-button" data-action="clear-deck-filters">Clear filter</button>${editorOptions.layout.startsWith('visual') ? deckOwnershipControl() : ''}</div>${selectionDeck === d ? '<p class="hint deck-selection-hint" id="deck-selection-hint">Select cards to include all copies of each entry, across any zone.</p>' : ''}${deckCards(d)}${selectionDeck === d ? batchBar() : ''}`}</div>${tabs.filter(([key])=>key!==deckTab).map(([key])=>`<div id="deck-panel-${key}" role="tabpanel" aria-labelledby="deck-tab-${key}" tabindex="0" hidden></div>`).join('')}</div>`;
 }
 function quickAddMarkup(d) {
   return `<section class="quick-add" aria-label="Quick add to ${esc(d.name)}"><div class="owned-search-wrap"><label for="quick-add-name">Quick add card<input id="quick-add-name" type="search" role="combobox" aria-autocomplete="list" aria-controls="quick-add-matches" aria-expanded="false" aria-describedby="quick-add-status" autocomplete="off" maxlength="200" placeholder="e.g. Sol Ring"></label><div id="quick-add-matches" class="owned-suggestions" role="listbox" aria-label="Card name suggestions" hidden></div></div><p id="quick-add-status" class="hint" role="status"></p></section>`;
@@ -1198,6 +1198,16 @@ function stackCardMeta({card,finish}) {
   const currency=deckCurrency(current()), { cents } = deckPrintingPrice(card,finish,currency);
   const price=cents === null ? 'Price unavailable' : money(cents,currency);
   return `<div class="stack-card-meta" aria-label="${esc('Price: '+price)}" title="${esc(price)}">${esc(price)}</div>`;
+}
+function deckOwnershipControl() {
+  return `<div class="deck-ownership-controls">
+    <label class="deck-ownership-toggle"><input id="show-deck-ownership" type="checkbox" ${showDeckOwnership ? 'checked' : ''}> Show ownership</label>
+    <ul class="deck-ownership-legend" role="list" aria-label="Ownership colors">
+      <li><span class="entry-quantity" data-ownership="owned" aria-hidden="true"></span> All in this printing</li>
+      <li><span class="entry-quantity" data-ownership="alternate" aria-hidden="true"></span> Covered with other printings</li>
+      <li><span class="entry-quantity" data-ownership="missing" aria-hidden="true"></span> Copies missing</li>
+    </ul>
+  </div>`;
 }
 function ownershipBadge(row) {
   if(row.owned===null)return {state:'excluded',description:'Outside ownership scope'};
@@ -2064,7 +2074,7 @@ function duplicateDeck(deck) {
 function deleteDeck(deck) {
   showDialog(`<h2>Delete ${esc(deck.name)}?</h2><p>This removes only this deck from this browser. Export a JSON backup first to keep a complete copy.</p><div class="workspace-actions"><button id="cancel-delete" class="secondary">Keep deck</button><button id="confirm-delete" class="danger">Delete ${esc(deck.name)}</button></div>`);
   $('#cancel-delete').onclick=()=>$('#dialog').close();
-  $('#confirm-delete').onclick=()=>{decks=decks.filter(d=>d.id!==deck.id);if(rememberedDeck===deck.id)rememberedDeck='';if(active===deck.id){active=decks[0]?.id;if(view==='deck')view='decks';}if(tracker.id===deck.id){tracker.id='';saveTracker();}save();$('#dialog').close();render();$('#library-title')?.focus();toast('Deck deleted');};
+  $('#confirm-delete').onclick=()=>{decks=decks.filter(d=>d.id!==deck.id);if(active===deck.id){active=decks[0]?.id;if(view==='deck')view='decks';}if(tracker.id===deck.id){tracker.id='';saveTracker();}save();$('#dialog').close();render();$('#library-title')?.focus();toast('Deck deleted');};
   $('#cancel-delete').focus();
 }
 function exportDialog(deck, group) {
@@ -2528,11 +2538,9 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.view){
     e.preventDefault?.();
     view=button.dataset.view;
-    if(view==='decks' && button.dataset.home===undefined && decks.some(d=>d.id===rememberedDeck)){active=rememberedDeck;view='deck';}
     if(view==='explore')resetExplore();
     render();
-    if(view==='deck')$('#deck-title')?.focus();
-    else if(view==='decks')$('#library-title')?.focus();
+    if(view==='decks')$('#library-title')?.focus();
     else if(view==='collection')$('#collection-title')?.focus();
     else $('#raw')?.focus();
     return;

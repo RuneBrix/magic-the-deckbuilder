@@ -45,46 +45,56 @@ test('statistics geometry centers a wider board and makes section headings prima
   }
 });
 
-test('My decks restores the last open deck while the library and Explore remain explicit',async({page})=>{
+test('My decks opens and focuses the library from every top-level surface',async({page})=>{
   await page.evaluate(()=>{
     const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key));
     data.decks.push({...structuredClone(data.decks[0]),id:'other-deck',name:'Other Garden'});
     localStorage.setItem(key,JSON.stringify(data));
   });
   await page.reload();await openDeck(page);
-  await expect(page.getByRole('button',{name:'Find cards to add',exact:true})).toHaveCount(0);
   await page.getByRole('tab',{name:'Statistics',exact:true}).click();
+  const library=page.locator('#library-title');
+  const myDecks=page.getByRole('button',{name:'My decks',exact:true});
+  const expectLibrary=async()=>{
+    await expect(library).toBeFocused();
+    await expect(myDecks).toHaveAttribute('aria-current','page');
+    await expect(page.locator('#deck-title')).toHaveCount(0);
+  };
+  await myDecks.press('Enter');await expectLibrary();
+  await myDecks.click();await expectLibrary();
   for(const destination of ['Collection','Search cards','Settings']) {
+    await openDeck(page);
     await page.getByRole('button',{name:destination,exact:true}).click();
     if(destination==='Search cards') {
       await page.getByRole('combobox',{name:'Track deck',exact:true}).selectOption('other-deck');
       await page.locator('#raw').fill('otag:ramp');
     }
-    await page.getByRole('button',{name:'My decks',exact:true}).click();
-    await expect(page.locator('#deck-title')).toHaveText('Smoke Garden');
-    await expect(page.getByRole('tab',{name:'Statistics',exact:true})).toHaveAttribute('aria-selected','true');
-    await expect(page.locator('#deck-title')).toBeFocused();
+    await myDecks.click();await expectLibrary();
   }
   const tracker=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcana.explorer.v1')));
   expect(tracker.id).toBe('other-deck');
-  await page.getByRole('button',{name:'Back to library',exact:true}).press('Enter');
-  await expect(page.locator('#library-title')).toBeFocused();
   await page.getByRole('button',{name:'Other Garden',exact:true}).click();
-  await page.getByRole('button',{name:'Collection',exact:true}).click();
-  await page.getByRole('button',{name:'My decks',exact:true}).click();
   await expect(page.locator('#deck-title')).toHaveText('Other Garden');
+  await expect(page.locator('#deck-title')).toBeFocused();
   await page.getByRole('link',{name:'Arcana home — My decks',exact:true}).click();
-  await expect(page.locator('#library-title')).toBeFocused();
-  await page.getByRole('button',{name:'My decks',exact:true}).click();
-  await expect(page.locator('#deck-title')).toHaveText('Other Garden');
+  await expectLibrary();
   await page.getByLabel('Deck actions for Other Garden',{exact:true}).click();
-  await page.locator('[data-manage="delete"]').click();
+  await page.getByRole('article',{name:'Other Garden',exact:true}).getByRole('button',{name:'Delete deck…',exact:true}).click();
   await page.getByRole('button',{name:'Delete Other Garden',exact:true}).click();
   await page.getByRole('button',{name:'Collection',exact:true}).click();
-  await page.getByRole('button',{name:'My decks',exact:true}).click();
-  await expect(page.locator('#library-title')).toBeVisible();
+  await myDecks.click();await expectLibrary();
+  await expect(page.getByRole('button',{name:'Other Garden',exact:true})).toHaveCount(0);
   await openDeck(page);await page.reload();
-  await expect(page.locator('#library-title')).toBeVisible();
+  await expect(library).toBeVisible();
+  await page.evaluate(()=>{
+    const key='arcana.workspace.v2',data=JSON.parse(localStorage.getItem(key));
+    data.decks=[];
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.reload();
+  await page.getByRole('button',{name:'Collection',exact:true}).click();
+  await myDecks.press('Enter');await expectLibrary();
+  await expect(page.getByRole('heading',{name:'No decks yet.'})).toBeVisible();
 });
 
 
