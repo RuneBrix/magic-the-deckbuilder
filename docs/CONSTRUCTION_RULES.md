@@ -12,7 +12,7 @@ Pregame color choices and detected special construction exceptions require manua
 
 ## Companion
 
-The Checks selector designates one existing Sideboard / outside-game entry. Storing or adding a companion-capable card alone does not designate it. None clears the choice; selecting another entry changes it. Moving the selected entry out of Sideboard clears designation, as does removing that entry. Copying cards into another deck does not copy designation; duplicating a whole deck does. The selected printing, finish, quantities, functions and unrelated entries are retained.
+On Cards, **Designate as companion** is available in the card options for a companion-capable Sideboard entry. Designating another entry switches the choice. **Remove as companion** clears the choice and keeps the card in Sideboard. Moving the designated entry out of Sideboard or removing its last copy clears the designation. Copying a card into another deck leaves designation in the source deck, while duplicating a whole deck preserves it. Designation preserves printings, finishes, quantities, functions and unrelated entries. Checks displays the designated companion and evaluates its restrictions. [#275](https://github.com/RuneBrix/magic-the-deckbuilder/issues/275)
 
 In constructed play, the selected companion occupies a normal sideboard slot and participates in sideboard legality/copy limits. Its condition inspects Main deck only. In Commander it is outside the 100, but must have legal stored format data, fit the commander identity, have one stored copy and not share a starting-deck name. Its condition inspects Main deck plus Command zone. Other outside-game cards and Maybeboard do not participate. Commander has no official sideboard; Arcana's Sideboard remains an outside-game storage area with an explicit notice for undesignated entries.
 
@@ -36,4 +36,4 @@ The optional boolean `entry.companion` extends existing versioned workspace deck
 
 ## Verification
 
-Native synthetic fixtures cover complete decks, valid/invalid pairs, combined identities, eligibility, basic-land types, companion predicates, data gaps, designation changes/moves, and complete JSON round trips. Browser checks cover selection, focus, reload and clear in isolated Chromium desktop/phone light/dark contexts. These checks do not establish macOS/Safari acceptance or complete Magic rules certification; record actual run results in the PR.
+Native synthetic fixtures cover complete decks, valid/invalid pairs, combined identities, eligibility, basic-land types, companion predicates, data gaps, designation changes/moves, and complete JSON round trips. Browser checks cover designation and removal in visual and text card menus, focus, reload and Checks reporting in isolated Chromium desktop/phone light/dark contexts. Record actual run results and remaining platform checks in the PR.

@@ -1157,8 +1157,26 @@ function bracketControl(d) {
 function bracketPanel(d) {
   if(d.format!=='commander')return '';
   const report=bracketReport(d),range=report.range;
-  const suggestion=!report.available?'Guidance unavailable: app bracket data is missing.':report.stale?'Guidance is outdated. Check the current official source before using it.':report.missing?'Guidance unavailable: some stored card data is incomplete.':!report.canSuggest?'Add cards to see Game Changer guidance.':range?`Discussion range: Brackets ${range[0]}–${range[1]} based on Game Changer count.`:'No discussion range from Game Changers alone; zero matches can fit any bracket.';
-  return `<section class="bracket-review" id="bracket-discussion" tabindex="-1" aria-label="Commander bracket discussion"><h3>Commander bracket discussion</h3><p><strong>Player assigned:</strong> ${d.bracket?'Bracket '+d.bracket+' · '+BRACKETS[d.bracket]:'Not assigned'}.</p><p class="check-info bracket-suggestion">${esc(suggestion)}</p><p>${report.available?`${report.count} Game Changer ${report.count===1?'copy':'copies'} in Main deck + Command zone${report.stale?' (outdated app data)':''}.`:'Game Changer count unavailable.'} Sideboard and Maybeboard excluded.</p>${report.matches.length?`<ul>${report.matches.map(m=>`<li>${esc(m.name)} · ${m.qty} ${m.qty===1?'copy':'copies'} · ${m.zones.map(z=>ZONES[z]).join(', ')}</li>`).join('')}</ul>`:''}${range&&d.bracket&&d.bracket<range[0]?'<p class="bracket-conflict">Your assigned bracket is below this count-based range. Discuss the deck with your group; thematic exceptions can be agreed.</p>':''}<p class="hint">Game Changer counts are not a power rating or bracket certification. Discuss combos, extra turns, mass land denial, speed, consistency and intended play with your group. Counts do not distinguish Brackets 4 and 5; thematic exceptions are a group decision.</p><h4>About bracket data</h4><p class="hint">Last updated: <time datetime="${esc(COMMANDER_BRACKETS.verifiedAt)}">${esc(COMMANDER_BRACKETS.verifiedAt)}</time> · Developer-maintained.</p><p>This date records the last developer review of the bundled list and guidance. Updates arrive with app versions; there is no live refresh. Card-legality refresh does not update bracket data.</p><p><a href="${COMMANDER_BRACKETS.source}" target="_blank" rel="noreferrer">Current official Commander brackets and Game Changers</a></p></section>`;
+  let suggestion='Zero matches can fit any bracket.';
+  if(!report.available)suggestion='Bracket data is unavailable.';
+  else if(report.stale)suggestion='Bracket data is outdated. Check the official source.';
+  else if(report.missing)suggestion='Some stored card data is incomplete.';
+  else if(!report.canSuggest)suggestion='Add playing cards to see bracket guidance.';
+  else if(range)suggestion=`Suggested discussion range · Brackets ${range[0]}–${range[1]}`;
+  const countLabel=report.available
+    ? `${report.count}${report.missing?' known':''} Game Changer${report.count===1?'':'s'} in deck`
+    : 'Game Changer count unavailable';
+  const reviewed=esc(COMMANDER_BRACKETS.verifiedAt);
+  return `<section class="bracket-review" id="bracket-discussion" tabindex="-1" aria-label="Commander bracket discussion">
+    <h3>Commander bracket discussion</h3>
+    <p><strong>Player assigned:</strong> ${d.bracket?'Bracket '+d.bracket+' · '+BRACKETS[d.bracket]:'Not assigned'}.</p>
+    <p class="check-info bracket-suggestion">${suggestion}</p>
+    <p>${countLabel}</p>
+    ${report.matches.length?`<ul>${report.matches.map(m=>`<li>${esc(m.name)} · ${m.qty} ${m.qty===1?'copy':'copies'} · ${m.zones.map(z=>ZONES[z]).join(', ')}</li>`).join('')}</ul>`:''}
+    ${range&&d.bracket&&d.bracket<range[0]?'<p class="bracket-conflict">Your assigned bracket is below this count-based range.</p>':''}
+    ${range?'<p class="hint">Use this count-based suggestion to start a discussion with your group.</p>':''}
+    <p class="hint">${report.available?`Data reviewed <time datetime="${reviewed}">${reviewed}</time> · `:''}<a href="${COMMANDER_BRACKETS.source}" target="_blank" rel="noreferrer">Official Commander guidance</a></p>
+  </section>`;
 }
 function checksPanel(d, report) {
   const section = (label, items, status, symbol) => items.length ? `<section class="check-section check-${status}"><h3>${icon(symbol,18)} ${label} · ${items.length}</h3><ul>${items.map(t=>`<li>${esc(t)}</li>`).join('')}</ul></section>` : '';
@@ -1172,12 +1190,11 @@ function checksPanel(d, report) {
   const recovery = refreshStatus==='failed' && hasLegalityCards(d)
     ? `<div class="freshness check-info"><p>Couldn’t update card legality.</p><p>${esc(legalityStates.get(d.id).error)}</p><button class="text-button" data-action="refresh">Retry legality refresh</button></div>`
     : '';
-  const companions=d.cards.filter(entry=>zoneFor(entry)==='sideboard' && (companionCapable(entry.card)||entry.companion));
-  const companionControl=`<label>Designated companion<select id="deck-companion"><option value="">None</option>${companions.map(entry=>`<option value="${esc(entryKey(entry))}" ${entry.companion?'selected':''}>${esc(entry.card.name)}</option>`).join('')}</select></label>`;
+  const companion=d.cards.find(entry=>entry.companion);
   const scope = d.format==='commander'
     ? 'Checks cover deck size, commander eligibility and color identity, copy limits, and card legality.'
     : 'Checks cover deck size, sideboard size, copy limits, and card legality.';
-  return `<div class="checks"><h2>Deck legality checks</h2><h3 class="check-summary check-${status}" aria-live="polite">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3>${recovery}${companionControl}${section('Failed checks',report.failed,'failure','close')}${section('Data unavailable',report.unavailable,'warning','book')}${section('Manual review',report.manual,'info','book')}<details class="backup-help"><summary>About these checks</summary><p>${scope} Special construction rules may need manual review.</p><p>To designate a companion, add it to your Sideboard and select it here. Checks will show any issues with your choice.</p></details>${bracketPanel(d)}</div>`;
+  return `<div class="checks"><h2>Deck legality checks</h2><h3 class="check-summary check-${status}" aria-live="polite">${icon(status==='success'?'check':status==='failure'?'close':'book',18)} ${title}</h3>${recovery}${companion?`<p><strong>Companion</strong> · ${esc(companion.card.name)}</p>`:''}${section('Failed checks',report.failed,'failure','close')}${section('Data unavailable',report.unavailable,'warning','book')}${section('Manual review',report.manual,'info','book')}<details class="backup-help"><summary>About these checks</summary><p>${scope} Special construction rules may need manual review.</p><p>On Cards, open the card options for a Sideboard entry to designate it as a companion.</p></details>${bracketPanel(d)}</div>`;
 }
 
 function deckPriceTotal(entries, d=current()) {
@@ -1886,8 +1903,13 @@ function openCardActions(key,trigger,context=null) {
   menu.dataset.deck=d.id;menu.dataset.entry=key;
   const action=(value,label,attributes='')=>`<button role="menuitem" data-card-action="${value}" ${attributes}>${label}</button>`;
   const submenu='aria-haspopup="menu" aria-expanded="false" aria-controls="card-submenu"';
+  let companion='';
+  if(entry.companion)companion=action('companion','Remove as companion');
+  else if(companionCapable(entry.card))companion=zoneFor(entry)==='sideboard'
+    ? action('companion','Designate as companion')
+    : action('companion','Companion requires Sideboard','aria-disabled="true"');
   menu.setAttribute('aria-label',`Card actions for ${entry.card.name} in ${d.name} · ${ZONES[zoneFor(entry)]}`);
-  menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>`+action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>',submenu)+action('move-menu','Move to… <span aria-hidden="true">›</span>',submenu)+action('edit-printing','Change in-deck card details')+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card')+'<div id="card-submenu" popover="manual" role="menu"></div>';
+  menu.innerHTML=`<h3>${esc(entry.card.name)}</h3>`+action('details','Open details')+action('function-menu','Assign card to function… <span aria-hidden="true">›</span>',submenu)+action('move-menu','Move to… <span aria-hidden="true">›</span>',submenu)+companion+action('edit-printing','Change in-deck card details')+action('copy-name','Copy card name')+action('copy-deck','Add to another deck…',decks.length<2?'disabled':'')+action('remove','Delete card')+'<div id="card-submenu" popover="manual" role="menu"></div>';
   menu.scrollTop=0;
   menu.showPopover();positionCardActions();trigger.setAttribute('aria-expanded','true');
   menu.querySelector(':scope > button:not(:disabled)')?.focus();
@@ -1979,10 +2001,18 @@ $('#card-actions').addEventListener('click',async e=>{
   const menu=$('#card-actions'),d=decks.find(x=>x.id===menu.dataset.deck),key=menu.dataset.entry,entry=d?.cards.find(e=>entryKey(e)===key);
   if(!d||!entry||current()!==d){closeCardActions();toast('This card entry is no longer available in this view.');return;}
   const action=button.dataset.cardAction;
+  if(action==='companion'&&button.getAttribute('aria-disabled')==='true')return;
   if(action==='function-menu'||action==='move-menu'){showCardSubmenu(action==='function-menu'?'function':'move',e.detail===0);return;}
   closeCardActions();
   try{
     if(action==='details')inspect(entry.card.id,key);
+    if(action==='companion'){
+      const staged={...d,cards:d.cards.map(card=>({...card}))};
+      setCompanion(staged,entry.companion?null:key);
+      commitDeckSnapshot(d,staged);
+      render();focusCardEntry(d,key);
+      toast(entry.companion?'Companion designation removed.':`${entry.card.name} designated as companion.`);
+    }
     if(action==='edit-printing')deckCardDialog(entry.card,{zone:zoneFor(entry),edit:{deck:d,entry,key}});
     if(action==='new-function')assignFunctionDialog(d,key);
     if(action==='suggested-function'){
@@ -2019,7 +2049,13 @@ $('#card-actions').addEventListener('keydown',e=>{
   if(e.key==='Escape'||e.key==='ArrowLeft'&&menu.dataset.submenu){e.preventDefault();if(menu.dataset.submenu)closeCardSubmenu(true);else closeCardActions();return;}
   if(e.key==='ArrowRight'&&['function-menu','move-menu'].includes(button?.dataset.cardAction)){e.preventDefault();showCardSubmenu(button.dataset.cardAction==='function-menu'?'function':'move',true);return;}
   if(e.key==='Tab'){closeCardActions();return;}
-  if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const scope=sub.contains(e.target)?sub:menu,buttons=[...scope.querySelectorAll(':scope > button:not(:disabled)')],i=buttons.indexOf(document.activeElement);buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();}
+  if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){
+    e.preventDefault();
+    const scope=sub.contains(e.target)?sub:menu;
+    if(scope===menu && menu.dataset.submenu)closeCardSubmenu();
+    const buttons=[...scope.querySelectorAll(':scope > button:not(:disabled)')],i=buttons.indexOf(document.activeElement);
+    buttons[e.key==='Home'?0:e.key==='End'?buttons.length-1:e.key==='ArrowDown'?(i+1)%buttons.length:(i+buttons.length-1)%buttons.length]?.focus();
+  }
 });
 addEventListener('resize',()=>{if($('#card-actions').matches(':popover-open'))positionCardActions();});
 $('#card-actions').addEventListener('toggle',e=>{if(e.target===$('#card-actions')&&e.newState==='closed'){closeCardSubmenu();cardActionTrigger?.setAttribute('aria-expanded','false');}});
@@ -2377,7 +2413,6 @@ function bind() {
   $('#collection-filter')?.addEventListener('input',e=>{collectionOptions.filter=e.target.value;collectionOptions.page=1;saveCollectionOptions();const container=document.createElement('div');container.innerHTML=collectionPage(collection,collectionOptions);$('#collection-results').outerHTML=container.querySelector('#collection-results').outerHTML;});
   $('#tracked-deck')?.addEventListener('change',e=>trackDeck(e.target.value));
   bindTrackerResize();
-  $('#deck-companion')?.addEventListener('change',e=>{try{changeDeck(deck=>setCompanion(deck,e.target.value||null));$('#deck-companion')?.focus();}catch(error){toast(error.message);}});
   $('#assigned-bracket')?.addEventListener('change',e=>{const d=current();if(!d || d.format!=='commander')return;const value=Number(e.target.value);if(e.target.value && !Object.hasOwn(BRACKETS,value))return;if(e.target.value)d.bracket=value;else delete d.bracket;d.updated=new Date().toISOString();save();render();$('#assigned-bracket')?.focus();});
   for(const key of ['layout','group','order'])$('#editor-'+key)?.addEventListener('change',e=>{editorOptions[key]=e.target.value;render();});
   $('#editor-mode')?.addEventListener('change',e=>setDeckSelectionMode(e.target.value === 'select'));

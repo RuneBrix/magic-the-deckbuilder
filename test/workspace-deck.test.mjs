@@ -195,7 +195,7 @@ test('compact editor exposes named management, format and identity; guidance ope
   await w.node('#app').click({preventDefault(){prevented=true;},target:{closest:()=>({dataset:{action:'bracket-guidance'}})}});
   assert.equal(vm.runInContext('deckTab',w.context),'checks');assert.equal(scrolled,1);assert.equal(focused,1);assert.equal(prevented,true);
   html=w.node('#app').innerHTML;assert.match(html,/id="bracket-discussion" tabindex="-1"/);
-  assert.match(html,/not a power rating or bracket certification/);assert.match(html,/About bracket data/);
+  assert.match(html,/Official Commander guidance/);
   assert.equal(vm.runInContext('JSON.stringify(decks)',w.context),before);assert.equal(w.writes.length,0);
 });
 
