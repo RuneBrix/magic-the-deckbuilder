@@ -131,14 +131,9 @@ test('Add a filter opens an anchored menu and fills the next reserved slot', asy
   const menu = page.getByRole('group', { name: 'Filter types', exact: true });
   await expect(menu).toBeVisible();
   await expect(page.locator('dialog[open]')).toHaveCount(0);
-  const [menuBox, addBox] = await Promise.all([menu.boundingBox(), add.boundingBox()]);
-  if (isMobile) {
-    expect(menuBox.y).toBeCloseTo(addBox.y + addBox.height + 4, 0);
-    expect(menuBox.x + menuBox.width).toBeCloseTo(addBox.x + addBox.width, 0);
-  } else {
-    expect(menuBox.x).toBeCloseTo(addBox.x + addBox.width + 4, 0);
-    expect(menuBox.y).toBeCloseTo(addBox.y, 0);
-  }
+  const [menuBox, labelBox] = await Promise.all([menu.boundingBox(), add.locator('.add-guided-filter-label').boundingBox()]);
+  expect(menuBox.y).toBeCloseTo(labelBox.y + labelBox.height + 4, 0);
+  expect(menuBox.x + menuBox.width / 2).toBeCloseTo(labelBox.x + labelBox.width / 2, 0);
   expect((await boxes()).map(({ width, height }) => [width, height])).toEqual(beforeOpen.map(({ width, height }) => [width, height]));
   await expect(menu.getByRole('button', { name: 'Card name', exact: true })).toBeFocused();
   await menu.scrollIntoViewIfNeeded();

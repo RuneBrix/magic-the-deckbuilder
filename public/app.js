@@ -312,7 +312,7 @@ function guidedControls() {
   };
   const visible = visibleGuidedFamilies();
   const choices = availableGuidedFamilies();
-  const addLabel = `${icon('plus',22)} Add a filter`;
+  const addLabel = `<span class="add-guided-filter-label">${icon('plus',22)} Add a filter</span>`;
   const addFilter = choices.length ? `<details class="deck-menu guided-filter-picker">
       <summary id="add-guided-filter" class="add-guided-filter">${addLabel}</summary>
       <div class="deck-menu-actions" role="group" aria-label="Filter types">
