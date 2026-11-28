@@ -669,7 +669,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .search-panel-summaries{display:grid;grid-column:1/-1;gap:3px;min-width:0}
 .search-panel-summary{overflow-wrap:anywhere;font-size:.8125rem;color:var(--ink)}
 .search-panel[open]>summary .search-panel-summaries,.search-panel-summaries:not(:has(.search-panel-summary:not(:empty))),.search-panel-summary:empty,#tag-match-count:empty{display:none}
-.search-panel-columns{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:12px;background:var(--ground);border-top:1px solid var(--line)}
+.search-panel-columns{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:12px;background:var(--ground);border-top:1px solid var(--line);border-radius:0 0 3px 3px}
 .search-panel-columns>section{min-width:0;padding:14px;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
 .search-panel-columns h2{margin:0 0 12px;font-size:1.125rem}
 @container (min-width:60rem){.search-panel-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -770,7 +770,8 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .tag-choice-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:auto;padding-top:4px}
 .tag-choice-actions button{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:34px;padding:4px 7px;font-size:.75rem}
 @media (pointer:coarse){.tag-choice-actions button{min-height:44px}}
-.tag-pagination-slot{min-height:44px;margin-top:10px}
+.tag-pagination-slot{margin-top:8px}
+.tag-pagination-slot:empty{display:none}
 #tag-pagination{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 #tag-pagination label{display:flex;align-items:center;gap:5px;white-space:nowrap}
 #tag-pagination :is(input,select,button){height:44px}
@@ -780,7 +781,6 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 #tag-pagination button{min-width:44px}
 #tag-pagination button:disabled{opacity:.45}
 #tag-pagination [data-tag-page-step="-1"] svg{transform:rotate(180deg)}
-@container (max-width:29rem){.tag-pagination-slot{min-height:94px}}
 #related-dialog{width:720px}
 #related-dialog:has(~ #dialog:modal)::backdrop{background:transparent}
 #dialog:has(~ #tag-search-confirmation:modal)::backdrop{background:transparent}
@@ -809,7 +809,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 .selected-functions-heading h3{font-size:13px;font-weight:600}
 .selected-functions-heading label{display:flex;align-items:center;gap:8px}
 .selected-functions-heading select{width:auto;max-width:100%;font-size:12px;text-transform:none;margin:0}
-.selected-functions .active-tags{block-size:5.5rem;overflow:auto;align-content:flex-start;align-items:flex-start;margin:8px -4px 4px;padding:4px;scroll-padding:4px}
+.selected-functions .active-tags{block-size:3.5rem;overflow:auto;align-content:flex-start;align-items:flex-start;margin:4px -4px 0;padding:4px;scroll-padding:4px}
 .selected-functions .active-tags button{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:start}
 .selected-functions .active-tags .hint{margin:4px 0}
 .selected-unlisted{flex-basis:100%}

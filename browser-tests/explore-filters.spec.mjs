@@ -29,13 +29,22 @@ test('Explore keeps ten starter slots and a stable Selected functions area', asy
   const before = await geometry();
   const initial = await candidates.evaluateAll(nodes => nodes.map(node => node.dataset.tag));
   expect(initial).toHaveLength(10);
+  const starterBottomGap = await page.locator('#function-tags').evaluate(panel =>
+    panel.getBoundingClientRect().bottom - panel.querySelector('.tag-options').getBoundingClientRect().bottom);
+  expect(starterBottomGap).toBeLessThanOrEqual(20);
   for (const slot of [0, 1, 2, 3, 4]) {
     const add = candidates.nth(slot);
     const selected = await add.getAttribute('data-tag');
     await add.scrollIntoViewIfNeeded();
     const scrollBefore = await page.evaluate(() => scrollY);
     if (isMobile) await add.tap(); else await add.press('Enter');
-    await expect(selections.getByRole('button', { name: `Remove ${selected} filter`, exact: true })).toBeAttached();
+    const chip = selections.getByRole('button', { name: `Remove ${selected} filter`, exact: true });
+    await expect(chip).toBeAttached();
+    if (slot === 0) {
+      const clear = selections.getByRole('button', { name: 'Clear function filters' });
+      const [chipBox, clearBox] = await Promise.all([chip.boundingBox(), clear.boundingBox()]);
+      expect(clearBox.y - (chipBox.y + chipBox.height)).toBeLessThanOrEqual(16);
+    }
     await expect(candidates).toHaveCount(10);
     await expect(add).not.toHaveAttribute('data-tag', selected);
     await expect(add).toBeFocused();
@@ -45,6 +54,8 @@ test('Explore keeps ten starter slots and a stable Selected functions area', asy
   await selections.getByRole('button', { name: 'Clear function filters' }).click();
   await expect(selections.getByText('No functions selected.')).toBeVisible();
   expect(await geometry()).toEqual(before);
+  await page.locator('#search-tools').evaluate(panel => panel.scrollIntoView({ block: 'end' }));
+  await page.screenshot({ path: testInfo.outputPath('search-tools-bottom.png') });
   await raw.fill('usd<5 (otag:ramp OR otag:draw)');
   await expect(selections).toBeVisible();
   await expect(selections.getByLabel('Combine functions by')).toHaveValue('any');
