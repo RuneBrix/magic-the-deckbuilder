@@ -18,8 +18,8 @@ export const workspace = {
 };
 
 export async function chooseGuidedFilter(page, family) {
-  await page.getByRole('button', { name: 'Add a filter', exact: true }).click();
-  const picker = page.getByRole('dialog', { name: 'Add a filter' });
+  await page.locator('#add-guided-filter').click();
+  const picker = page.getByRole('group', { name: 'Filter types', exact: true });
   await picker.locator(`[data-guided-choice="${family}"]`).click();
   await picker.waitFor({ state: 'hidden' });
 }

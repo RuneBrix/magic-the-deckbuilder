@@ -662,7 +662,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 #search-form{position:sticky;top:var(--nav-height,60px);z-index:4;background:var(--ground);padding:8px 0 2px}
 #query-notes:empty{display:none}
 .search-setup :is(#query-notes,.search-panel) :is(summary,input,select,button,[tabindex],a){scroll-margin-top:var(--search-form-height,0px)}
-.explorer .search-panel{container-type:inline-size;margin:0;padding:0;border:1px solid var(--line);border-radius:4px;background:var(--soft)}
+.explorer .search-panel{container:search-tools / inline-size;margin:0;padding:0;border:1px solid var(--line);border-radius:4px;background:var(--soft)}
 .search-panel>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;min-height:52px;padding:8px 14px}
 .search-panel>summary::after{grid-column:2;grid-row:1}
 .search-panel>summary .search-panel-title{font-size:1.0625rem;font-weight:650;color:var(--ink)}
@@ -676,18 +676,21 @@ input::placeholder,textarea::placeholder{color:var(--muted);font-style:italic;fo
 #search-filters{container-type:inline-size}
 .guided-grid{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:12px}
 @container (min-width:36rem){.guided-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.add-guided-filter{display:flex;align-items:center;justify-content:center;gap:8px;min-block-size:8rem;border:1px dashed var(--muted);border-radius:3px;color:var(--accent);font-weight:600}
-.add-guided-filter:hover:enabled{background:var(--soft)}
+.add-guided-filter,.guided-filter-picker>.add-guided-filter{display:flex;align-items:center;justify-content:center;gap:8px;min-block-size:8rem;border:1px dashed var(--muted);border-radius:3px;background:transparent;color:var(--accent);font-weight:600}
+.guided-filter-picker:is([open],:hover)>.add-guided-filter{background:var(--soft)}
 .add-guided-filter:disabled{opacity:.6}
+#search-filters:has(.guided-filter-picker[open]){z-index:1}
+.guided-filter-picker>.deck-menu-actions{width:min(190px,100%);max-block-size:min(420px,55dvh);overflow:auto;overscroll-behavior:contain}
+.guided-filter-picker .deck-menu-actions button:focus-visible{outline-offset:-3px}
+@container search-tools (min-width:60rem){
+  .guided-filter-picker>.deck-menu-actions{top:0;left:calc(100% + 4px);right:auto;width:190px}
+}
 #guided-form>[data-clear-category="guided"]{min-height:44px;margin-top:4px}
 .guided-family{min-width:0;border:1px solid var(--line);border-radius:3px;container-type:inline-size}
 .guided-family-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-inline-start:10px;border-bottom:1px solid var(--line);background:var(--ground);overflow-wrap:anywhere}
 .remove-guided-family{flex:none;width:44px;height:44px}
 .guided-grid fieldset{min-width:0;margin:0;padding:0 12px 12px;border:0}
 .guided-locked{margin:10px 12px 0}
-#dialog:has(.guided-filter-choices){inset:0 0 0 auto;margin:0;width:min(100%,25rem);height:100dvh;max-width:100%;max-height:none;border-radius:0;padding:24px}
-.guided-filter-choices{display:grid;gap:8px;list-style:none;margin:20px 0 0;padding:0}
-.guided-filter-choices button{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:44px;text-align:start}
 .guided-grid fieldset>label{display:block;margin:16px 0}
 .guided-grid fieldset>.guided-entry,.chip-picker{margin-top:16px}
 .guided-grid fieldset:disabled{opacity:.75}

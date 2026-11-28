@@ -311,8 +311,16 @@ function guidedControls() {
     legal: field('legal',`${clearable('legal','format legality',`<label>Legal in format<select name="legal"><option value="">Any format</option>${formats}</select></label>`)}<p class="hint">Chosen independently of the tracked deck.</p>`),
   };
   const visible = visibleGuidedFamilies();
+  const choices = availableGuidedFamilies();
+  const addLabel = `${icon('plus',22)} Add a filter`;
+  const addFilter = choices.length ? `<details class="deck-menu guided-filter-picker">
+      <summary id="add-guided-filter" class="add-guided-filter">${addLabel}</summary>
+      <div class="deck-menu-actions" role="group" aria-label="Filter types">
+        ${choices.map(panel=>`<button type="button" data-guided-choice="${panel}">${guidedFamilies[panel]}</button>`).join('')}
+      </div>
+    </details>` : `<button type="button" id="add-guided-filter" class="add-guided-filter" disabled>${addLabel}</button>`;
   return `<form id="guided-form"><div class="guided-grid">${visible.map(panel=>fields[panel]).join('')}
-    ${visible.length<Object.keys(guidedFamilies).length?`<button type="button" id="add-guided-filter" class="add-guided-filter" aria-haspopup="dialog" ${availableGuidedFamilies().length?'':'disabled'}>${icon('plus',22)} Add a filter</button>`:''}
+    ${visible.length<Object.keys(guidedFamilies).length?addFilter:''}
     </div><p id="guided-error" role="alert"></p>${visible.length?`<button type="button" class="text-button" data-clear-category="guided" ${filters.error?'disabled':''}>Clear all guided filters</button>`:''}</form>`;
 }
 function uniqueFormats(){return [...new Set([...FORMATS,...(filters.legal?[filters.legal]:[])])];}
@@ -2206,30 +2214,9 @@ function clearFilterCategory(category) {
   if (category === 'guided' || category === 'colors') colorTarget='';
   renderSearchState();
   if (filters.query !== previous.query) runGuidedSearch(true);
-  ($(category==='tags'?'#tag-search':'#add-guided-filter:enabled') ?? $('#raw'))?.focus();
+  ($(category==='tags'?'#tag-search':'#add-guided-filter:not(:disabled)') ?? $('#raw'))?.focus();
 }
 
-function openGuidedFilterPicker() {
-  const choices = availableGuidedFamilies();
-  if (!choices.length) return;
-  const dialog = $('#dialog');
-  showDialog(`<h2>Add a filter</h2><ul class="guided-filter-choices">${choices.map(panel=>`<li><button type="button" class="secondary" data-guided-choice="${panel}">${guidedFamilies[panel]}${icon('plus',16)}</button></li>`).join('')}</ul>`, dialog);
-  let chosen = '';
-  dialog.onclose = () => {
-    const field = chosen && $(`[data-guided-family="${chosen}"] :is(input,select):enabled`);
-    (field || $('#add-guided-filter:enabled') || $('#raw'))?.focus();
-  };
-  dialog.querySelector('.guided-filter-choices').onclick = event => {
-    const panel = event.target.closest('[data-guided-choice]')?.dataset.guidedChoice;
-    if (!choices.includes(panel)) return;
-    guidedFilterOrder = [...visibleGuidedFamilies(), panel];
-    addedFilterFamilies.add(panel);
-    chosen = panel;
-    refreshGuidedControls();
-    dialog.close();
-  };
-  dialog.querySelector('[data-guided-choice]')?.focus();
-}
 function showChipSuggestions(input) {
   const list = document.getElementById(input.getAttribute('aria-controls'));
   const query = input.value.trim().toLowerCase();
@@ -2505,7 +2492,15 @@ $('#app').addEventListener('click',async e=>{
   if(button.dataset.deckGroupAction){await useDeckGroupControl(button);return;}
   if(button.dataset.flipCard!==undefined){showCardFace(button.closest('[data-card-faces]'),button.getAttribute('aria-pressed')!=='true');return;}
   readFilters();
-  if (button.id === 'add-guided-filter') { openGuidedFilterPicker(); return; }
+  if (button.dataset.guidedChoice) {
+    const panel = button.dataset.guidedChoice;
+    if (!availableGuidedFamilies().includes(panel)) return;
+    guidedFilterOrder = [...visibleGuidedFamilies(), panel];
+    addedFilterFamilies.add(panel);
+    refreshGuidedControls();
+    $(`[data-guided-family="${panel}"] :is(input,select):enabled`)?.focus();
+    return;
+  }
   if (button.dataset.tagPageStep) {
     goToTagPage(tagPage + Number(button.dataset.tagPageStep), `[data-tag-page-step="${button.dataset.tagPageStep}"]`);
     return;

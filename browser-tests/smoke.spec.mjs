@@ -1895,7 +1895,7 @@ test('scoped clearing and activated abilities preserve the editable query and fo
     panel.querySelector(':scope > summary').click();
     panel.querySelector('#add-guided-filter').click();
   });
-  await page.getByRole('dialog', { name: 'Add a filter' }).getByRole('button', { name: 'Activated abilities' }).click();
+  await page.getByRole('group', { name: 'Filter types' }).getByRole('button', { name: 'Activated abilities' }).click();
   await page.getByLabel('Activation cost includes').selectOption('tap');
   await expect(filtersPanel).toHaveJSProperty('open',true);
   await expect(page.getByLabel('Activation cost includes')).toBeVisible();
@@ -1916,7 +1916,7 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   await payment.fill('3U');
   await expect(page.locator('#guided-error')).toBeEmpty();
   await page.getByRole('button',{name:'Remove mana value filter',exact:true}).press('Enter');
-  await expect(page.getByRole('button', { name: 'Add a filter', exact: true })).toBeFocused();
+  await expect(page.locator('#add-guided-filter')).toBeFocused();
   await expect(raw).not.toHaveValue(/mv[<>=]/);
   await expect(raw).toHaveValue(/otag:ramp/);
   await page.getByRole('button',{name:'Remove colors filter',exact:true}).click();
@@ -1934,7 +1934,7 @@ test('scoped clearing and activated abilities preserve the editable query and fo
   }
   const clearGuided=page.getByRole('button',{name:'Clear all guided filters',exact:true});
   if(isMobile)await clearGuided.tap();else await clearGuided.click();
-  await expect(page.getByRole('button', { name: 'Add a filter', exact: true })).toBeFocused();
+  await expect(page.locator('#add-guided-filter')).toBeFocused();
   await expect(raw).toHaveValue('otag:ramp usd<5');
   const lookup=page.getByRole('searchbox',{name:'Find a function'});
   await lookup.fill('removal');

@@ -12,7 +12,7 @@ test('Explore keeps ten starter slots and a stable Selected functions area', asy
   const tools = page.locator('#search-tools-heading');
   await expect(page.locator('#applied-filter-summary')).toBeHidden();
   await tools.press('Enter');
-  await expect(page.getByRole('button', { name: 'Add a filter', exact: true })).toBeVisible();
+  await expect(page.locator('#add-guided-filter')).toBeVisible();
   await expect(page.locator('.guided-family')).toHaveCount(0);
   const selections = page.locator('.selected-functions');
   await expect(selections.getByText('No functions selected.')).toBeVisible();
@@ -91,9 +91,9 @@ test('one disclosure exposes both applied summaries when collapsed', async ({ pa
   await expect(tools).toHaveAccessibleDescription('');
   await expect(filterSummary).toBeHidden();
   await expect(functionSummary).toBeHidden();
-  const add = page.getByRole('button', { name: 'Add a filter', exact: true });
+  const add = page.locator('#add-guided-filter');
   await add.click();
-  const picker = page.getByRole('dialog', { name: 'Add a filter' });
+  const picker = page.getByRole('group', { name: 'Filter types', exact: true });
   await expect(picker.locator('[data-guided-choice="oracle"]')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(add).toBeFocused();
@@ -107,7 +107,7 @@ test('one disclosure exposes both applied summaries when collapsed', async ({ pa
   await expect(functionSummary).toBeHidden();
 });
 
-test('Add a filter opens a side panel and fills the next reserved filter slot', async ({ page, isMobile }, testInfo) => {
+test('Add a filter opens an anchored menu and fills the next reserved slot', async ({ page, isMobile }, testInfo) => {
   const queries = [];
   page.on('request', request => {
     const url = new URL(request.url());
@@ -115,7 +115,7 @@ test('Add a filter opens a side panel and fills the next reserved filter slot', 
   });
   const raw = page.locator('#raw');
   const toggle = page.locator('#search-tools-heading');
-  const add = page.getByRole('button', { name: 'Add a filter', exact: true });
+  const add = page.locator('#add-guided-filter');
   const panels = page.locator('.search-panel-columns > section');
   const boxes = () => panels.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()));
   await toggle.press('Enter');
@@ -125,16 +125,32 @@ test('Add a filter opens a side panel and fills the next reserved filter slot', 
     const { x, y, width } = element.getBoundingClientRect();
     return { x: x + scrollX, y: y + scrollY, width };
   });
-  await add.press('Enter');
-  const drawer = page.getByRole('dialog', { name: 'Add a filter' });
-  await expect(drawer).toBeVisible();
-  const drawerBox = await drawer.boundingBox();
-  const usableWidth = await page.locator('body').evaluate(body => body.clientWidth);
-  expect(drawerBox.x + drawerBox.width).toBeCloseTo(usableWidth, 0);
-  await expect(drawer.getByRole('button', { name: 'Card name', exact: true })).toBeFocused();
-  await page.screenshot({ path: testInfo.outputPath('filter-side-panel.png') });
+  const beforeOpen = await boxes();
+  await expect(add).toHaveAccessibleName('Add a filter');
+  await add.press('ArrowDown');
+  const menu = page.getByRole('group', { name: 'Filter types', exact: true });
+  await expect(menu).toBeVisible();
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  const [menuBox, addBox] = await Promise.all([menu.boundingBox(), add.boundingBox()]);
+  if (isMobile) {
+    expect(menuBox.y).toBeCloseTo(addBox.y + addBox.height + 4, 0);
+    expect(menuBox.x + menuBox.width).toBeCloseTo(addBox.x + addBox.width, 0);
+  } else {
+    expect(menuBox.x).toBeCloseTo(addBox.x + addBox.width + 4, 0);
+    expect(menuBox.y).toBeCloseTo(addBox.y, 0);
+  }
+  expect((await boxes()).map(({ width, height }) => [width, height])).toEqual(beforeOpen.map(({ width, height }) => [width, height]));
+  await expect(menu.getByRole('button', { name: 'Card name', exact: true })).toBeFocused();
+  await menu.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('filter-dropdown.png') });
   await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
   await expect(add).toBeFocused();
+  if (isMobile) await add.tap(); else await add.click();
+  await expect(menu).toBeVisible();
+  await raw.click();
+  await expect(menu).toBeHidden();
+  await expect(raw).toBeFocused();
   const order = [];
   for (const [family, firstField] of [
     ['name', 'name'], ['type', 'types'], ['keyword', 'keywords'], ['mv', 'mv-op-0'], ['colors', 'color-target'],

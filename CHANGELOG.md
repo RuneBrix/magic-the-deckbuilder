@@ -3,7 +3,7 @@
 ## Search cards setup — 2026-11-28
 
 - Open Filters and Browse by function together in visually distinct panels. The panels split the width evenly on wide screens, stack in narrower spaces and summarize applied conditions when closed (#286).
-- Choose Add a filter in the next grid slot to open the filter picker. Existing query conditions reveal their controls automatically. Each filter’s X removes its editable conditions (#285).
+- Choose Add a filter in the next grid slot to open its dropdown. Existing query conditions reveal their controls automatically. Each filter’s X removes its editable conditions (#285).
 - Browse ten function starters in fixed slots that refill as you select them. Selected functions stays visible, and search pages support previous, next, an editable page number and a page menu (#284).
 
 ## Statistics charts and tokens — 2026-11-28
