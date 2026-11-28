@@ -55,15 +55,43 @@ test('detailed statistics weight exact mana values and separate the playing deck
 test('colored mana stats count weighted symbols and possible sources across playing zones', () => {
   const land = card('Dual land', 'Land', 0, [], { mana_cost: '', produced_mana: ['G', 'U', 'C', 'U'] });
   const spell = card('Ritual', 'Instant', 4, [], { mana_cost: '{W/U}{B/P}{2/R}{X}{C}', produced_mana: ['B'] });
-  const commander = card('Two faces', 'Legendary Creature', 2, [], {
+  const commander = card('Two faces', 'Legendary Creature', 2, ['U', 'B', 'G'], {
     object: 'card', card_faces: [{ mana_cost: '{G}' }, { mana_cost: '{R}{R}' }],
   });
   const deck = { format: 'commander', cards: [entry(land, 3), entry(spell, 3), entry(commander, 1, { zone: 'command' }),
     entry(card('Legacy', 'Artifact', 0), 2), entry(spell, 20, { zone: 'sideboard' }), entry(land, 20, { zone: 'maybeboard' })] };
   const s = stats(deck, { detailed: true });
   assert.deepEqual(s.manaCosts, { colors: { W: 1.5, U: 1.5, B: 3, R: 5, G: 1 }, unavailable: 2 });
-  assert.deepEqual(s.manaSources, { colors: { W: 0, U: 3, B: 3, R: 0, G: 3 }, unavailable: 2 });
+  assert.deepEqual(s.manaSources, { colors: { U: 3, B: 3, G: 3 }, unavailable: 2, zone: 'command', identityIncomplete: false });
   assert.equal(stats({ ...deck, format: 'modern' }, { detailed: true }).manaCosts.colors.G, 0);
+});
+
+test('mana production uses command identity or falls back to the Main deck identity without widening from sources', () => {
+  const source = entry(card('Any color', 'Artifact', 2, [], { produced_mana: ['W', 'U', 'B', 'R', 'G', 'C'] }), 4);
+  const green = entry(card('Forest', 'Basic Land', 0, ['G'], { produced_mana: ['G'] }), 2);
+  const commander = (name, identity) => entry(card(name, 'Legendary Creature', 2, identity, {
+    color_identity: identity, object: 'card', mana_cost: '',
+  }), 1, { commander: true });
+  const blackWhite = commander('First commander', ['B', 'W']);
+  const blue = commander('Second commander', ['U']);
+  const colorless = commander('Colorless commander', []);
+  const unknown = commander('Unknown commander', undefined);
+  const malformed = commander('Malformed commander', 'WUBRG');
+  const excluded = ['sideboard', 'maybeboard'].map(zone => ({ ...source, zone, qty: 20, card: { ...source.card, color_identity: ['U'] } }));
+  for (const { format = 'commander', commanders, colors, zone = 'command', identityIncomplete = false } of [
+    { commanders: [commander('Three colors', ['G', 'W', 'U'])], colors: { W: 4, U: 4, G: 6 } },
+    { commanders: [blackWhite, blue], colors: { W: 4, U: 4, B: 4 } },
+    { commanders: [colorless], colors: {} },
+    { commanders: [commander('All colors', ['W', 'U', 'B', 'R', 'G'])], colors: { W: 4, U: 4, B: 4, R: 4, G: 6 } },
+    { commanders: [blue, unknown], colors: { U: 4 }, identityIncomplete: true },
+    { commanders: [unknown], colors: {}, identityIncomplete: true },
+    { commanders: [malformed], colors: {}, identityIncomplete: true },
+    { commanders: [], colors: { G: 6 }, zone: 'main' },
+    { format: 'modern', commanders: [blue], colors: { G: 6 }, zone: 'main' },
+  ]) {
+    const { manaSources } = stats({ format, cards: [...commanders, source, green, ...excluded] }, { detailed: true });
+    assert.deepEqual(manaSources, { colors, unavailable: 0, zone, identityIncomplete });
+  }
 });
 
 test('token stats deduplicate exact references, exclude other components and report incomplete records', () => {

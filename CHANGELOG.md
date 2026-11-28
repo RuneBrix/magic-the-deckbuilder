@@ -1,5 +1,10 @@
 # Changelog
 
+## Statistics charts and tokens — 2026-11-28
+
+- Limit colored mana production to the combined Command zone identity in Commander, or Main deck identity when no commander is designated or in other formats. Use short chart captions and keep missing-data warnings visible (#271, #288).
+- Show only the token name below Referenced tokens artwork and keep each tile linked to its exact printing (#282).
+
 ## Collection upload — 2026-11-27
 
 - Upload or paste tab-separated deck TXT with set, collector number, finish and language. Map unfamiliar columns and review malformed rows before applying copies (#269).

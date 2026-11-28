@@ -1142,7 +1142,6 @@ html{scroll-padding-top:calc(var(--nav-height,60px) + 12px)}
 .token-list span{color:var(--muted);font-size:13px}
 .token-list .token-art{display:grid;place-items:center;aspect-ratio:488/680;border-radius:5px;background:var(--soft);text-align:center}
 .token-art img{display:block;inline-size:100%;block-size:100%;aspect-ratio:488/680;object-fit:contain;border-radius:inherit}
-.token-printing:empty{display:none}
 .draw-tool .stat-controls{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
 .draw-tool [aria-invalid=true]{border-color:var(--danger)}
 #draw-status:empty{margin:0}
